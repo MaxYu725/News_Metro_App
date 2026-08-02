@@ -5,20 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
     
-    <!-- PWA 全螢幕、桌面釘選與 Manifest 設置 -->
-    <link rel="manifest" href="/manifest.json">
+    <!-- PWA 全螢幕、桌面釘選與 Manifest 設置 (修復為相對路徑) -->
+    <link rel="manifest" href="./manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Metro News</title>
     
-    <!-- App Logo 設置 -->
-    <link rel="icon" href="/ic_launcher.png" type="image/png">
-    <link rel="apple-touch-icon" href="/ic_launcher.png">
+    <!-- App Logo 設置 (修復為相對路徑) -->
+    <link rel="icon" href="./ic_launcher.png" type="image/png">
+    <link rel="apple-touch-icon" href="./ic_launcher.png">
     
-    <!-- 引入 Tailwind CSS 與自訂樣式表 -->
+    <!-- 引入 Tailwind CSS 與自訂樣式表 (修復為相對路徑) -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="./style.css">
 </head>
 <body class="h-screen w-screen flex flex-col pt-6 px-6 relative">
 
@@ -88,7 +88,7 @@
         </section>
     </main>
 
-    <!-- 引入主要邏輯腳本 -->
-    <script src="app.js"></script>
+    <!-- 引入主要邏輯腳本 (修復為相對路徑) -->
+    <script src="./app.js"></script>
 </body>
 </html>
