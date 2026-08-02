@@ -1,1 +1,58 @@
 
+/* 核心靈魂：Segoe UI 字體與純黑背景 */
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background-color: #000000;
+    color: #FFFFFF;
+    overflow: hidden; /* 防止主畫面滾動，由內部容器接管 */
+}
+
+/* 隱藏滾動條但保留滑動功能 */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 導覽列特效 */
+.nav-link {
+    transition: color 0.2s;
+    cursor: pointer;
+}
+.nav-link.active {
+    color: #FFFFFF;
+    font-weight: 600;
+}
+
+/* Metro 動態磚基礎樣式 */
+.metro-tile {
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
+    border-radius: 0px; /* 絕對銳利，無圓角 */
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: fadeIn 0.5s ease-out forwards;
+    opacity: 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.metro-tile:active {
+    transform: scale(0.98);
+}
+
+/* 動態磚漸顯動畫 */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Loading 動畫 */
+.loader {
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-left-color: #ffffff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+}
