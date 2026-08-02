@@ -1,10 +1,10 @@
-
 /* 核心靈魂：Segoe UI 字體與純黑背景 */
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background-color: #000000;
     color: #FFFFFF;
     overflow: hidden; /* 防止主畫面滾動，由內部容器接管 */
+    transition: font-size 0.3s ease; /* 讓字體放大縮小有平滑過渡效果 */
 }
 
 /* 隱藏滾動條但保留滑動功能 */
@@ -26,7 +26,7 @@ body {
     position: relative;
     cursor: pointer;
     overflow: hidden;
-    border-radius: 0px; /* 絕對銳利，無圓角 */
+    border-radius: 0px; 
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     animation: fadeIn 0.5s ease-out forwards;
     opacity: 0;
@@ -35,6 +35,33 @@ body {
 }
 .metro-tile:active {
     transform: scale(0.98);
+}
+
+/* Metro 風格設定按鈕 */
+.metro-btn {
+    background-color: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.metro-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+.metro-btn:active {
+    transform: scale(0.95);
+}
+/* 選中狀態（黑字白底） */
+.metro-btn.active {
+    background-color: #ffffff;
+    color: #000000;
+    border-color: #ffffff;
+    font-weight: bold;
 }
 
 /* 動態磚漸顯動畫 */
