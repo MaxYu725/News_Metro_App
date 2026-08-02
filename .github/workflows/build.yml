@@ -40,7 +40,7 @@ jobs:
             "appName": "Metro News",
             "webDir": "www",
             "server": {
-              "url": "https://github.com/MaxYu725/News_Metro_App",
+              "url": "https://github.com/MaxYu725/News_Metro_App/index.html",
               "cleartext": true
             }
           }
