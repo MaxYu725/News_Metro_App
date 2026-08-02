@@ -17,29 +17,28 @@
 <body class="h-screen w-screen flex flex-col pt-6 px-6 relative">
 
     <header class="flex-shrink-0">
-        <nav class="flex space-x-6 text-2xl mb-6 text-gray-500 overflow-x-auto hide-scrollbar" id="nav-menu">
-            <a data-category="local" class="nav-link active">本地</a>
-            <a data-category="finance" class="nav-link">財經</a>
-            <a data-category="global" class="nav-link">國際</a>
-            <a data-category="settings" class="nav-link">設定</a>
+        <nav class="flex space-x-6 text-2xl mb-6 text-gray-500 overflow-x-auto hide-scrollbar justify-start" id="nav-menu">
         </nav>
     </header>
 
     <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative" id="main-container">
+        <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-200" style="height: 0px;"></div>
+        
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
             <div class="loader"></div>
         </div>
         
         <div id="news-grid" class="grid grid-cols-1 gap-3 auto-rows-auto"></div>
 
-        <!-- Settings Page (獨立設定頁面) -->
         <div id="settings-view" class="hidden flex-col space-y-10 pb-10">
             <div class="flex flex-col space-y-4">
                 <h2 class="text-3xl font-light mb-2">settings</h2>
-                <button class="text-left text-xl font-light text-gray-300 hover:text-white transition-all">hong kong local news</button>
-                <button class="text-left text-xl font-light text-gray-300 hover:text-white transition-all">entertainment & culture</button>
-                <button class="text-left text-xl font-light text-gray-300 hover:text-white transition-all">technology & digital trends</button>
-                <button class="text-left text-xl font-light text-gray-300 hover:text-white transition-all">your saved articles</button>
+                <div class="flex flex-col space-y-3" id="category-manager-list">
+                </div>
+                <div class="flex space-x-2 mt-4">
+                    <input type="text" id="new-cat-input" placeholder="輸入新類別名稱..." class="bg-black border border-white/30 px-4 py-2 text-white focus:outline-none focus:border-white flex-grow">
+                    <button id="btn-add-cat" class="metro-btn">新增</button>
+                </div>
             </div>
 
             <div>
