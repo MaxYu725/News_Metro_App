@@ -1,40 +1,52 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Metro News Live</title>
+    <meta name="theme-color" content="#000000">
+    
+    <!-- PWA 全螢幕與桌面釘選設置 -->
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
+    <title>Metro News</title>
+    
+    <!-- App Logo 設置 (指向根目錄) -->
+    <link rel="icon" href="/ic_launcher.png" type="image/png">
+    <link rel="apple-touch-icon" href="/ic_launcher.png">
+    
+    <!-- 引入 Tailwind CSS 與自訂樣式表 -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="h-screen w-screen flex flex-col pt-6 pb-6 px-6 relative">
 
-<div id="loading-overlay">
-    <div class="metro-progress-container">
-        <div class="metro-dot"></div><div class="metro-dot"></div><div class="metro-dot"></div><div class="metro-dot"></div><div class="metro-dot"></div>
-    </div>
-    <div class="loading-text">updating headlines...</div>
-</div>
+    <!-- 頂部 Pivot 導覽列 (取代原本的 Panorama 標題) -->
+    <header class="flex-shrink-0">
+        <nav class="flex space-x-6 text-2xl mb-6 text-gray-500" id="nav-menu">
+            <a data-category="local" class="nav-link active">本地</a>
+            <a data-category="finance" class="nav-link">財經</a>
+            <a data-category="global" class="nav-link">國際</a>
+        </nav>
+    </header>
 
-<div id="app-container">
-    <div class="app-title">metro news live</div>
-    
-    <div class="pivot-headers" id="pivot-header-container">
-        <h2 class="pivot-header active" data-index="0">latest</h2>
-        <h2 class="pivot-header" data-index="1">local</h2>
-        <h2 class="pivot-header" data-index="2">entertainment</h2>
-        <h2 class="pivot-header" data-index="3">tech</h2>
-        <h2 class="pivot-header" data-index="4">pinned</h2>
-        <h2 class="pivot-header" data-index="5">settings</h2>
-    </div>
+    <!-- 主體內容：一排一個磚 (grid-cols-1) -->
+    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-10 relative" id="main-container">
+        <!-- 載入中畫面 -->
+        <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden">
+            <div class="loader"></div>
+        </div>
+        
+        <!-- 新聞網格容器 -->
+        <div id="news-grid" class="grid grid-cols-1 gap-3 auto-rows-auto">
+            <!-- 內容將由 JavaScript 動態插入 -->
+        </div>
+    </main>
 
-    <div class="pivot-content-wrapper" id="pivot-body">
-        <!-- Pivot 0: Latest -->
-        <div id="pivot-latest" class="pivot-item active">
-            <div class="update-indicator" id="status-latest">syncing latest headlines...</div>
-            <div id="list-latest" class="tiles-grid"></div>
+    <!-- 引入主要邏輯腳本 -->
+    <script src="app.js"></script>
+</body>
+</html>            <div id="list-latest" class="tiles-grid"></div>
         </div>
 
         <!-- Pivot 1: Local -->
