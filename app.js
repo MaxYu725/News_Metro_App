@@ -28,6 +28,42 @@ function timeAgo(dateString) {
     return `${Math.floor(diffHours / 24)} 天前`;
 }
 
+// 隨機生成低透明度（10%–30% Alpha）幾何多邊形與斜切線條
+function generateGeometricBackground() {
+    let svg = `<svg class="geo-bg" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg">`;
+    
+    // 隨機斜切線條 (10% - 30% Alpha)
+    for (let i = 0; i < 6; i++) {
+        const x1 = Math.random() * 400;
+        const y1 = Math.random() * 600;
+        const x2 = Math.random() * 400;
+        const y2 = Math.random() * 600;
+        const opacity = (10 + Math.random() * 20) / 100;
+        svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="${1 + Math.random() * 2}" stroke-opacity="${opacity}" />`;
+    }
+    
+    // 隨機幾何多邊形 / 三角形 (10% - 30% Alpha)
+    for (let i = 0; i < 4; i++) {
+        const p1 = `${Math.random()*400},${Math.random()*600}`;
+        const p2 = `${Math.random()*400},${Math.random()*600}`;
+        const p3 = `${Math.random()*400},${Math.random()*600}`;
+        const opacity = (10 + Math.random() * 20) / 100;
+        svg += `<polygon points="${p1} ${p2} ${p3}" fill="white" fill-opacity="${opacity}" />`;
+    }
+
+    // 隨機幾何圓點
+    for (let i = 0; i < 3; i++) {
+        const cx = Math.random() * 400;
+        const cy = Math.random() * 600;
+        const r = 10 + Math.random() * 25;
+        const opacity = (10 + Math.random() * 15) / 100;
+        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="${opacity}" />`;
+    }
+
+    svg += `</svg>`;
+    return svg;
+}
+
 // 取得新聞資料
 async function fetchNews(category) {
     newsGrid.innerHTML = '';
@@ -59,10 +95,14 @@ function renderTiles() {
         const colorClass = METRO_COLORS[index % METRO_COLORS.length];
         const animationDelay = `style="animation-delay: ${index * 0.03}s"`;
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
+        const geoBackground = generateGeometricBackground();
 
         htmlContent += `
             <article class="metro-tile ${colorClass}" data-index="${index}" ${animationDelay}>
-                <!-- 收合狀態預覽 (大字體) -->
+                <!-- 固定錨點幾何背景 -->
+                ${geoBackground}
+
+                <!-- 收合狀態預覽 (僅顯示頂部局部殘缺圖案) -->
                 <div class="tile-preview p-5">
                     <div></div>
                     <div>
@@ -73,7 +113,7 @@ function renderTiles() {
                     </div>
                 </div>
 
-                <!-- 展開沉浸式排版內文 (平滑高度過渡) -->
+                <!-- 展開沉浸式排版內文 (向下自然揭開剩餘幾何線條) -->
                 <div class="tile-details">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
@@ -107,7 +147,6 @@ function attachTileEvents() {
     const tiles = newsGrid.querySelectorAll('.metro-tile');
 
     tiles.forEach((tile, index) => {
-        // 點擊事件：切換展開/收合，並自動平滑滾動至頂部對齊
         tile.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
@@ -120,7 +159,6 @@ function attachTileEvents() {
             if (!isCurrentlyExpanded) {
                 tile.classList.add('expanded');
                 setTimeout(() => {
-                    // 使用 block: 'start' 將 Tile 頂部完美貼齊螢幕上方
                     tile.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 150);
             }
