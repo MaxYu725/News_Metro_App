@@ -11,23 +11,3 @@
 4. **自動吸頂滾動（Auto-Snap to Top）**：點擊卡片展開閱讀時，列表會自動以阻尼物理手勢捲動並將文章對齊頂部。
 
 ---
-
-## 雲端架構與佈署參數
-* **後端 API**：`https://metro-news-api.maxyu0725.workers.dev/`
-* **Cloudflare KV Namespace**：`NEWS_CACHE_KV` (`0faa3dc0b32a435fb91672dd0f2cfe25`)
-* **GitHub Actions APK 簽署 Alias**：`gemini-news-release`
-* **GitHub Repository**：`maxyu725/metro-news-live`
-
----
-
-## 本地開發與運行
-```bash
-# Clone the repository
-git clone [https://github.com/maxyu725/metro-news-live.git](https://github.com/maxyu725/metro-news-live.git)
-cd metro-news-live
-
-# Open index.html directly in browser for UI preview
-# OR build Android app via Capacitor
-npm install
-npx cap sync android
-npx cap open android
