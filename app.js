@@ -12,13 +12,7 @@ const newsGrid = document.getElementById('news-grid');
 const loadingIndicator = document.getElementById('loading-indicator');
 const navLinks = document.querySelectorAll('.nav-link');
 
-// 狀態管理
 let currentNewsData = [];
-let expandedIndex = null;
-
-// ==========================================
-// 1. 新聞抓取與渲染邏輯
-// ==========================================
 
 // 時間格式化
 function timeAgo(dateString) {
@@ -38,7 +32,6 @@ function timeAgo(dateString) {
 async function fetchNews(category) {
     newsGrid.innerHTML = '';
     loadingIndicator.classList.remove('hidden');
-    expandedIndex = null; // 切換分類時重置展開狀態
 
     try {
         const response = await fetch(`${API_BASE_URL}${category}`);
@@ -58,49 +51,19 @@ async function fetchNews(category) {
     }
 }
 
-// 渲染動態磚
+// 渲染所有動態磚 (建立雙結構：預覽區與可平滑展開的內文區)
 function renderTiles() {
     let htmlContent = '';
     
     currentNewsData.forEach((news, index) => {
         const colorClass = METRO_COLORS[index % METRO_COLORS.length];
-        const isExpanded = (expandedIndex === index);
-        
-        // 單欄佈局：收合狀態高度增至 180px
-        const minHeightClass = isExpanded ? 'min-h-[320px]' : 'h-[180px]';
         const animationDelay = `style="animation-delay: ${index * 0.03}s"`;
+        const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
 
-        if (isExpanded) {
-            // === 展開的大磚狀態 ===
-            const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
-            htmlContent += `
-                <article class="metro-tile ${colorClass} ${minHeightClass} p-6 flex flex-col justify-between shadow-2xl" 
-                         data-index="${index}"
-                         ${animationDelay}>
-                    <div>
-                        <div class="flex justify-between items-center mb-3">
-                            <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
-                            <span class="text-xs uppercase tracking-widest opacity-60">點擊收回 ∧</span>
-                        </div>
-                        <h3 class="text-2xl md:text-3xl font-light leading-tight mb-4">${news.title}</h3>
-                        <p class="text-xs opacity-70 mb-6 pb-4 border-b border-white/20">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
-                        <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4">
-                            <p>${cleanDescription}</p>
-                        </div>
-                    </div>
-                    <div class="mt-8 flex justify-end">
-                        <button onclick="openExternal(event, '${news.link}')" class="text-xs uppercase tracking-widest bg-black/40 hover:bg-black/60 px-4 py-2 transition-colors border border-white/20">
-                            網頁檢視 ↗
-                        </button>
-                    </div>
-                </article>
-            `;
-        } else {
-            // === 收合的小磚狀態 ===
-            htmlContent += `
-                <article class="metro-tile ${colorClass} ${minHeightClass} p-5 flex flex-col justify-between" 
-                         data-index="${index}"
-                         ${animationDelay}>
+        htmlContent += `
+            <article class="metro-tile ${colorClass}" data-index="${index}" ${animationDelay}>
+                <!-- 收合狀態預覽 (大字體) -->
+                <div class="tile-preview p-5">
                     <div></div>
                     <div>
                         <h3 class="text-xl md:text-2xl font-bold leading-tight line-clamp-3">${news.title}</h3>
@@ -108,41 +71,61 @@ function renderTiles() {
                             ${timeAgo(news.pubDate)}
                         </p>
                     </div>
-                </article>
-            `;
-        }
+                </div>
+
+                <!-- 展開沉浸式排版內文 (平滑高度過渡) -->
+                <div class="tile-details">
+                    <div class="tile-details-inner flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-3">
+                                <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
+                                <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
+                            </div>
+                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-4">${news.title}</h3>
+                            <p class="text-xs opacity-70 mb-6 pb-4 border-b border-white/20">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
+                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4">
+                                <p>${cleanDescription}</p>
+                            </div>
+                        </div>
+                        <div class="mt-8 flex justify-end">
+                            <button onclick="openExternal(event, '${news.link}')" class="text-xs uppercase tracking-widest bg-black/40 hover:bg-black/60 px-4 py-2 transition-colors border border-white/20 cursor-pointer">
+                                網頁檢視 ↗
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        `;
     });
 
     newsGrid.innerHTML = htmlContent;
     attachTileEvents();
 }
 
-// 綁定動態磚事件
+// 綁定互動事件 (實現互斥展開與平滑滑動)
 function attachTileEvents() {
     const tiles = newsGrid.querySelectorAll('.metro-tile');
 
-    tiles.forEach(tile => {
-        const index = parseInt(tile.getAttribute('data-index'));
-
-        // 點擊展開/收合
+    tiles.forEach((tile, index) => {
+        // 點擊事件：切換展開/收合，並自動收回其他大磚
         tile.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
-            if (expandedIndex === index) {
-                expandedIndex = null;
-            } else {
-                expandedIndex = index;
-            }
-            renderTiles();
+            const isCurrentlyExpanded = tile.classList.contains('expanded');
 
-            if (expandedIndex !== null) {
+            // 先將所有磚塊收回
+            tiles.forEach(t => t.classList.remove('expanded'));
+
+            // 如果原本沒有展開，則展開自己
+            if (!isCurrentlyExpanded) {
+                tile.classList.add('expanded');
                 setTimeout(() => {
-                    tile.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 100);
+                    tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 150);
             }
         });
 
-        // 長按事件
+        // 長按事件 (顯示快捷網頁檢視)
         let pressTimer = null;
         const startPress = () => {
             clearPress();
@@ -159,6 +142,7 @@ function attachTileEvents() {
     });
 }
 
+// 長按快捷選單
 function triggerLongPressAction(tile, link) {
     if (tile.querySelector('.long-press-overlay')) return;
     const overlay = document.createElement('div');
@@ -186,52 +170,36 @@ navLinks.forEach(link => {
     });
 });
 
-// ==========================================
-// 2. 底部設定面板互動邏輯 (Settings UI)
-// ==========================================
-
-// Typography Size (字體大小縮放控制)
+// 底部設定面板互動
 let currentFontSizePercent = 110; 
 const fontDisplay = document.getElementById('font-size-display');
 const rootHtml = document.documentElement; 
 
 function updateFontSize() {
     fontDisplay.innerText = currentFontSizePercent + '%';
-    // 透過改變 root font-size (rem 基礎)，達成整個畫面等比例縮放
     rootHtml.style.fontSize = (16 * (currentFontSizePercent / 100)) + 'px';
 }
 
 document.getElementById('btn-font-plus').addEventListener('click', () => {
-    if (currentFontSizePercent < 150) {
-        currentFontSizePercent += 10;
-        updateFontSize();
-    }
+    if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); }
 });
-
 document.getElementById('btn-font-minus').addEventListener('click', () => {
-    if (currentFontSizePercent > 70) {
-        currentFontSizePercent -= 10;
-        updateFontSize();
-    }
+    if (currentFontSizePercent > 70) { currentFontSizePercent -= 10; updateFontSize(); }
 });
-
 document.getElementById('btn-font-reset').addEventListener('click', () => {
-    currentFontSizePercent = 110;
-    updateFontSize();
+    currentFontSizePercent = 110; updateFontSize();
 });
 
-// Auto Update Frequency (更新頻率按鈕單選邏輯)
 const freqButtons = document.querySelectorAll('#update-freq-group .metro-btn');
 freqButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {
         freqButtons.forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
-        // 此處可延伸實作 setInterval 自動更新 API 的邏輯
     });
 });
 
 // 啟動初始化
 window.addEventListener('DOMContentLoaded', () => {
-    updateFontSize(); // 套用預設 110% 字體
+    updateFontSize();
     fetchNews('local');
 });
