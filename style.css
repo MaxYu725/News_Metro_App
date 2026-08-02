@@ -126,6 +126,14 @@ body {
     height: 40px;
     animation: spin 1.2s linear infinite;
 }
+.loader-small {
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-left-color: #ffffff;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
 @keyframes spin { 
     0% { transform: rotate(0deg); } 
     100% { transform: rotate(360deg); } 
