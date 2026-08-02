@@ -1,35 +1,32 @@
-/* 核心靈魂：Segoe UI 字體與純黑背景 */
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background-color: #000000;
     color: #FFFFFF;
-    overflow: hidden; /* 防止主畫面滾動，由內部容器接管 */
+    overflow: hidden;
     transition: font-size 0.3s ease;
 }
 
-/* 隱藏滾動條但保留滑動功能 */
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* 導覽列特效 */
 .nav-link {
     transition: color 0.2s;
     cursor: pointer;
+    white-space: nowrap;
 }
 .nav-link.active {
     color: #FFFFFF;
     font-weight: 600;
 }
 
-/* Metro 動態磚基礎樣式 */
 .metro-tile {
     position: relative;
     cursor: pointer;
     overflow: hidden;
     border-radius: 0px; 
     min-height: 180px;
-    transition: transform 0.2s ease, box-shadow 0.3s ease;
-    animation: fadeIn 0.5s ease-out forwards;
+    transition: transform 0.3s ease, box-shadow 0.5s ease;
+    animation: fadeIn 0.7s ease-out forwards;
     opacity: 0;
     user-select: none;
     -webkit-user-select: none;
@@ -38,29 +35,26 @@ body {
     transform: scale(0.98);
 }
 .metro-tile.expanded {
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.6), 0 15px 15px -5px rgba(0, 0, 0, 0.5);
 }
 
-/* 固定錨點幾何背景層 (座標原點固定在左上角，隨高度展開自然揭開而不拉伸) */
 .geo-bg {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 600px; /* 固定幾何畫布高度 */
+    height: 600px;
     pointer-events: none;
     z-index: 0;
 }
 
-/* 確保內容層高於幾何背景 */
 .tile-preview, .tile-details {
     position: relative;
     z-index: 10;
 }
 
-/* 收合預覽區塊 */
 .tile-preview {
-    transition: opacity 0.2s ease;
+    transition: opacity 0.3s ease;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -74,11 +68,10 @@ body {
     overflow: hidden;
 }
 
-/* 展開內文區塊 (平滑高度過渡) */
 .tile-details {
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    transition: grid-template-rows 0.7s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
     opacity: 0;
 }
 .metro-tile.expanded .tile-details {
@@ -89,13 +82,12 @@ body {
 .tile-details-inner {
     overflow: hidden;
     padding: 0px 24px;
-    transition: padding 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: padding 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .metro-tile.expanded .tile-details-inner {
     padding: 24px;
 }
 
-/* Metro 風格設定按鈕 */
 .metro-btn {
     background-color: transparent;
     border: 2px solid rgba(255, 255, 255, 0.3);
@@ -121,20 +113,18 @@ body {
     font-weight: bold;
 }
 
-/* 動態磚漸顯動畫 */
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(15px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Loading 動畫 */
 .loader {
     border: 4px solid rgba(255, 255, 255, 0.1);
     border-left-color: #ffffff;
     border-radius: 50%;
     width: 40px;
     height: 40px;
-    animation: spin 1s linear infinite;
+    animation: spin 1.2s linear infinite;
 }
 @keyframes spin { 
     0% { transform: rotate(0deg); } 
