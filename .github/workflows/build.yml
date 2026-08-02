@@ -37,10 +37,10 @@ jobs:
           cat <<EOF > capacitor.config.json
           {
             "appId": "hk.metronews.app",
-            "appName": "Metro News Live",
+            "appName": "Metro News",
             "webDir": "www",
             "server": {
-              "url": "https://maxyu725.github.io/News_Metro_App",
+              "url": "https://github.com/MaxYu725/News_Metro_App",
               "cleartext": true
             }
           }
