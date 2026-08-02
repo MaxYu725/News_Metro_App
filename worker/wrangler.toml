@@ -1,0 +1,7 @@
+name = "metro-news-api"
+main = "index.js"
+compatibility_date = "2026-08-01"
+
+kv_namespaces = [
+  { binding = "NEWS_CACHE_KV", id = "0faa3dc0b32a435fb91672dd0f2cfe25" }
+]
