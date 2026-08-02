@@ -1,20 +1,17 @@
-// 設定 API 網址 (Cloudflare Worker)
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// Metro UI 經典顏色庫
 const METRO_COLORS = [
     'bg-blue-600', 'bg-green-600', 'bg-purple-700', 
     'bg-red-600', 'bg-orange-600', 'bg-teal-600', 'bg-pink-600'
 ];
 
-// 綁定 DOM 元素
 const newsGrid = document.getElementById('news-grid');
+const settingsView = document.getElementById('settings-view');
 const loadingIndicator = document.getElementById('loading-indicator');
 const navLinks = document.querySelectorAll('.nav-link');
 
 let currentNewsData = [];
 
-// 時間格式化
 function timeAgo(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -28,11 +25,9 @@ function timeAgo(dateString) {
     return `${Math.floor(diffHours / 24)} 天前`;
 }
 
-// 隨機生成低透明度（10%–30% Alpha）幾何多邊形與斜切線條
 function generateGeometricBackground() {
     let svg = `<svg class="geo-bg" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg">`;
     
-    // 隨機斜切線條 (10% - 30% Alpha)
     for (let i = 0; i < 6; i++) {
         const x1 = Math.random() * 400;
         const y1 = Math.random() * 600;
@@ -42,7 +37,6 @@ function generateGeometricBackground() {
         svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="${1 + Math.random() * 2}" stroke-opacity="${opacity}" />`;
     }
     
-    // 隨機幾何多邊形 / 三角形 (10% - 30% Alpha)
     for (let i = 0; i < 4; i++) {
         const p1 = `${Math.random()*400},${Math.random()*600}`;
         const p2 = `${Math.random()*400},${Math.random()*600}`;
@@ -51,7 +45,6 @@ function generateGeometricBackground() {
         svg += `<polygon points="${p1} ${p2} ${p3}" fill="white" fill-opacity="${opacity}" />`;
     }
 
-    // 隨機幾何圓點
     for (let i = 0; i < 3; i++) {
         const cx = Math.random() * 400;
         const cy = Math.random() * 600;
@@ -64,7 +57,6 @@ function generateGeometricBackground() {
     return svg;
 }
 
-// 取得新聞資料
 async function fetchNews(category) {
     newsGrid.innerHTML = '';
     loadingIndicator.classList.remove('hidden');
@@ -87,22 +79,18 @@ async function fetchNews(category) {
     }
 }
 
-// 渲染所有動態磚
 function renderTiles() {
     let htmlContent = '';
     
     currentNewsData.forEach((news, index) => {
         const colorClass = METRO_COLORS[index % METRO_COLORS.length];
-        const animationDelay = `style="animation-delay: ${index * 0.03}s"`;
+        const animationDelay = `style="animation-delay: ${index * 0.05}s"`;
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
 
         htmlContent += `
             <article class="metro-tile ${colorClass}" data-index="${index}" ${animationDelay}>
-                <!-- 固定錨點幾何背景 -->
                 ${geoBackground}
-
-                <!-- 收合狀態預覽 (僅顯示頂部局部殘缺圖案) -->
                 <div class="tile-preview p-5">
                     <div></div>
                     <div>
@@ -112,8 +100,6 @@ function renderTiles() {
                         </p>
                     </div>
                 </div>
-
-                <!-- 展開沉浸式排版內文 (向下自然揭開剩餘幾何線條) -->
                 <div class="tile-details">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
@@ -127,11 +113,6 @@ function renderTiles() {
                                 <p>${cleanDescription}</p>
                             </div>
                         </div>
-                        <div class="mt-8 flex justify-end">
-                            <button onclick="openExternal(event, '${news.link}')" class="text-xs uppercase tracking-widest bg-black/40 hover:bg-black/60 px-4 py-2 transition-colors border border-white/20 cursor-pointer">
-                                網頁檢視 ↗
-                            </button>
-                        </div>
                     </div>
                 </div>
             </article>
@@ -142,29 +123,22 @@ function renderTiles() {
     attachTileEvents();
 }
 
-// 綁定互動事件 (加入頂部貼齊的平滑滾動)
 function attachTileEvents() {
     const tiles = newsGrid.querySelectorAll('.metro-tile');
 
     tiles.forEach((tile, index) => {
-        tile.addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-
+        tile.addEventListener('click', () => {
             const isCurrentlyExpanded = tile.classList.contains('expanded');
-
-            // 先將所有磚塊收回
             tiles.forEach(t => t.classList.remove('expanded'));
 
-            // 如果原本沒有展開，則展開自己並平滑滾動至頂部
             if (!isCurrentlyExpanded) {
                 tile.classList.add('expanded');
                 setTimeout(() => {
                     tile.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 150);
+                }, 200);
             }
         });
 
-        // 長按事件 (顯示快捷網頁檢視)
         let pressTimer = null;
         const startPress = () => {
             clearPress();
@@ -181,7 +155,6 @@ function attachTileEvents() {
     });
 }
 
-// 長按快捷選單
 function triggerLongPressAction(tile, link) {
     if (tile.querySelector('.long-press-overlay')) return;
     const overlay = document.createElement('div');
@@ -195,21 +168,25 @@ function triggerLongPressAction(tile, link) {
     tile.appendChild(overlay);
 }
 
-function openExternal(e, link) {
-    e.stopPropagation();
-    window.open(link, '_blank');
-}
-
-// 導覽列分類切換
 navLinks.forEach(link => {
     link.addEventListener('click', (e) => {
         navLinks.forEach(l => l.classList.remove('active', 'text-white', 'font-semibold'));
         e.target.classList.add('active', 'text-white', 'font-semibold');
-        fetchNews(e.target.getAttribute('data-category'));
+        
+        const category = e.target.getAttribute('data-category');
+        if (category === 'settings') {
+            newsGrid.classList.add('hidden');
+            settingsView.classList.remove('hidden');
+            settingsView.classList.add('flex');
+        } else {
+            settingsView.classList.add('hidden');
+            settingsView.classList.remove('flex');
+            newsGrid.classList.remove('hidden');
+            fetchNews(category);
+        }
     });
 });
 
-// 底部設定面板互動
 let currentFontSizePercent = 110; 
 const fontDisplay = document.getElementById('font-size-display');
 const rootHtml = document.documentElement; 
@@ -237,7 +214,6 @@ freqButtons.forEach(btn => {
     });
 });
 
-// 啟動初始化
 window.addEventListener('DOMContentLoaded', () => {
     updateFontSize();
     fetchNews('local');
