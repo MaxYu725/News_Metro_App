@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Metro News Live</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="loading-overlay">
+    <div class="metro-progress-container">
+        <div class="metro-dot"></div><div class="metro-dot"></div><div class="metro-dot"></div><div class="metro-dot"></div><div class="metro-dot"></div>
+    </div>
+    <div class="loading-text">updating headlines...</div>
+</div>
+
+<div id="app-container">
+    <div class="app-title">metro news live</div>
+    
+    <div class="pivot-headers" id="pivot-header-container">
+        <h2 class="pivot-header active" data-index="0">latest</h2>
+        <h2 class="pivot-header" data-index="1">local</h2>
+        <h2 class="pivot-header" data-index="2">entertainment</h2>
+        <h2 class="pivot-header" data-index="3">tech</h2>
+        <h2 class="pivot-header" data-index="4">pinned</h2>
+        <h2 class="pivot-header" data-index="5">settings</h2>
+    </div>
+
+    <div class="pivot-content-wrapper" id="pivot-body">
+        <!-- Pivot 0: Latest -->
+        <div id="pivot-latest" class="pivot-item active">
+            <div class="update-indicator" id="status-latest">syncing latest headlines...</div>
+            <div id="list-latest" class="tiles-grid"></div>
+        </div>
+
+        <!-- Pivot 1: Local -->
+        <div id="pivot-local" class="pivot-item">
+            <div class="update-indicator" id="status-local">hong kong local news</div>
+            <div id="list-local" class="tiles-grid"></div>
+        </div>
+
+        <!-- Pivot 2: Entertainment -->
+        <div id="pivot-entertainment" class="pivot-item">
+            <div class="update-indicator" id="status-entertainment">entertainment & culture</div>
+            <div id="list-entertainment" class="tiles-grid"></div>
+        </div>
+
+        <!-- Pivot 3: Tech -->
+        <div id="pivot-tech" class="pivot-item">
+            <div class="update-indicator" id="status-tech">technology & digital trends</div>
+            <div id="list-tech" class="tiles-grid"></div>
+        </div>
+
+        <!-- Pivot 4: Pinned -->
+        <div id="pivot-pinned" class="pivot-item">
+            <div class="update-indicator" id="status-pinned">your saved articles</div>
+            <div id="list-pinned" class="tiles-grid"></div>
+        </div>
+
+        <!-- Pivot 5: Settings -->
+        <div id="pivot-settings" class="pivot-item">
+            <div class="settings-container">
+                <div class="settings-group">
+                    <div class="settings-title">accent color</div>
+                    <div class="color-picker-grid">
+                        <button class="color-swatch" style="background: #339933;" onclick="MetroNews.setAccentColor('#339933')"></button>
+                        <button class="color-swatch" style="background: #1ba1e2;" onclick="MetroNews.setAccentColor('#1ba1e2')"></button>
+                        <button class="color-swatch" style="background: #d80073;" onclick="MetroNews.setAccentColor('#d80073')"></button>
+                        <button class="color-swatch" style="background: #a20025;" onclick="MetroNews.setAccentColor('#a20025')"></button>
+                        <button class="color-swatch" style="background: #f09609;" onclick="MetroNews.setAccentColor('#f09609')"></button>
+                        <button class="color-swatch" style="background: #00aba9;" onclick="MetroNews.setAccentColor('#00aba9')"></button>
+                        <button class="color-swatch" style="background: #fa6800;" onclick="MetroNews.setAccentColor('#fa6800')"></button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="settings-title">typography size</div>
+                    <div class="slider-row">
+                        <button class="metro-btn mb-0" onclick="MetroNews.changeFontSize(-10)">a-</button>
+                        <div id="font-size-label" class="settings-value">110%</div>
+                        <button class="metro-btn mb-0" onclick="MetroNews.changeFontSize(10)">a+</button>
+                        <button class="metro-btn mb-0" onclick="MetroNews.resetFontSize()">reset</button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="settings-title">auto update frequency</div>
+                    <div class="action-row">
+                        <button class="metro-btn accent mb-0 flex-grow" id="btn-freq-5" onclick="MetroNews.setUpdateFreq(5)">5 min</button>
+                        <button class="metro-btn mb-0 flex-grow" id="btn-freq-15" onclick="MetroNews.setUpdateFreq(15)">15 min</button>
+                        <button class="metro-btn mb-0 flex-grow" id="btn-freq-30" onclick="MetroNews.setUpdateFreq(30)">30 min</button>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <div class="settings-title">offline cache & api status</div>
+                    <div class="settings-info" id="cache-size-text">cached items: 0 article(s)</div>
+                    <div class="settings-info" id="api-status-text">backend: checking...</div>
+                    <div class="action-row" style="margin-top: 10px;">
+                        <button class="metro-btn mb-0 flex-grow" onclick="MetroNews.clearCache()">clear offline cache</button>
+                        <button class="metro-btn accent mb-0 flex-grow" onclick="MetroNews.checkApiStatus()">ping api</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
