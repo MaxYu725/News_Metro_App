@@ -51,7 +51,7 @@ async function fetchNews(category) {
     }
 }
 
-// 渲染所有動態磚 (建立雙結構：預覽區與可平滑展開的內文區)
+// 渲染所有動態磚
 function renderTiles() {
     let htmlContent = '';
     
@@ -102,12 +102,12 @@ function renderTiles() {
     attachTileEvents();
 }
 
-// 綁定互動事件 (實現互斥展開與平滑滑動)
+// 綁定互動事件 (加入頂部貼齊的平滑滾動)
 function attachTileEvents() {
     const tiles = newsGrid.querySelectorAll('.metro-tile');
 
     tiles.forEach((tile, index) => {
-        // 點擊事件：切換展開/收合，並自動收回其他大磚
+        // 點擊事件：切換展開/收合，並自動平滑滾動至頂部對齊
         tile.addEventListener('click', (e) => {
             if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
 
@@ -116,11 +116,12 @@ function attachTileEvents() {
             // 先將所有磚塊收回
             tiles.forEach(t => t.classList.remove('expanded'));
 
-            // 如果原本沒有展開，則展開自己
+            // 如果原本沒有展開，則展開自己並平滑滾動至頂部
             if (!isCurrentlyExpanded) {
                 tile.classList.add('expanded');
                 setTimeout(() => {
-                    tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    // 使用 block: 'start' 將 Tile 頂部完美貼齊螢幕上方
+                    tile.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 150);
             }
         });
