@@ -9,6 +9,7 @@ let categories = [
     { id: 'local', name: '本地' },
     { id: 'finance', name: '財經' },
     { id: 'global', name: '國際' },
+    { id: 'tech', name: '科技' },
     { id: 'settings', name: '設定' }
 ];
 let currentIndex = 0;
@@ -199,7 +200,6 @@ function triggerLongPressAction(tile, link) {
     tile.appendChild(overlay);
 }
 
-// 左右滑動切換頁面（無限循環）
 let touchStartX = 0;
 let touchStartY = 0;
 let touchEndX = 0;
@@ -219,7 +219,7 @@ document.addEventListener('touchend', e => {
 function handleSwipe() {
     const deltaX = touchEndX - touchStartX;
     const deltaY = touchEndY - touchStartY;
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 70) {
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
         if (deltaX > 0) {
             currentIndex = (currentIndex - 1 + categories.length) % categories.length;
         } else {
@@ -229,7 +229,6 @@ function handleSwipe() {
     }
 }
 
-// 下拉更新（Pull-to-Refresh）
 let ptrStartY = 0;
 let ptrCurrentY = 0;
 let isPulling = false;
@@ -245,9 +244,9 @@ mainContainer.addEventListener('touchmove', e => {
     if (!isPulling) return;
     ptrCurrentY = e.touches[0].clientY;
     const pullDist = ptrCurrentY - ptrStartY;
-    if (pullDist > 0 && pullDist < 140) {
+    if (pullDist > 0 && pullDist < 120) {
         ptrIndicator.style.height = `${pullDist}px`;
-        ptrIndicator.innerHTML = `<div class="loader-small" style="opacity: ${pullDist / 100};"></div>`;
+        ptrIndicator.innerHTML = `<div class="loader-small" style="opacity: ${pullDist / 80};"></div>`;
     }
 }, { passive: true });
 
@@ -255,8 +254,8 @@ mainContainer.addEventListener('touchend', async () => {
     if (!isPulling) return;
     isPulling = false;
     const pullDist = ptrCurrentY - ptrStartY;
-    if (pullDist > 75) {
-        ptrIndicator.style.height = '50px';
+    if (pullDist > 65) {
+        ptrIndicator.style.height = '45px';
         const currentCat = categories[currentIndex];
         if (currentCat.id !== 'settings') {
             await fetchNews(currentCat.id);
@@ -268,12 +267,11 @@ mainContainer.addEventListener('touchend', async () => {
     ptrCurrentY = 0;
 }, { passive: true });
 
-// 動態類別管理（新增 / 刪除）
 function renderCategoryManager() {
     const list = document.getElementById('category-manager-list');
     list.innerHTML = '';
     categories.forEach((cat, index) => {
-        if (cat.id === 'settings') return; // 保留設定分頁不在此刪除
+        if (cat.id === 'settings') return;
         const row = document.createElement('div');
         row.className = 'flex justify-between items-center bg-white/5 px-4 py-3';
         row.innerHTML = `
@@ -285,7 +283,7 @@ function renderCategoryManager() {
 }
 
 window.deleteCategory = function(index) {
-    if (categories.length <= 2) return; // 至少保留一個新聞與設定
+    if (categories.length <= 2) return;
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
     renderPivot();
@@ -297,7 +295,6 @@ document.getElementById('btn-add-cat').addEventListener('click', () => {
     const val = input.value.trim();
     if (val) {
         const id = val.toLowerCase().replace(/\s+/g, '_');
-        // 插入到設定分頁之前
         categories.splice(categories.length - 1, 0, { id: id, name: val });
         input.value = '';
         renderPivot();
