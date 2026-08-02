@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#000000">
     
-    <!-- PWA 全螢幕與桌面釘選設置 -->
+    <!-- PWA 全螢幕、桌面釘選與 Manifest 設置 -->
+    <link rel="manifest" href="/manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Metro News</title>
     
-    <!-- App Logo 設置 (指向根目錄) -->
+    <!-- App Logo 設置 -->
     <link rel="icon" href="/ic_launcher.png" type="image/png">
     <link rel="apple-touch-icon" href="/ic_launcher.png">
     
@@ -19,9 +20,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="h-screen w-screen flex flex-col pt-6 pb-6 px-6 relative">
+<body class="h-screen w-screen flex flex-col pt-6 px-6 relative">
 
-    <!-- 頂部 Pivot 導覽列 (取代原本的 Panorama 標題) -->
+    <!-- 頂部 Pivot 導覽列 -->
     <header class="flex-shrink-0">
         <nav class="flex space-x-6 text-2xl mb-6 text-gray-500" id="nav-menu">
             <a data-category="local" class="nav-link active">本地</a>
@@ -30,98 +31,64 @@
         </nav>
     </header>
 
-    <!-- 主體內容：一排一個磚 (grid-cols-1) -->
-    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-10 relative" id="main-container">
+    <!-- 主體內容容器 -->
+    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative" id="main-container">
         <!-- 載入中畫面 -->
-        <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden">
+        <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
             <div class="loader"></div>
         </div>
         
-        <!-- 新聞網格容器 -->
-        <div id="news-grid" class="grid grid-cols-1 gap-3 auto-rows-auto">
+        <!-- 新聞網格容器 (一排一個磚) -->
+        <div id="news-grid" class="grid grid-cols-1 gap-3 auto-rows-auto mb-10">
             <!-- 內容將由 JavaScript 動態插入 -->
         </div>
+
+        <!-- 底部設定與更多選項 (Metro 幾何風格) -->
+        <section class="border-t border-white/20 pt-8 pb-10" id="settings-panel">
+            
+            <!-- 更多分類選單 -->
+            <div class="mb-10 flex flex-col space-y-4">
+                <button class="text-left text-xl font-light text-gray-300 hover:text-white hover:translate-x-1 transition-all">hong kong local news</button>
+                <button class="text-left text-xl font-light text-gray-300 hover:text-white hover:translate-x-1 transition-all">entertainment & culture</button>
+                <button class="text-left text-xl font-light text-gray-300 hover:text-white hover:translate-x-1 transition-all">technology & digital trends</button>
+                <button class="text-left text-xl font-light text-gray-300 hover:text-white hover:translate-x-1 transition-all">your saved articles</button>
+            </div>
+
+            <!-- 主題色設定 (Accent Color) -->
+            <div class="mb-8">
+                <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">accent color</p>
+                <div class="flex space-x-3">
+                    <button class="w-10 h-10 bg-blue-600 border-2 border-white focus:border-white transition-all"></button>
+                    <button class="w-10 h-10 bg-green-600 border-2 border-transparent focus:border-white transition-all"></button>
+                    <button class="w-10 h-10 bg-red-600 border-2 border-transparent focus:border-white transition-all"></button>
+                </div>
+            </div>
+
+            <!-- 字體大小設定 (Typography Size) -->
+            <div class="mb-8">
+                <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">typography size</p>
+                <div class="flex space-x-2">
+                    <button class="metro-btn" id="btn-font-minus">a -</button>
+                    <div class="flex items-center justify-center px-4 bg-white/10 text-white font-bold tracking-wider" id="font-size-display">110%</div>
+                    <button class="metro-btn" id="btn-font-plus">a +</button>
+                    <button class="metro-btn" id="btn-font-reset">reset</button>
+                </div>
+            </div>
+
+            <!-- 自動更新頻率 (Auto Update Frequency) -->
+            <div class="mb-8">
+                <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">auto update frequency</p>
+                <div class="flex space-x-2" id="update-freq-group">
+                    <button class="metro-btn active">5 min</button>
+                    <button class="metro-btn">15 min</button>
+                    <button class="metro-btn">30 min</button>
+                </div>
+            </div>
+
+        </section>
     </main>
 
     <!-- 引入主要邏輯腳本 -->
     <script src="app.js"></script>
-</body>
-</html>            <div id="list-latest" class="tiles-grid"></div>
-        </div>
-
-        <!-- Pivot 1: Local -->
-        <div id="pivot-local" class="pivot-item">
-            <div class="update-indicator" id="status-local">hong kong local news</div>
-            <div id="list-local" class="tiles-grid"></div>
-        </div>
-
-        <!-- Pivot 2: Entertainment -->
-        <div id="pivot-entertainment" class="pivot-item">
-            <div class="update-indicator" id="status-entertainment">entertainment & culture</div>
-            <div id="list-entertainment" class="tiles-grid"></div>
-        </div>
-
-        <!-- Pivot 3: Tech -->
-        <div id="pivot-tech" class="pivot-item">
-            <div class="update-indicator" id="status-tech">technology & digital trends</div>
-            <div id="list-tech" class="tiles-grid"></div>
-        </div>
-
-        <!-- Pivot 4: Pinned -->
-        <div id="pivot-pinned" class="pivot-item">
-            <div class="update-indicator" id="status-pinned">your saved articles</div>
-            <div id="list-pinned" class="tiles-grid"></div>
-        </div>
-
-        <!-- Pivot 5: Settings -->
-        <div id="pivot-settings" class="pivot-item">
-            <div class="settings-container">
-                <div class="settings-group">
-                    <div class="settings-title">accent color</div>
-                    <div class="color-picker-grid">
-                        <button class="color-swatch" style="background: #339933;" onclick="MetroNews.setAccentColor('#339933')"></button>
-                        <button class="color-swatch" style="background: #1ba1e2;" onclick="MetroNews.setAccentColor('#1ba1e2')"></button>
-                        <button class="color-swatch" style="background: #d80073;" onclick="MetroNews.setAccentColor('#d80073')"></button>
-                        <button class="color-swatch" style="background: #a20025;" onclick="MetroNews.setAccentColor('#a20025')"></button>
-                        <button class="color-swatch" style="background: #f09609;" onclick="MetroNews.setAccentColor('#f09609')"></button>
-                        <button class="color-swatch" style="background: #00aba9;" onclick="MetroNews.setAccentColor('#00aba9')"></button>
-                        <button class="color-swatch" style="background: #fa6800;" onclick="MetroNews.setAccentColor('#fa6800')"></button>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <div class="settings-title">typography size</div>
-                    <div class="slider-row">
-                        <button class="metro-btn mb-0" onclick="MetroNews.changeFontSize(-10)">a-</button>
-                        <div id="font-size-label" class="settings-value">110%</div>
-                        <button class="metro-btn mb-0" onclick="MetroNews.changeFontSize(10)">a+</button>
-                        <button class="metro-btn mb-0" onclick="MetroNews.resetFontSize()">reset</button>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <div class="settings-title">auto update frequency</div>
-                    <div class="action-row">
-                        <button class="metro-btn accent mb-0 flex-grow" id="btn-freq-5" onclick="MetroNews.setUpdateFreq(5)">5 min</button>
-                        <button class="metro-btn mb-0 flex-grow" id="btn-freq-15" onclick="MetroNews.setUpdateFreq(15)">15 min</button>
-                        <button class="metro-btn mb-0 flex-grow" id="btn-freq-30" onclick="MetroNews.setUpdateFreq(30)">30 min</button>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <div class="settings-title">offline cache & api status</div>
-                    <div class="settings-info" id="cache-size-text">cached items: 0 article(s)</div>
-                    <div class="settings-info" id="api-status-text">backend: checking...</div>
-                    <div class="action-row" style="margin-top: 10px;">
-                        <button class="metro-btn mb-0 flex-grow" onclick="MetroNews.clearCache()">clear offline cache</button>
-                        <button class="metro-btn accent mb-0 flex-grow" onclick="MetroNews.checkApiStatus()">ping api</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script src="app.js"></script>
 </body>
 </html>
