@@ -17,8 +17,7 @@
 <body class="h-screen w-screen flex flex-col pt-6 px-6 relative">
 
     <header class="flex-shrink-0">
-        <nav class="flex space-x-6 text-2xl mb-6 text-gray-500 overflow-x-auto hide-scrollbar justify-start" id="nav-menu">
-        </nav>
+        <nav class="flex space-x-6 text-2xl mb-6 text-gray-500 overflow-x-auto hide-scrollbar justify-start" id="nav-menu"></nav>
     </header>
 
     <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative" id="main-container">
@@ -43,9 +42,11 @@
             <div>
                 <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">accent color</p>
                 <div class="flex space-x-3">
-                    <button class="w-10 h-10 bg-blue-600 border-2 border-white transition-all"></button>
-                    <button class="w-10 h-10 bg-green-600 border-2 border-transparent transition-all"></button>
-                    <button class="w-10 h-10 bg-red-600 border-2 border-transparent transition-all"></button>
+                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-white transition-all" data-color="bg-blue-600"></button>
+                    <button class="color-btn w-10 h-10 bg-green-600 border-2 border-transparent transition-all" data-color="bg-green-600"></button>
+                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent transition-all" data-color="bg-purple-700"></button>
+                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent transition-all" data-color="bg-red-600"></button>
+                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent transition-all" data-color="bg-orange-600"></button>
                 </div>
             </div>
 
