@@ -1,10 +1,5 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-const METRO_COLORS = [
-    'bg-blue-600', 'bg-green-600', 'bg-purple-700', 
-    'bg-red-600', 'bg-orange-600', 'bg-teal-600', 'bg-pink-600'
-];
-
 let categories = [
     { id: 'local', name: '本地' },
     { id: 'finance', name: '財經' },
@@ -12,8 +7,10 @@ let categories = [
     { id: 'tech', name: '科技' },
     { id: 'settings', name: '設定' }
 ];
+
 let currentIndex = 0;
 let currentNewsData = [];
+let currentThemeColor = 'bg-blue-600'; 
 
 const newsGrid = document.getElementById('news-grid');
 const settingsView = document.getElementById('settings-view');
@@ -71,24 +68,19 @@ function timeAgo(dateString) {
 
 function generateGeometricBackground() {
     let svg = `<svg class="geo-bg" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg">`;
-    for (let i = 0; i < 6; i++) {
-        const x1 = Math.random() * 400, y1 = Math.random() * 600;
-        const x2 = Math.random() * 400, y2 = Math.random() * 600;
-        const opacity = (10 + Math.random() * 20) / 100;
-        svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="white" stroke-width="${1 + Math.random() * 2}" stroke-opacity="${opacity}" />`;
+    
+    const cx = 50 + Math.random() * 300;
+    const cy = 50 + Math.random() * 200;
+    const r = 100 + Math.random() * 150;
+    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.08" />`;
+
+    for (let i = 0; i < (1 + Math.floor(Math.random() * 2)); i++) {
+        const x = Math.random() * 300;
+        const y = Math.random() * 300;
+        const pts = `${x},${y} ${x+250},${y+80} ${x+180},${y+350} ${x-70},${y+270}`;
+        svg += `<polygon points="${pts}" fill="white" fill-opacity="0.05" />`;
     }
-    for (let i = 0; i < 4; i++) {
-        const p1 = `${Math.random()*400},${Math.random()*600}`;
-        const p2 = `${Math.random()*400},${Math.random()*600}`;
-        const p3 = `${Math.random()*400},${Math.random()*600}`;
-        const opacity = (10 + Math.random() * 20) / 100;
-        svg += `<polygon points="${p1} ${p2} ${p3}" fill="white" fill-opacity="${opacity}" />`;
-    }
-    for (let i = 0; i < 3; i++) {
-        const cx = Math.random() * 400, cy = Math.random() * 600, r = 10 + Math.random() * 25;
-        const opacity = (10 + Math.random() * 15) / 100;
-        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="${opacity}" />`;
-    }
+    
     svg += `</svg>`;
     return svg;
 }
@@ -118,13 +110,12 @@ async function fetchNews(categoryId) {
 function renderTiles() {
     let htmlContent = '';
     currentNewsData.forEach((news, index) => {
-        const colorClass = METRO_COLORS[index % METRO_COLORS.length];
         const animationDelay = `style="animation-delay: ${index * 0.05}s"`;
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
 
         htmlContent += `
-            <article class="metro-tile ${colorClass}" data-index="${index}" ${animationDelay}>
+            <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
                 ${geoBackground}
                 <div class="tile-preview p-5">
                     <div></div>
@@ -143,8 +134,9 @@ function renderTiles() {
                                 <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
                             </div>
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-4">${news.title}</h3>
-                            <p class="text-xs opacity-70 mb-6 pb-4 border-b border-white/20">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
-                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4">
+                            <p class="text-xs opacity-70 mb-2">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
+                            
+                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 p-5 mt-4">
                                 <p>${cleanDescription}</p>
                             </div>
                         </div>
@@ -300,6 +292,21 @@ document.getElementById('btn-add-cat').addEventListener('click', () => {
         renderPivot();
         renderCategoryManager();
     }
+});
+
+const colorButtons = document.querySelectorAll('.color-btn');
+colorButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        colorButtons.forEach(b => {
+            b.classList.remove('border-white');
+            b.classList.add('border-transparent');
+        });
+        e.target.classList.remove('border-transparent');
+        e.target.classList.add('border-white');
+        
+        currentThemeColor = e.target.getAttribute('data-color');
+        if (currentNewsData.length > 0) renderTiles();
+    });
 });
 
 let currentFontSizePercent = 110; 
