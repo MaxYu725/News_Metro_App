@@ -38,7 +38,7 @@ function renderPivot() {
     });
     const activeLink = navMenu.children[currentIndex];
     if (activeLink) {
-        navMenu.scrollTo({ left: activeLink.offsetLeft - 12, behavior: 'smooth' });
+        navMenu.scrollTo({ left: activeLink.offsetLeft - 16, behavior: 'smooth' });
     }
 }
 
@@ -109,12 +109,12 @@ async function fetchNews(categoryId, forceRefresh = false) {
             renderTiles();
         } else {
             if (!newsCache[categoryId]) {
-                newsGrid.innerHTML = '<p class="text-gray-500">目前沒有新聞資料。</p>';
+                newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有新聞資料。</p>';
             }
         }
     } catch (error) {
         if (!newsCache[categoryId]) {
-            newsGrid.innerHTML = '<p class="text-red-500">無法連接到伺服器，請檢查網路或 API 設定。</p>';
+            newsGrid.innerHTML = '<p class="text-red-500 text-center mt-10">無法連接到伺服器，請檢查網路設定。</p>';
         }
     } finally {
         loadingIndicator.classList.add('hidden');
@@ -137,23 +137,26 @@ function renderTiles() {
             `;
         }
 
+        // 修改為滿版無邊界的畫廊
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
+            // 使用 w-full h-auto block 讓圖片完美滿版並等比例自適應高度
             let slidesHtml = news.images.map(imgUrl => 
-                `<img src="${imgUrl}" class="snap-center flex-shrink-0 w-full h-auto max-h-[450px] object-contain bg-black/40" alt="新聞圖片" loading="lazy" />`
+                `<img src="${imgUrl}" class="snap-center flex-shrink-0 w-full h-auto block" alt="新聞圖片" loading="lazy" />`
             ).join('');
             
             let navButtons = '';
             if (news.images.length > 1) {
                 navButtons = `
-                    <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: -window.innerWidth*0.8, behavior: 'smooth'})" class="absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg border-y border-r border-white/20 active:bg-white active:text-black transition-colors">❮</button>
-                    <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: window.innerWidth*0.8, behavior: 'smooth'})" class="absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg border-y border-l border-white/20 active:bg-white active:text-black transition-colors">❯</button>
-                    <div class="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded tracking-widest border border-white/20 z-10 shadow">${news.images.length} 圖</div>
+                    <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: -window.innerWidth, behavior: 'smooth'})" class="absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❮</button>
+                    <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: window.innerWidth, behavior: 'smooth'})" class="absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❯</button>
+                    <div class="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded tracking-widest z-10 shadow">${news.images.length} 圖</div>
                 `;
             }
 
+            // 直接貼合邊緣，移除 mx-4 負距與外框
             imagesHtml = `
-                <div class="relative my-3 -mx-4 overflow-hidden border-y border-white/10 group bg-black/20">
+                <div class="relative my-4 w-full overflow-hidden group bg-black/20 shadow-md">
                     <div class="img-scroll-box flex overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">
                         ${slidesHtml}
                     </div>
@@ -166,7 +169,7 @@ function renderTiles() {
             <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
                 ${geoBackground}
                 
-                <div class="tile-preview p-4 flex flex-row justify-between items-start">
+                <div class="tile-preview px-5 py-4 flex flex-row justify-between items-start">
                     <div class="flex flex-col justify-between h-full flex-grow pr-1">
                         <h3 class="text-xl md:text-2xl font-bold leading-tight line-clamp-3">${news.title}</h3>
                         <p class="text-xs mt-3 opacity-80 uppercase tracking-widest truncate">
@@ -179,16 +182,16 @@ function renderTiles() {
                 <div class="tile-details">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
-                            <div class="flex justify-between items-center mb-2 mt-2">
+                            <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
                                 <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
                             </div>
-                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3">${news.title}</h3>
-                            <p class="text-xs opacity-70 mb-2">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
+                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3 px-5">${news.title}</h3>
+                            <p class="text-xs opacity-70 mb-2 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
                             ${imagesHtml}
 
-                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 p-4 mt-3 mb-2 border border-white/5">
+                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 px-5 py-6 mt-3">
                                 <p>${cleanDescription}</p>
                             </div>
                         </div>
