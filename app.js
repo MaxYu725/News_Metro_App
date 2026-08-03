@@ -1,6 +1,5 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 預設分類加入「娛樂」
 let categories = [
     { id: 'local', name: '本地' },
     { id: 'finance', name: '財經' },
@@ -70,19 +69,16 @@ function timeAgo(dateString) {
 
 function generateGeometricBackground() {
     let svg = `<svg class="geo-bg" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg">`;
-    
     const cx = 50 + Math.random() * 300;
     const cy = 50 + Math.random() * 200;
     const r = 100 + Math.random() * 150;
     svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.08" />`;
-
     for (let i = 0; i < (1 + Math.floor(Math.random() * 2)); i++) {
         const x = Math.random() * 300;
         const y = Math.random() * 300;
         const pts = `${x},${y} ${x+250},${y+80} ${x+180},${y+350} ${x-70},${y+270}`;
         svg += `<polygon points="${pts}" fill="white" fill-opacity="0.05" />`;
     }
-    
     svg += `</svg>`;
     return svg;
 }
@@ -116,8 +112,24 @@ function renderTiles() {
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
 
+        // 若有縮圖，套用背景圖片與半透明遮罩
+        let tileStyle = '';
+        if (news.imageUrl) {
+            tileStyle = `style="background-image: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.65)), url('${news.imageUrl}'); background-size: cover; background-position: center;"`;
+        }
+
+        // 展開後的圖片畫廊渲染
+        let imagesHtml = '';
+        if (news.images && news.images.length > 0) {
+            imagesHtml = `<div class="grid grid-cols-1 gap-4 my-4">`;
+            news.images.forEach(imgUrl => {
+                imagesHtml += `<img src="${imgUrl}" class="w-full h-auto object-cover max-h-[350px] border border-white/20" alt="新聞圖片" />`;
+            });
+            imagesHtml += `</div>`;
+        }
+
         htmlContent += `
-            <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
+            <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay} ${tileStyle}>
                 ${geoBackground}
                 <div class="tile-preview p-5">
                     <div></div>
@@ -138,6 +150,8 @@ function renderTiles() {
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-4">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-2">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
+                            ${imagesHtml}
+
                             <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 p-5 mt-4">
                                 <p>${cleanDescription}</p>
                             </div>
