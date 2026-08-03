@@ -35,15 +35,36 @@ const DOM = {
     navMenu: document.getElementById('nav-menu'),
     mainContainer: document.getElementById('main-container'),
     ptrIndicator: document.getElementById('ptr-indicator'),
-    // Lightbox 元素
     lightboxOverlay: document.getElementById('lightbox-overlay'),
     lightboxImg: document.getElementById('lightbox-img'),
-    lightboxClose: document.getElementById('lightbox-close')
+    lightboxClose: document.getElementById('lightbox-close'),
+    backToTopBtn: document.getElementById('back-to-top') // 新增回到頂部按鈕
 };
 
 // ==========================================
-// Lightbox (圖片檢視器) 引擎與雙指縮放邏輯
+// 動態磚 (Live Tiles) 自動翻轉引擎
 // ==========================================
+setInterval(() => {
+    // 若在設定頁或畫面無新聞，則不翻轉
+    if (DOM.newsGrid.classList.contains('hidden') || currentNewsData.length === 0) return;
+    
+    // 隨機挑選一塊「未展開」的新聞磚
+    const tiles = Array.from(DOM.newsGrid.querySelectorAll('.metro-tile:not(.expanded)'));
+    if (tiles.length === 0) return;
+    
+    const randomTile = tiles[Math.floor(Math.random() * tiles.length)];
+    
+    // 觸發翻轉動畫
+    randomTile.classList.add('live-tile-flip');
+    
+    // 動畫結束後移除 class 以便下次觸發
+    setTimeout(() => {
+        randomTile.classList.remove('live-tile-flip');
+    }, 1500); 
+}, 3500); // 每 3.5 秒翻轉一次，增添視覺動態感
+// ==========================================
+
+
 let currentScale = 1;
 let initialDistance = 0;
 
@@ -52,7 +73,6 @@ function openLightbox(src) {
     DOM.lightboxImg.style.transform = 'scale(1)';
     currentScale = 1;
     DOM.lightboxOverlay.classList.remove('hidden');
-    // 延遲一點點移除透明度，觸發 CSS 漸顯動畫
     setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
 }
 
@@ -66,11 +86,9 @@ function closeLightbox() {
 
 DOM.lightboxClose.addEventListener('click', closeLightbox);
 DOM.lightboxOverlay.addEventListener('click', (e) => {
-    // 點擊背景區域關閉
     if (e.target === DOM.lightboxOverlay) closeLightbox();
 });
 
-// 1. 記錄雙指剛觸碰時的距離
 DOM.lightboxImg.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
         initialDistance = Math.hypot(
@@ -80,10 +98,9 @@ DOM.lightboxImg.addEventListener('touchstart', (e) => {
     }
 }, { passive: false });
 
-// 2. 雙指滑動時計算比例並放大縮小
 DOM.lightboxImg.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2) {
-        e.preventDefault(); // 防止畫面滾動
+        e.preventDefault(); 
         const currentDistance = Math.hypot(
             e.touches[0].pageX - e.touches[1].pageX,
             e.touches[0].pageY - e.touches[1].pageY
@@ -91,13 +108,11 @@ DOM.lightboxImg.addEventListener('touchmove', (e) => {
         const scaleChange = currentDistance / initialDistance;
         let newScale = currentScale * scaleChange;
         
-        // 限制縮放比例 (最小 1 倍，最大 4 倍)
         newScale = Math.min(Math.max(1, newScale), 4);
         DOM.lightboxImg.style.transform = `scale(${newScale})`;
     }
 }, { passive: false });
 
-// 3. 手指離開時，記憶最後的縮放比例
 DOM.lightboxImg.addEventListener('touchend', (e) => {
     if (e.touches.length < 2) {
         const transform = DOM.lightboxImg.style.transform;
@@ -106,21 +121,17 @@ DOM.lightboxImg.addEventListener('touchend', (e) => {
     }
 });
 
-// 4. 雙擊還原 (Double Tap to Reset)
 let lastTapTime = 0;
 DOM.lightboxImg.addEventListener('touchend', (e) => {
     const currentTime = new Date().getTime();
     const tapLength = currentTime - lastTapTime;
     if (tapLength < 300 && tapLength > 0) {
-        // 偵測到雙擊
         currentScale = 1;
         DOM.lightboxImg.style.transform = 'scale(1)';
         e.preventDefault();
     }
     lastTapTime = currentTime;
 });
-// ==========================================
-
 
 function renderPivot() {
     DOM.navMenu.innerHTML = '';
@@ -145,6 +156,7 @@ function handlePageChange() {
     currentPage = 0; 
     hasMoreNews = true;
     currentSearchQuery = ''; 
+    DOM.backToTopBtn.classList.add('hidden-fab'); // 切換版塊時隱藏回到頂部按鈕
     
     if (currentCat.id === 'settings') {
         DOM.newsGrid.classList.add('hidden');
@@ -262,7 +274,6 @@ function renderTiles(isAppendMode = false) {
 
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
-            // 在圖片上加入 lightbox-img class
             let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-auto block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" />`).join('');
             let navButtons = news.images.length > 1 ? `
                 <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: -window.innerWidth, behavior: 'smooth'})" class="absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❮</button>
@@ -292,6 +303,8 @@ function renderTiles(isAppendMode = false) {
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
                                 <div class="flex space-x-4">
+                                    <!-- 新增：原生分享按鈕 -->
+                                    <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100" data-index="${index}">分享 ↗</button>
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                     <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
                                 </div>
@@ -318,6 +331,8 @@ function attachTileEvents(startIndex = 0) {
     
     tiles.forEach((tile) => {
         const index = tile.getAttribute('data-index');
+        
+        // 收藏按鈕事件
         const bookmarkBtn = tile.querySelector('.bookmark-btn');
         if (bookmarkBtn) {
             bookmarkBtn.addEventListener('click', (e) => {
@@ -325,11 +340,35 @@ function attachTileEvents(startIndex = 0) {
                 toggleBookmark(currentNewsData[index], bookmarkBtn);
             });
         }
+        
+        // 分享按鈕事件 (Web Share API)
+        const shareBtn = tile.querySelector('.share-btn');
+        if (shareBtn) {
+            shareBtn.addEventListener('click', async (e) => {
+                e.stopPropagation(); 
+                const news = currentNewsData[index];
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: news.title,
+                            text: '看看這則新聞！',
+                            url: news.link
+                        });
+                    } catch (err) {
+                        console.log('分享取消或失敗');
+                    }
+                } else {
+                    // 電腦版或不支援原生分享時的備案：複製連結
+                    navigator.clipboard.writeText(news.link).then(() => {
+                        alert('已複製新聞連結！');
+                    });
+                }
+            });
+        }
 
         tile.addEventListener('click', (e) => {
             if(e.target.tagName === 'BUTTON') return;
 
-            // 攔截圖片點擊：如果點擊的是文章內的圖片，直接開啟燈箱，不執行收起文章的邏輯
             if (e.target.classList.contains('lightbox-img')) {
                 e.stopPropagation();
                 openLightbox(e.target.src);
@@ -376,7 +415,15 @@ function triggerLongPressAction(tile, link) {
     tile.appendChild(overlay);
 }
 
+// 捲動監聽 (無限載入 + 回到頂部按鈕顯示邏輯)
 DOM.mainContainer.addEventListener('scroll', () => {
+    // 回到頂部按鈕邏輯：向下滑動超過 1.5 倍螢幕高度時顯示
+    if (DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
+        DOM.backToTopBtn.classList.remove('hidden-fab');
+    } else {
+        DOM.backToTopBtn.classList.add('hidden-fab');
+    }
+
     if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
         if (categories[currentIndex].isCustom && !currentSearchQuery) return;
         if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 150) {
@@ -388,6 +435,11 @@ DOM.mainContainer.addEventListener('scroll', () => {
             }
         }
     }
+});
+
+// 回到頂部按鈕點擊事件
+DOM.backToTopBtn.addEventListener('click', () => {
+    DOM.mainContainer.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
 let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
