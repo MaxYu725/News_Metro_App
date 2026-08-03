@@ -1,10 +1,12 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
+// 預設分類加入「娛樂」
 let categories = [
     { id: 'local', name: '本地' },
     { id: 'finance', name: '財經' },
     { id: 'global', name: '國際' },
     { id: 'tech', name: '科技' },
+    { id: 'ent', name: '娛樂' },
     { id: 'settings', name: '設定' }
 ];
 
