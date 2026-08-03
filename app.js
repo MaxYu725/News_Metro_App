@@ -1,14 +1,14 @@
 import { timeAgo, generateGeometricBackground, LocalDB, extractDynamicColor } from './utils.js';
 import { fetchNewsData, fetchImageData } from './api.js';
 
+// 移除了科技板塊。你之前刪掉的預設板塊會在這裡自動重生！
 const baseCats = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
-    { id: 'ent', name: '娛樂' },
-    { id: 'tech', name: '科技' }
+    { id: 'ent', name: '娛樂' }
 ];
 const systemCats = [
-    { id: 'gallery', name: '圖庫' }, // 全新圖庫版塊
+    { id: 'gallery', name: '圖庫' }, 
     { id: 'bookmarks', name: '收藏' },
     { id: 'settings', name: '設定' }
 ];
@@ -45,7 +45,6 @@ const DOM = {
     gallerySearchInput: document.getElementById('gallery-search-input')
 };
 
-// 監聽圖庫搜尋框 Enter 事件
 DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         DOM.gallerySearchInput.blur();
@@ -61,7 +60,6 @@ async function releaseWakeLock() { if (wakeLock !== null) { await wakeLock.relea
 document.addEventListener('visibilitychange', async () => { if (wakeLock !== null && document.visibilityState === 'visible') { await requestWakeLock(); } });
 
 setInterval(() => {
-    // 只有在新聞模式下才翻轉動態磚 (圖庫模式不翻轉)
     if (!DOM.newsGrid || DOM.newsGrid.classList.contains('hidden') || currentNewsData.length === 0 || categories[currentIndex].id === 'gallery') return;
     const tiles = Array.from(DOM.newsGrid.querySelectorAll('.metro-tile:not(.expanded)'));
     if (tiles.length === 0) return;
@@ -70,8 +68,12 @@ setInterval(() => {
     setTimeout(() => { randomTile.classList.remove('live-tile-flip'); }, 1500); 
 }, 3500); 
 
+// ==============================
+// 完美防護：結合 History API 的 Lightbox
+// ==============================
 let currentScale = 1;
 let initialDistance = 0;
+let isLightboxOpen = false;
 
 function openLightbox(src) {
     if(!DOM.lightboxImg || !DOM.lightboxOverlay) return;
@@ -80,19 +82,37 @@ function openLightbox(src) {
     currentScale = 1;
     DOM.lightboxOverlay.classList.remove('hidden');
     setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
+    
+    // 將開啟狀態寫入瀏覽器歷史紀錄，攔截手機返回鍵
+    isLightboxOpen = true;
+    history.pushState({ lightbox: true }, '');
 }
 
-function closeLightbox() {
-    if(!DOM.lightboxOverlay) return;
+function closeLightbox(fromHardwareBackBtn = false) {
+    if(!DOM.lightboxOverlay || DOM.lightboxOverlay.classList.contains('hidden')) return;
+    
     DOM.lightboxOverlay.classList.add('opacity-0');
     setTimeout(() => {
         DOM.lightboxOverlay.classList.add('hidden');
         if(DOM.lightboxImg) DOM.lightboxImg.src = '';
     }, 300);
+    
+    isLightboxOpen = false;
+    // 如果是手動點擊 X 關閉，則主動消耗掉歷史紀錄；如果是按實體返回鍵，就不需要重複消耗。
+    if (!fromHardwareBackBtn) {
+        history.back(); 
+    }
 }
 
-DOM.lightboxClose?.addEventListener('click', closeLightbox);
-DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lightboxOverlay) closeLightbox(); });
+// 監聽手機的實體返回鍵
+window.addEventListener('popstate', () => {
+    if (isLightboxOpen) {
+        closeLightbox(true); // 觸發關閉，並不讓網頁退出
+    }
+});
+
+DOM.lightboxClose?.addEventListener('click', () => closeLightbox(false));
+DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lightboxOverlay) closeLightbox(false); });
 
 DOM.lightboxImg?.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) initialDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
@@ -151,7 +171,6 @@ function handlePageChange() {
     
     releaseWakeLock();
     
-    // 預設關閉圖庫搜尋列，並恢復新聞網格排版
     DOM.gallerySearchContainer?.classList.add('hidden');
     if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 gap-[2px] auto-rows-auto';
 
@@ -166,12 +185,11 @@ function handlePageChange() {
         DOM.newsGrid?.classList.remove('hidden');
         renderBookmarksUI();
     } else if (currentCat.id === 'gallery') {
-        // 圖庫專屬排版邏輯
         DOM.settingsView?.classList.add('hidden');
         DOM.settingsView?.classList.remove('flex');
         DOM.newsGrid?.classList.remove('hidden');
         DOM.gallerySearchContainer?.classList.remove('hidden');
-        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-[2px] auto-rows-auto px-5'; // 雙欄網格
+        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-[2px] auto-rows-auto px-5'; 
         
         currentSearchQuery = DOM.gallerySearchInput?.value.trim() || 'Japan travel';
         loadGalleryUI(false);
@@ -225,7 +243,6 @@ function markAsRead(link, titleElement) {
     }
 }
 
-// 專屬圖庫加載邏輯
 async function loadGalleryUI(isAppendMode = false) {
     if (!isAppendMode && DOM.newsGrid) {
         DOM.newsGrid.innerHTML = '';
@@ -254,7 +271,6 @@ async function loadGalleryUI(isAppendMode = false) {
     isLoadingMore = false;
 }
 
-// 專屬圖庫渲染邏輯 (雙欄無文字排版)
 function renderGalleryTiles(isAppendMode = false) {
     if (!DOM.newsGrid) return;
     let htmlContent = '';
@@ -557,17 +573,30 @@ DOM.mainContainer?.addEventListener('touchend', async () => {
     ptrStartY = 0; ptrCurrentY = 0;
 }, { passive: true });
 
+// ==============================
+// 完美修復：設定頁「只允許刪除自訂關鍵字」，預設板塊絕對安全！
+// ==============================
 function renderCategoryManager() {
     const list = document.getElementById('category-manager-list');
     if(!list) return;
     list.innerHTML = '';
-    categories.forEach((cat, index) => {
-        if (['bookmarks', 'settings', 'gallery'].includes(cat.id)) return;
+    
+    // 只抓取「自訂板塊」顯示在刪除清單中
+    const customCategoriesOnly = categories.filter(cat => cat.isCustom);
+    
+    if (customCategoriesOnly.length === 0) {
+        list.innerHTML = '<p class="text-gray-500 text-sm py-4">目前沒有自訂追蹤關鍵字。</p>';
+        return;
+    }
+
+    customCategoriesOnly.forEach((cat) => {
+        // 找出它在原始陣列的正確 index
+        const realIndex = categories.findIndex(c => c.id === cat.id);
         const row = document.createElement('div');
-        row.className = 'flex justify-between items-center bg-white/5 px-4 py-3';
+        row.className = 'flex justify-between items-center bg-white/5 px-4 py-3 mb-2 rounded';
         row.innerHTML = `
-            <span class="text-xl font-light text-gray-200">${cat.name} ${cat.isCustom ? '<span class="text-[10px] text-blue-300 ml-1">(追蹤)</span>' : ''}</span>
-            <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30" onclick="deleteCategory(${index})">刪除</button>
+            <span class="text-xl font-light text-gray-200">${cat.name} <span class="text-[10px] text-blue-300 ml-1">(追蹤)</span></span>
+            <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30 rounded" onclick="deleteCategory(${realIndex})">刪除</button>
         `;
         list.appendChild(row);
     });
@@ -575,8 +604,12 @@ function renderCategoryManager() {
 
 window.deleteCategory = function(index) {
     const target = categories[index];
-    if (['bookmarks', 'settings', 'gallery'].includes(target.id)) return alert('系統預設板塊無法刪除！');
-    if (target.isCustom) { customCats = customCats.filter(c => c.id !== target.id); LocalDB.saveCustomCategories(customCats); }
+    if (!target.isCustom) return alert('系統預設板塊無法刪除！');
+    
+    if (target.isCustom) { 
+        customCats = customCats.filter(c => c.id !== target.id); 
+        LocalDB.saveCustomCategories(customCats); 
+    }
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
     renderPivot(); renderCategoryManager();
@@ -587,9 +620,13 @@ document.getElementById('btn-add-cat')?.addEventListener('click', () => {
     const val = input.value.trim();
     if (val) {
         const newCat = { id: 'custom_' + Date.now(), name: val, isCustom: true, query: val };
-        customCats.push(newCat); LocalDB.saveCustomCategories(customCats);
+        customCats.push(newCat);
+        LocalDB.saveCustomCategories(customCats);
+        
         categories = [...baseCats, ...customCats, ...systemCats];
-        input.value = ''; renderPivot(); renderCategoryManager();
+        input.value = '';
+        renderPivot();
+        renderCategoryManager();
     }
 });
 
