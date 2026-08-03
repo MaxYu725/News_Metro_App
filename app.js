@@ -1,7 +1,6 @@
 import { timeAgo, generateGeometricBackground, LocalDB, extractDynamicColor } from './utils.js';
-import { fetchNewsData, fetchImageData } from './api.js';
+import { fetchNewsData, fetchImageData, fetchAISummary } from './api.js';
 
-// 移除了科技板塊。你之前刪掉的預設板塊會在這裡自動重生！
 const baseCats = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
@@ -68,9 +67,6 @@ setInterval(() => {
     setTimeout(() => { randomTile.classList.remove('live-tile-flip'); }, 1500); 
 }, 3500); 
 
-// ==============================
-// 完美防護：結合 History API 的 Lightbox
-// ==============================
 let currentScale = 1;
 let initialDistance = 0;
 let isLightboxOpen = false;
@@ -82,35 +78,22 @@ function openLightbox(src) {
     currentScale = 1;
     DOM.lightboxOverlay.classList.remove('hidden');
     setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
-    
-    // 將開啟狀態寫入瀏覽器歷史紀錄，攔截手機返回鍵
     isLightboxOpen = true;
     history.pushState({ lightbox: true }, '');
 }
 
 function closeLightbox(fromHardwareBackBtn = false) {
     if(!DOM.lightboxOverlay || DOM.lightboxOverlay.classList.contains('hidden')) return;
-    
     DOM.lightboxOverlay.classList.add('opacity-0');
     setTimeout(() => {
         DOM.lightboxOverlay.classList.add('hidden');
         if(DOM.lightboxImg) DOM.lightboxImg.src = '';
     }, 300);
-    
     isLightboxOpen = false;
-    // 如果是手動點擊 X 關閉，則主動消耗掉歷史紀錄；如果是按實體返回鍵，就不需要重複消耗。
-    if (!fromHardwareBackBtn) {
-        history.back(); 
-    }
+    if (!fromHardwareBackBtn) history.back(); 
 }
 
-// 監聽手機的實體返回鍵
-window.addEventListener('popstate', () => {
-    if (isLightboxOpen) {
-        closeLightbox(true); // 觸發關閉，並不讓網頁退出
-    }
-});
-
+window.addEventListener('popstate', () => { if (isLightboxOpen) closeLightbox(true); });
 DOM.lightboxClose?.addEventListener('click', () => closeLightbox(false));
 DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lightboxOverlay) closeLightbox(false); });
 
@@ -387,13 +370,24 @@ function renderTiles(isAppendMode = false) {
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
                                 <div class="flex space-x-4">
-                                    <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100" data-index="${index}">分享 ↗</button>
+                                    <!-- 全新：✨ AI 總結按鈕 -->
+                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 總結</button>
+                                    <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors" data-index="${index}">分享 ↗</button>
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
-                                    <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
                                 </div>
                             </div>
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3 px-5">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-2 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
+                            
+                            <!-- 全新：隱藏的 AI 總結顯示區塊 -->
+                            <div class="ai-box hidden mx-5 my-4 bg-fuchsia-900/30 border border-fuchsia-500/40 p-4 rounded-sm">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <span class="text-fuchsia-400 text-sm">✨</span>
+                                    <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Cloudflare Workers AI</span>
+                                </div>
+                                <p class="ai-summary-text text-sm font-light text-gray-200 leading-relaxed tracking-wide"></p>
+                            </div>
+
                             ${imagesHtml}
                             <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 px-5 py-6 mt-3 border border-white/5"><p>${cleanDescription}</p></div>
                         </div>
@@ -443,6 +437,39 @@ function attachTileEvents(startIndex = 0) {
                     try { await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link }); } catch (err) {}
                 } else {
                     navigator.clipboard.writeText(news.link).then(() => { alert('已複製新聞連結！'); });
+                }
+            });
+        }
+
+        // ==============================
+        // ✨ AI 總結按鈕事件綁定
+        // ==============================
+        const aiBtn = tile.querySelector('.ai-btn');
+        const aiBox = tile.querySelector('.ai-box');
+        const aiText = tile.querySelector('.ai-summary-text');
+
+        if (aiBtn && aiBox && aiText) {
+            aiBtn.addEventListener('click', async (e) => {
+                e.stopPropagation(); // 防止點擊按鈕時觸發文章收合
+                
+                // 防止重複點擊呼叫
+                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
+
+                // 顯示讀取中狀態
+                aiBox.classList.remove('hidden');
+                aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
+
+                const news = currentNewsData[index];
+                // 移除所有的 HTML 標籤，把乾淨純文字送給 AI
+                const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
+
+                const res = await fetchAISummary(cleanTextForAI);
+                
+                if (res.success) {
+                    aiText.innerText = res.summary;
+                } else {
+                    aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
+                    console.error('AI Error:', res.error);
                 }
             });
         }
@@ -573,24 +600,16 @@ DOM.mainContainer?.addEventListener('touchend', async () => {
     ptrStartY = 0; ptrCurrentY = 0;
 }, { passive: true });
 
-// ==============================
-// 完美修復：設定頁「只允許刪除自訂關鍵字」，預設板塊絕對安全！
-// ==============================
 function renderCategoryManager() {
     const list = document.getElementById('category-manager-list');
     if(!list) return;
     list.innerHTML = '';
-    
-    // 只抓取「自訂板塊」顯示在刪除清單中
     const customCategoriesOnly = categories.filter(cat => cat.isCustom);
-    
     if (customCategoriesOnly.length === 0) {
         list.innerHTML = '<p class="text-gray-500 text-sm py-4">目前沒有自訂追蹤關鍵字。</p>';
         return;
     }
-
     customCategoriesOnly.forEach((cat) => {
-        // 找出它在原始陣列的正確 index
         const realIndex = categories.findIndex(c => c.id === cat.id);
         const row = document.createElement('div');
         row.className = 'flex justify-between items-center bg-white/5 px-4 py-3 mb-2 rounded';
@@ -605,11 +624,7 @@ function renderCategoryManager() {
 window.deleteCategory = function(index) {
     const target = categories[index];
     if (!target.isCustom) return alert('系統預設板塊無法刪除！');
-    
-    if (target.isCustom) { 
-        customCats = customCats.filter(c => c.id !== target.id); 
-        LocalDB.saveCustomCategories(customCats); 
-    }
+    if (target.isCustom) { customCats = customCats.filter(c => c.id !== target.id); LocalDB.saveCustomCategories(customCats); }
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
     renderPivot(); renderCategoryManager();
@@ -620,13 +635,9 @@ document.getElementById('btn-add-cat')?.addEventListener('click', () => {
     const val = input.value.trim();
     if (val) {
         const newCat = { id: 'custom_' + Date.now(), name: val, isCustom: true, query: val };
-        customCats.push(newCat);
-        LocalDB.saveCustomCategories(customCats);
-        
+        customCats.push(newCat); LocalDB.saveCustomCategories(customCats);
         categories = [...baseCats, ...customCats, ...systemCats];
-        input.value = '';
-        renderPivot();
-        renderCategoryManager();
+        input.value = ''; renderPivot(); renderCategoryManager();
     }
 });
 
