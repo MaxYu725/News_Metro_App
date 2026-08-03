@@ -38,30 +38,56 @@ const DOM = {
     lightboxOverlay: document.getElementById('lightbox-overlay'),
     lightboxImg: document.getElementById('lightbox-img'),
     lightboxClose: document.getElementById('lightbox-close'),
-    backToTopBtn: document.getElementById('back-to-top') // 新增回到頂部按鈕
+    backToTopBtn: document.getElementById('back-to-top') 
 };
+
+// ==========================================
+// 【黑科技實裝】極限三：Wake Lock API 防休眠引擎
+// ==========================================
+let wakeLock = null;
+
+async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            // 成功取得螢幕喚醒特權
+        } catch (err) {
+            console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
+        }
+    }
+}
+
+async function releaseWakeLock() {
+    if (wakeLock !== null) {
+        await wakeLock.release();
+        wakeLock = null;
+        // 已釋放螢幕喚醒特權，恢復系統省電機制
+    }
+}
+
+// 防呆機制：當使用者跳出瀏覽器切換到其他 App 時，系統會自動釋放。
+// 當使用者切回來時，如果還有新聞是展開狀態，我們必須重新申請。
+document.addEventListener('visibilitychange', async () => {
+    if (wakeLock !== null && document.visibilityState === 'visible') {
+        await requestWakeLock();
+    }
+});
+// ==========================================
+
 
 // ==========================================
 // 動態磚 (Live Tiles) 自動翻轉引擎
 // ==========================================
 setInterval(() => {
-    // 若在設定頁或畫面無新聞，則不翻轉
     if (DOM.newsGrid.classList.contains('hidden') || currentNewsData.length === 0) return;
-    
-    // 隨機挑選一塊「未展開」的新聞磚
     const tiles = Array.from(DOM.newsGrid.querySelectorAll('.metro-tile:not(.expanded)'));
     if (tiles.length === 0) return;
-    
     const randomTile = tiles[Math.floor(Math.random() * tiles.length)];
-    
-    // 觸發翻轉動畫
     randomTile.classList.add('live-tile-flip');
-    
-    // 動畫結束後移除 class 以便下次觸發
     setTimeout(() => {
         randomTile.classList.remove('live-tile-flip');
     }, 1500); 
-}, 3500); // 每 3.5 秒翻轉一次，增添視覺動態感
+}, 3500); 
 // ==========================================
 
 
@@ -156,7 +182,10 @@ function handlePageChange() {
     currentPage = 0; 
     hasMoreNews = true;
     currentSearchQuery = ''; 
-    DOM.backToTopBtn.classList.add('hidden-fab'); // 切換版塊時隱藏回到頂部按鈕
+    DOM.backToTopBtn.classList.add('hidden-fab'); 
+    
+    // 切換頁籤時，如果有閱讀到一半的文章，強制釋放防休眠特權
+    releaseWakeLock();
     
     if (currentCat.id === 'settings') {
         DOM.newsGrid.classList.add('hidden');
@@ -303,7 +332,6 @@ function renderTiles(isAppendMode = false) {
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
                                 <div class="flex space-x-4">
-                                    <!-- 新增：原生分享按鈕 -->
                                     <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100" data-index="${index}">分享 ↗</button>
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                     <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
@@ -332,7 +360,6 @@ function attachTileEvents(startIndex = 0) {
     tiles.forEach((tile) => {
         const index = tile.getAttribute('data-index');
         
-        // 收藏按鈕事件
         const bookmarkBtn = tile.querySelector('.bookmark-btn');
         if (bookmarkBtn) {
             bookmarkBtn.addEventListener('click', (e) => {
@@ -341,7 +368,6 @@ function attachTileEvents(startIndex = 0) {
             });
         }
         
-        // 分享按鈕事件 (Web Share API)
         const shareBtn = tile.querySelector('.share-btn');
         if (shareBtn) {
             shareBtn.addEventListener('click', async (e) => {
@@ -358,7 +384,6 @@ function attachTileEvents(startIndex = 0) {
                         console.log('分享取消或失敗');
                     }
                 } else {
-                    // 電腦版或不支援原生分享時的備案：複製連結
                     navigator.clipboard.writeText(news.link).then(() => {
                         alert('已複製新聞連結！');
                     });
@@ -376,12 +401,22 @@ function attachTileEvents(startIndex = 0) {
             }
 
             const isCurrentlyExpanded = tile.classList.contains('expanded');
+            
+            // 無論如何，先關閉所有展開的磚塊，並釋放防休眠特權
             DOM.newsGrid.querySelectorAll('.metro-tile').forEach(t => t.classList.remove('expanded'));
+            releaseWakeLock();
             
             if (!isCurrentlyExpanded) {
+                // 如果點擊的是未展開的磚塊，將其標記為已讀
                 const titleElement = tile.querySelector('.news-title');
                 markAsRead(currentNewsData[index].link, titleElement);
+                
+                // 展開磚塊
                 tile.classList.add('expanded');
+                
+                // 成功展開，申請防休眠特權，讓你安心閱讀
+                requestWakeLock();
+                
                 setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
             }
         });
@@ -415,9 +450,7 @@ function triggerLongPressAction(tile, link) {
     tile.appendChild(overlay);
 }
 
-// 捲動監聽 (無限載入 + 回到頂部按鈕顯示邏輯)
 DOM.mainContainer.addEventListener('scroll', () => {
-    // 回到頂部按鈕邏輯：向下滑動超過 1.5 倍螢幕高度時顯示
     if (DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
         DOM.backToTopBtn.classList.remove('hidden-fab');
     } else {
@@ -437,7 +470,6 @@ DOM.mainContainer.addEventListener('scroll', () => {
     }
 });
 
-// 回到頂部按鈕點擊事件
 DOM.backToTopBtn.addEventListener('click', () => {
     DOM.mainContainer.scrollTo({ top: 0, behavior: 'smooth' });
 });
