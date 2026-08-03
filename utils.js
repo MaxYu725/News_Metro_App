@@ -48,11 +48,19 @@ export const LocalDB = {
     saveCustomCategories: (data) => localStorage.setItem('metro_news_custom_cats', JSON.stringify(data))
 };
 
+// ==========================================
+// 升級版：鮮豔影像主題色萃取演算法 (繞過 CORS)
+// ==========================================
 export function extractDynamicColor(imageUrl) {
     return new Promise((resolve) => {
         if (!imageUrl) return resolve(null);
+        
         const img = new Image();
         img.crossOrigin = 'Anonymous'; 
+        
+        // 【修復1】透過 weserv 圖片代理服務，強制繞過香港01等網站的 CORS 限制
+        // 同時要求代理伺服器將圖片縮小到 64x64，極大化提升手機運算效能！
+        const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}&w=64&h=64&fit=cover`;
         
         img.onload = () => {
             try {
@@ -65,28 +73,54 @@ export function extractDynamicColor(imageUrl) {
                 const data = ctx.getImageData(0, 0, 64, 64).data;
                 let r = 0, g = 0, b = 0, count = 0;
                 
+                // 第一階段：尋找高飽和度（鮮豔）的像素
                 for (let i = 0; i < data.length; i += 4) {
                     if (data[i + 3] < 255) continue; 
+                    
                     const cr = data[i], cg = data[i + 1], cb = data[i + 2];
                     const brightness = (cr * 299 + cg * 587 + cb * 114) / 1000;
-                    if (brightness > 30 && brightness < 220) {
+                    
+                    // 計算色彩飽和度 (最大值與最小值的差)
+                    const maxColor = Math.max(cr, cg, cb);
+                    const minColor = Math.min(cr, cg, cb);
+                    const colorfulness = maxColor - minColor;
+                    
+                    // 【修復2】過濾掉太暗、太亮，以及「灰色/泥巴色 (colorfulness < 30)」的像素
+                    if (brightness > 40 && brightness < 220 && colorfulness > 30) {
                         r += cr; g += cg; b += cb; count++;
                     }
                 }
                 
+                // 備用階段：如果圖片真的是黑白照片或全灰，就放寬標準再算一次
+                if (count < 50) {
+                    r = 0; g = 0; b = 0; count = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        if (data[i + 3] < 255) continue; 
+                        const cr = data[i], cg = data[i + 1], cb = data[i + 2];
+                        const brightness = (cr * 299 + cg * 587 + cb * 114) / 1000;
+                        if (brightness > 30 && brightness < 230) {
+                            r += cr; g += cg; b += cb; count++;
+                        }
+                    }
+                }
+                
                 if (count > 0) {
-                    const finalR = Math.floor((r / count) * 0.6);
-                    const finalG = Math.floor((g / count) * 0.6);
-                    const finalB = Math.floor((b / count) * 0.6);
+                    // 【修復3】將壓暗係數從 0.6 改為 0.85，讓色彩恢復鮮豔明亮！
+                    const finalR = Math.floor((r / count) * 0.85);
+                    const finalG = Math.floor((g / count) * 0.85);
+                    const finalB = Math.floor((b / count) * 0.85);
                     resolve(`rgb(${finalR}, ${finalG}, ${finalB})`);
                 } else {
                     resolve(null);
                 }
             } catch (e) {
+                console.warn('Canvas 讀取被阻擋', e);
                 resolve(null);
             }
         };
         img.onerror = () => resolve(null);
-        img.src = imageUrl;
+        
+        // 載入代理後的圖片
+        img.src = proxyUrl;
     });
 }
