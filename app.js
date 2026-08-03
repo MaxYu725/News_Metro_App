@@ -1,6 +1,5 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 加入了全新的「收藏」分頁
 let categories = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
@@ -19,8 +18,9 @@ let currentPage = 0;
 let isLoadingMore = false;
 let hasMoreNews = true;
 
-// 讀取本機收藏夾
+// 讀取本機收藏夾與已讀紀錄
 let savedBookmarks = JSON.parse(localStorage.getItem('metro_news_bookmarks')) || {};
+let readHistory = JSON.parse(localStorage.getItem('metro_news_read_history')) || {};
 
 const newsGrid = document.getElementById('news-grid');
 const settingsView = document.getElementById('settings-view');
@@ -51,8 +51,8 @@ function renderPivot() {
 function handlePageChange() {
     renderPivot();
     const currentCat = categories[currentIndex];
-    mainContainer.scrollTop = 0; // 切換分類時回到頂部
-    currentPage = 0; // 重置頁數
+    mainContainer.scrollTop = 0; 
+    currentPage = 0; 
     hasMoreNews = true;
     
     if (currentCat.id === 'settings') {
@@ -73,12 +73,11 @@ function handlePageChange() {
     }
 }
 
-// 載入收藏夾內容 (完全離線)
 function loadBookmarks() {
     const bookmarksArray = Object.values(savedBookmarks);
     bookmarksArray.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
     currentNewsData = bookmarksArray;
-    hasMoreNews = false; // 收藏夾一次全部顯示，無需無限捲動
+    hasMoreNews = false; 
     renderTiles(false);
     if (currentNewsData.length === 0) {
         newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">你的收藏夾空空如也，快去收藏新聞吧！</p>';
@@ -97,9 +96,33 @@ function toggleBookmark(newsItem, btnElement) {
     }
     localStorage.setItem('metro_news_bookmarks', JSON.stringify(savedBookmarks));
     
-    // 如果正在瀏覽收藏夾分頁，移除時即時刷新
     if (categories[currentIndex].id === 'bookmarks') {
         loadBookmarks();
+    }
+}
+
+// 標記為已讀並儲存至本機
+function markAsRead(link, titleElement) {
+    if (!readHistory[link]) {
+        readHistory[link] = Date.now();
+        
+        // 記憶體防爆機制：超過 1000 筆時，刪除最舊的一半紀錄
+        const keys = Object.keys(readHistory);
+        if (keys.length > 1000) {
+            const sortedKeys = keys.sort((a, b) => readHistory[b] - readHistory[a]);
+            const keysToKeep = sortedKeys.slice(0, 500);
+            const newHistory = {};
+            keysToKeep.forEach(k => newHistory[k] = readHistory[k]);
+            readHistory = newHistory;
+        }
+        
+        localStorage.setItem('metro_news_read_history', JSON.stringify(readHistory));
+        
+        // 即時改變文字顏色為灰色
+        if (titleElement) {
+            titleElement.classList.remove('text-white');
+            titleElement.classList.add('text-gray-400');
+        }
     }
 }
 
@@ -132,7 +155,6 @@ function generateGeometricBackground() {
     return svg;
 }
 
-// 修改 fetchNews 支援分頁 (isAppendMode) 與強制同步 (forceSync)
 async function fetchNews(categoryId, forceSync = false, isAppendMode = false) {
     if (!isAppendMode && !forceSync && newsCache[categoryId] && currentPage === 0) {
         currentNewsData = newsCache[categoryId];
@@ -182,11 +204,9 @@ async function fetchNews(categoryId, forceSync = false, isAppendMode = false) {
     }
 }
 
-// 支援附加模式渲染
 function renderTiles(isAppendMode = false) {
     let htmlContent = '';
     
-    // 如果是附加模式，只渲染新抓下來的這批；否則渲染全部
     const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
     const offsetIndex = isAppendMode ? currentPage * 20 : 0;
 
@@ -196,6 +216,7 @@ function renderTiles(isAppendMode = false) {
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
+        const isRead = !!readHistory[news.link]; // 檢查是否已讀
 
         let thumbHtml = '';
         if (news.imageUrl) {
@@ -231,13 +252,16 @@ function renderTiles(isAppendMode = false) {
             `;
         }
 
+        // 根據是否已讀，切換標題的文字顏色
+        const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
+
         htmlContent += `
             <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
                 ${geoBackground}
                 
                 <div class="tile-preview px-5 py-4 flex flex-row justify-between items-start">
                     <div class="flex flex-col justify-between h-full flex-grow pr-1">
-                        <h3 class="text-xl md:text-2xl font-bold leading-tight line-clamp-3">${news.title}</h3>
+                        <h3 class="news-title text-xl md:text-2xl font-bold leading-tight line-clamp-3 ${titleColorClass}">${news.title}</h3>
                         <div class="flex items-center space-x-2 mt-3">
                             <span class="text-xs opacity-90 uppercase font-semibold text-gray-200 border border-white/20 px-1.5 py-0.5 rounded">${news.source}</span>
                             <span class="text-xs opacity-70 uppercase tracking-widest truncate">
@@ -283,18 +307,16 @@ function renderTiles(isAppendMode = false) {
     attachTileEvents(isAppendMode ? offsetIndex : 0);
 }
 
-// 綁定事件時加入 offset，避免重複綁定舊有的 DOM
 function attachTileEvents(startIndex = 0) {
     const tiles = Array.from(newsGrid.querySelectorAll('.metro-tile')).slice(startIndex);
     
     tiles.forEach((tile) => {
         const index = tile.getAttribute('data-index');
         
-        // 收藏按鈕事件
         const bookmarkBtn = tile.querySelector('.bookmark-btn');
         if (bookmarkBtn) {
             bookmarkBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); // 防止觸發展開磚塊
+                e.stopPropagation(); 
                 toggleBookmark(currentNewsData[index], bookmarkBtn);
             });
         }
@@ -304,7 +326,12 @@ function attachTileEvents(startIndex = 0) {
 
             const isCurrentlyExpanded = tile.classList.contains('expanded');
             newsGrid.querySelectorAll('.metro-tile').forEach(t => t.classList.remove('expanded'));
+            
             if (!isCurrentlyExpanded) {
+                // 點擊展開時，觸發標記為已讀
+                const titleElement = tile.querySelector('.news-title');
+                markAsRead(currentNewsData[index].link, titleElement);
+
                 tile.classList.add('expanded');
                 setTimeout(() => {
                     tile.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -341,9 +368,7 @@ function triggerLongPressAction(tile, link) {
     tile.appendChild(overlay);
 }
 
-// 實作無限向下捲動載入 (Infinite Scroll)
 mainContainer.addEventListener('scroll', () => {
-    // 距離底部 150px 時觸發，且不是設定頁或收藏頁
     if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
         if (mainContainer.scrollTop + mainContainer.clientHeight >= mainContainer.scrollHeight - 150) {
             if (!isLoadingMore && hasMoreNews) {
@@ -411,7 +436,6 @@ mainContainer.addEventListener('touchend', async () => {
     if (pullDist > 65) {
         ptrIndicator.style.height = '45px';
         const currentCat = categories[currentIndex];
-        // 觸發下拉更新：發送 sync=1 參數強制後端更新資料庫，並將分頁歸零
         if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
             currentPage = 0;
             await fetchNews(currentCat.id, true, false); 
@@ -439,7 +463,7 @@ function renderCategoryManager() {
 }
 
 window.deleteCategory = function(index) {
-    if (categories.length <= 3) return; // 至少保留一兩個基本板塊
+    if (categories.length <= 3) return; 
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
     renderPivot();
