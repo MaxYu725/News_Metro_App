@@ -1,12 +1,10 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 全新的主題式分類 (每個分類將包含三大媒體的聚合資訊)
+// 移除財經與體育，保留最核心的三大板塊
 let categories = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
-    { id: 'finance', name: '財經' },
     { id: 'ent', name: '娛樂' },
-    { id: 'sports', name: '體育' },
     { id: 'settings', name: '設定' }
 ];
 
