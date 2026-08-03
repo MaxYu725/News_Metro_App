@@ -1,7 +1,6 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 const SEARCH_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/search';
 
-// 封裝取得新聞的 API 呼叫
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
     let url;
     

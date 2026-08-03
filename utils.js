@@ -48,7 +48,6 @@ export const LocalDB = {
     saveCustomCategories: (data) => localStorage.setItem('metro_news_custom_cats', JSON.stringify(data))
 };
 
-// 智慧影像主題色萃取演算法
 export function extractDynamicColor(imageUrl) {
     return new Promise((resolve) => {
         if (!imageUrl) return resolve(null);

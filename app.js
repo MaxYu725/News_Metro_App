@@ -93,7 +93,6 @@ function closeLightbox() {
     }, 300);
 }
 
-// 加入防呆的 ?. 確保即使 HTML 漏了元素也不會死機
 DOM.lightboxClose?.addEventListener('click', closeLightbox);
 DOM.lightboxOverlay?.addEventListener('click', (e) => {
     if (e.target === DOM.lightboxOverlay) closeLightbox();
@@ -135,7 +134,6 @@ DOM.lightboxImg?.addEventListener('touchend', (e) => {
     }
     lastTapTime = currentTime;
 });
-
 
 function renderPivot() {
     if(!DOM.navMenu) return;
@@ -270,7 +268,8 @@ function renderTiles(isAppendMode = false) {
     dataToRender.forEach((news, relativeIndex) => {
         const index = offsetIndex + relativeIndex;
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
-        const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
+        const cleanDescription = (news.description || '暫無詳細內文。').replace(/
+/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
         const isRead = !!readHistory[news.link]; 

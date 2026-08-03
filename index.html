@@ -13,6 +13,19 @@
     <link rel="apple-touch-icon" href="./ic_launcher.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
+    <script>
+        // 加入防黑畫面當機的安全機制
+        window.addEventListener('error', function(e) {
+            if(document.body) {
+                document.body.innerHTML = '<div style="color:#ff6b6b; padding:30px; font-size:16px; font-family:sans-serif; text-align:center; margin-top:20vh;"><h2>⚠️ 模組載入失敗</h2><p>這通常是因為瀏覽器快取了舊版檔案所導致。</p><p style="margin-top:20px;"><button onclick="window.location.reload(true)" style="background:#4CAF50; color:white; border:none; padding:10px 20px; border-radius:5px; font-size:16px;">點此強制重新整理</button></p><p style="margin-top:20px; font-size:12px; opacity:0.7;">技術細節: ' + e.message + '</p></div>';
+            }
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            if(document.body && e.reason && e.reason.message && e.reason.message.includes('export')) {
+                 document.body.innerHTML = '<div style="color:#ff6b6b; padding:30px; font-size:16px; font-family:sans-serif; text-align:center; margin-top:20vh;"><h2>⚠️ 快取版本衝突</h2><p>系統偵測到新舊檔案不匹配。</p><p style="margin-top:20px;"><button onclick="window.location.reload(true)" style="background:#4CAF50; color:white; border:none; padding:10px 20px; border-radius:5px; font-size:16px;">點此強制重新整理</button></p></div>';
+            }
+        });
+    </script>
 </head>
 <body class="h-screen w-screen flex flex-col pt-4 relative bg-black">
 
