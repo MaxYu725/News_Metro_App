@@ -44,7 +44,63 @@ export const LocalDB = {
         localStorage.setItem('metro_news_read_history', JSON.stringify(data));
     },
 
-    // 全新：儲存使用者的自訂分類 (如 iPhone, 科技)
     getCustomCategories: () => JSON.parse(localStorage.getItem('metro_news_custom_cats')) || [],
     saveCustomCategories: (data) => localStorage.setItem('metro_news_custom_cats', JSON.stringify(data))
 };
+
+// ==========================================
+// 【黑科技實裝】智慧影像主題色萃取演算法
+// ==========================================
+export function extractDynamicColor(imageUrl) {
+    return new Promise((resolve) => {
+        if (!imageUrl) return resolve(null);
+        
+        const img = new Image();
+        img.crossOrigin = 'Anonymous'; // 嘗試突破 CORS 限制
+        
+        img.onload = () => {
+            try {
+                // 建立一張極小的隱形畫布來運算，追求極致效能
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 64;
+                canvas.height = 64;
+                ctx.drawImage(img, 0, 0, 64, 64);
+                
+                const data = ctx.getImageData(0, 0, 64, 64).data;
+                let r = 0, g = 0, b = 0, count = 0;
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    if (data[i + 3] < 255) continue; // 跳過透明像素
+                    
+                    const cr = data[i], cg = data[i + 1], cb = data[i + 2];
+                    // 計算像素亮度 (Luma)
+                    const brightness = (cr * 299 + cg * 587 + cb * 114) / 1000;
+                    
+                    // 過濾掉極端的死黑與純白，保留真正構成影像靈魂的色彩
+                    if (brightness > 30 && brightness < 220) {
+                        r += cr; 
+                        g += cg; 
+                        b += cb; 
+                        count++;
+                    }
+                }
+                
+                if (count > 0) {
+                    // 將算出的平均色彩壓暗 40%，確保與白色文字形成高對比 (Metro UI 規範)
+                    const finalR = Math.floor((r / count) * 0.6);
+                    const finalG = Math.floor((g / count) * 0.6);
+                    const finalB = Math.floor((b / count) * 0.6);
+                    resolve(`rgb(${finalR}, ${finalG}, ${finalB})`);
+                } else {
+                    resolve(null);
+                }
+            } catch (e) {
+                // 若圖片伺服器阻擋跨域存取 (Tainted canvas)，安靜地返回 null，保留預設主題色
+                resolve(null);
+            }
+        };
+        img.onerror = () => resolve(null);
+        img.src = imageUrl;
+    });
+}
