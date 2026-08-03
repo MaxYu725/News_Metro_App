@@ -16,7 +16,6 @@
 </head>
 <body class="h-screen w-screen flex flex-col pt-4 relative bg-black">
 
-    <!-- 全新：全螢幕圖片燈箱 (Lightbox) -->
     <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-300">
         <button id="lightbox-close" class="absolute top-6 right-6 text-white text-4xl font-light hover:text-gray-400 z-10 px-4 py-2 drop-shadow-lg">&times;</button>
         <div class="relative w-full h-full flex justify-center items-center overflow-hidden">
@@ -41,6 +40,11 @@
         <div id="scroll-loading" class="w-full h-16 flex items-center justify-center hidden">
             <div class="loader-small"></div>
         </div>
+
+        <!-- 全新：回到頂部按鈕 -->
+        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-white/10 backdrop-blur-md border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:bg-white/30 active:scale-95 transition-all">
+            ↑
+        </button>
 
         <div id="settings-view" class="hidden flex-col space-y-10 pb-10 px-5 mt-4">
             <div class="flex flex-col space-y-4">
