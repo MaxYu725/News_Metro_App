@@ -1,5 +1,5 @@
 import { timeAgo, generateGeometricBackground, LocalDB, extractDynamicColor } from './utils.js';
-import { fetchNewsData } from './api.js';
+import { fetchNewsData, fetchImageData } from './api.js';
 
 const baseCats = [
     { id: 'local', name: '港聞' },
@@ -8,6 +8,7 @@ const baseCats = [
     { id: 'tech', name: '科技' }
 ];
 const systemCats = [
+    { id: 'gallery', name: '圖庫' }, // 全新圖庫版塊
     { id: 'bookmarks', name: '收藏' },
     { id: 'settings', name: '設定' }
 ];
@@ -39,30 +40,29 @@ const DOM = {
     lightboxOverlay: document.getElementById('lightbox-overlay'),
     lightboxImg: document.getElementById('lightbox-img'),
     lightboxClose: document.getElementById('lightbox-close'),
-    backToTopBtn: document.getElementById('back-to-top') 
+    backToTopBtn: document.getElementById('back-to-top'),
+    gallerySearchContainer: document.getElementById('gallery-search-container'),
+    gallerySearchInput: document.getElementById('gallery-search-input')
 };
 
-// ==============================
-// Wake Lock API (防休眠引擎)
-// ==============================
-let wakeLock = null;
-async function requestWakeLock() {
-    if ('wakeLock' in navigator) {
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+// 監聽圖庫搜尋框 Enter 事件
+DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        DOM.gallerySearchInput.blur();
+        currentSearchQuery = DOM.gallerySearchInput.value.trim() || 'Japan travel';
+        currentPage = 0;
+        loadGalleryUI(false);
     }
-}
-async function releaseWakeLock() {
-    if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; }
-}
-document.addEventListener('visibilitychange', async () => {
-    if (wakeLock !== null && document.visibilityState === 'visible') { await requestWakeLock(); }
 });
 
-// ==============================
-// Live Tiles (動態磚翻轉)
-// ==============================
+let wakeLock = null;
+async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} } }
+async function releaseWakeLock() { if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; } }
+document.addEventListener('visibilitychange', async () => { if (wakeLock !== null && document.visibilityState === 'visible') { await requestWakeLock(); } });
+
 setInterval(() => {
-    if (!DOM.newsGrid || DOM.newsGrid.classList.contains('hidden') || currentNewsData.length === 0) return;
+    // 只有在新聞模式下才翻轉動態磚 (圖庫模式不翻轉)
+    if (!DOM.newsGrid || DOM.newsGrid.classList.contains('hidden') || currentNewsData.length === 0 || categories[currentIndex].id === 'gallery') return;
     const tiles = Array.from(DOM.newsGrid.querySelectorAll('.metro-tile:not(.expanded)'));
     if (tiles.length === 0) return;
     const randomTile = tiles[Math.floor(Math.random() * tiles.length)];
@@ -70,9 +70,6 @@ setInterval(() => {
     setTimeout(() => { randomTile.classList.remove('live-tile-flip'); }, 1500); 
 }, 3500); 
 
-// ==============================
-// Lightbox (圖片檢視器)
-// ==============================
 let currentScale = 1;
 let initialDistance = 0;
 
@@ -95,26 +92,16 @@ function closeLightbox() {
 }
 
 DOM.lightboxClose?.addEventListener('click', closeLightbox);
-DOM.lightboxOverlay?.addEventListener('click', (e) => {
-    if (e.target === DOM.lightboxOverlay) closeLightbox();
-});
+DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lightboxOverlay) closeLightbox(); });
 
 DOM.lightboxImg?.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-        initialDistance = Math.hypot(
-            e.touches[0].pageX - e.touches[1].pageX,
-            e.touches[0].pageY - e.touches[1].pageY
-        );
-    }
+    if (e.touches.length === 2) initialDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
 }, { passive: false });
 
 DOM.lightboxImg?.addEventListener('touchmove', (e) => {
     if (e.touches.length === 2) {
         e.preventDefault(); 
-        const currentDistance = Math.hypot(
-            e.touches[0].pageX - e.touches[1].pageX,
-            e.touches[0].pageY - e.touches[1].pageY
-        );
+        const currentDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
         const scaleChange = currentDistance / initialDistance;
         let newScale = Math.min(Math.max(1, currentScale * scaleChange), 4);
         DOM.lightboxImg.style.transform = `scale(${newScale})`;
@@ -164,6 +151,10 @@ function handlePageChange() {
     
     releaseWakeLock();
     
+    // 預設關閉圖庫搜尋列，並恢復新聞網格排版
+    DOM.gallerySearchContainer?.classList.add('hidden');
+    if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 gap-[2px] auto-rows-auto';
+
     if (currentCat.id === 'settings') {
         DOM.newsGrid?.classList.add('hidden');
         DOM.settingsView?.classList.remove('hidden');
@@ -174,6 +165,16 @@ function handlePageChange() {
         DOM.settingsView?.classList.remove('flex');
         DOM.newsGrid?.classList.remove('hidden');
         renderBookmarksUI();
+    } else if (currentCat.id === 'gallery') {
+        // 圖庫專屬排版邏輯
+        DOM.settingsView?.classList.add('hidden');
+        DOM.settingsView?.classList.remove('flex');
+        DOM.newsGrid?.classList.remove('hidden');
+        DOM.gallerySearchContainer?.classList.remove('hidden');
+        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-[2px] auto-rows-auto px-5'; // 雙欄網格
+        
+        currentSearchQuery = DOM.gallerySearchInput?.value.trim() || 'Japan travel';
+        loadGalleryUI(false);
     } else if (currentCat.isCustom) {
         DOM.settingsView?.classList.add('hidden');
         DOM.settingsView?.classList.remove('flex');
@@ -222,6 +223,64 @@ function markAsRead(link, titleElement) {
             titleElement.classList.add('text-gray-400');
         }
     }
+}
+
+// 專屬圖庫加載邏輯
+async function loadGalleryUI(isAppendMode = false) {
+    if (!isAppendMode && DOM.newsGrid) {
+        DOM.newsGrid.innerHTML = '';
+        DOM.loadingIndicator?.classList.remove('hidden');
+    } else {
+        DOM.scrollLoading?.classList.remove('hidden');
+        isLoadingMore = true;
+    }
+
+    const result = await fetchImageData(currentSearchQuery, currentPage);
+
+    if (result.success && result.data.length > 0) {
+        hasMoreNews = result.hasMore;
+        currentNewsData = isAppendMode ? currentNewsData.concat(result.data) : result.data;
+        renderGalleryTiles(isAppendMode);
+    } else {
+        hasMoreNews = false;
+        if (!isAppendMode && DOM.newsGrid) {
+            const errorMsg = result.error ? `錯誤: ${result.error}` : '找不到相關圖片，換個關鍵字試試看吧！';
+            DOM.newsGrid.innerHTML = `<p class="text-gray-500 text-center mt-10 col-span-2">${errorMsg}</p>`;
+        }
+    }
+
+    DOM.loadingIndicator?.classList.add('hidden');
+    DOM.scrollLoading?.classList.add('hidden');
+    isLoadingMore = false;
+}
+
+// 專屬圖庫渲染邏輯 (雙欄無文字排版)
+function renderGalleryTiles(isAppendMode = false) {
+    if (!DOM.newsGrid) return;
+    let htmlContent = '';
+    const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
+
+    dataToRender.forEach((imgItem, relativeIndex) => {
+        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
+        htmlContent += `
+            <article class="metro-tile relative group cursor-pointer overflow-hidden bg-black/20 h-48 md:h-64" ${animationDelay}>
+                <img src="${imgItem.thumbUrl}" data-full="${imgItem.imageUrl}" class="gallery-img w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Gallery Image" loading="lazy" referrerpolicy="no-referrer" />
+                <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span class="text-[10px] text-white/80 uppercase tracking-widest leading-tight block truncate">${imgItem.tags}</span>
+                </div>
+            </article>
+        `;
+    });
+
+    if (isAppendMode) DOM.newsGrid.insertAdjacentHTML('beforeend', htmlContent);
+    else DOM.newsGrid.innerHTML = htmlContent;
+
+    DOM.newsGrid.querySelectorAll('.gallery-img').forEach(img => {
+        img.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openLightbox(e.target.getAttribute('data-full'));
+        });
+    });
 }
 
 async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
@@ -275,14 +334,12 @@ function renderTiles(isAppendMode = false) {
         const isRead = !!readHistory[news.link]; 
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
 
-        // 【修復1】加入 referrerpolicy="no-referrer" 破解防盜鏈機制
         let thumbHtml = news.imageUrl 
             ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-28 md:h-28 object-cover border-2 border-white/10 shadow-sm bg-black/20" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
             : '';
 
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
-            // 【修復2】加入 max-h-[50vh] 和 object-contain 確保圖片比例完美，且不被過度拉伸
             let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full max-h-[50vh] object-contain block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
             
             let navButtons = news.images.length > 1 ? `
@@ -291,7 +348,6 @@ function renderTiles(isAppendMode = false) {
                 <div class="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded tracking-widest z-10 shadow">${news.images.length} 圖</div>
             ` : '';
             
-            // 【修復3】外框加入 items-center，取消 Flexbox 的強制垂直拉伸 (stretch)
             imagesHtml = `<div class="relative my-4 w-full overflow-hidden group bg-black/30 shadow-md"><div class="img-scroll-box flex items-center overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
         }
 
@@ -368,9 +424,7 @@ function attachTileEvents(startIndex = 0) {
                 e.stopPropagation(); 
                 const news = currentNewsData[index];
                 if (navigator.share) {
-                    try {
-                        await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link });
-                    } catch (err) {}
+                    try { await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link }); } catch (err) {}
                 } else {
                     navigator.clipboard.writeText(news.link).then(() => { alert('已複製新聞連結！'); });
                 }
@@ -379,7 +433,6 @@ function attachTileEvents(startIndex = 0) {
 
         tile.addEventListener('click', (e) => {
             if(e.target.tagName === 'BUTTON') return;
-
             if (e.target.classList.contains('lightbox-img')) {
                 e.stopPropagation();
                 openLightbox(e.target.src);
@@ -387,7 +440,6 @@ function attachTileEvents(startIndex = 0) {
             }
 
             const isCurrentlyExpanded = tile.classList.contains('expanded');
-            
             DOM.newsGrid.querySelectorAll('.metro-tile').forEach(t => t.classList.remove('expanded'));
             releaseWakeLock();
             
@@ -441,17 +493,19 @@ DOM.mainContainer?.addEventListener('scroll', () => {
         if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 150) {
             if (!isLoadingMore && hasMoreNews) {
                 currentPage++;
-                const isCustom = categories[currentIndex].isCustom;
-                const catId = isCustom ? 'search' : categories[currentIndex].id;
-                loadNewsUI(catId, false, true);
+                if (categories[currentIndex].id === 'gallery') {
+                    loadGalleryUI(true);
+                } else {
+                    const isCustom = categories[currentIndex].isCustom;
+                    const catId = isCustom ? 'search' : categories[currentIndex].id;
+                    loadNewsUI(catId, false, true);
+                }
             }
         }
     }
 });
 
-DOM.backToTopBtn?.addEventListener('click', () => {
-    DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' });
-});
+DOM.backToTopBtn?.addEventListener('click', () => { DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' }); });
 
 let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
 document.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; touchStartY = e.changedTouches[0].screenY; }, { passive: true });
@@ -490,19 +544,17 @@ DOM.mainContainer?.addEventListener('touchend', async () => {
         const currentCat = categories[currentIndex];
         if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
             currentPage = 0;
-            if (currentCat.isCustom) {
+            if (currentCat.id === 'gallery') {
+                await loadGalleryUI(false);
+            } else if (currentCat.isCustom) {
                 await loadNewsUI('search', false, false);
             } else {
                 await loadNewsUI(currentCat.id, true, false); 
             }
         }
     }
-    if(DOM.ptrIndicator) {
-        DOM.ptrIndicator.style.height = '0px';
-        DOM.ptrIndicator.innerHTML = '';
-    }
-    ptrStartY = 0;
-    ptrCurrentY = 0;
+    if(DOM.ptrIndicator) { DOM.ptrIndicator.style.height = '0px'; DOM.ptrIndicator.innerHTML = ''; }
+    ptrStartY = 0; ptrCurrentY = 0;
 }, { passive: true });
 
 function renderCategoryManager() {
@@ -510,7 +562,7 @@ function renderCategoryManager() {
     if(!list) return;
     list.innerHTML = '';
     categories.forEach((cat, index) => {
-        if (['bookmarks', 'settings'].includes(cat.id)) return;
+        if (['bookmarks', 'settings', 'gallery'].includes(cat.id)) return;
         const row = document.createElement('div');
         row.className = 'flex justify-between items-center bg-white/5 px-4 py-3';
         row.innerHTML = `
@@ -523,18 +575,11 @@ function renderCategoryManager() {
 
 window.deleteCategory = function(index) {
     const target = categories[index];
-    if (['bookmarks', 'settings'].includes(target.id)) return alert('系統預設板塊無法刪除！');
-    
-    if (target.isCustom) {
-        customCats = customCats.filter(c => c.id !== target.id);
-        LocalDB.saveCustomCategories(customCats);
-    }
-    
+    if (['bookmarks', 'settings', 'gallery'].includes(target.id)) return alert('系統預設板塊無法刪除！');
+    if (target.isCustom) { customCats = customCats.filter(c => c.id !== target.id); LocalDB.saveCustomCategories(customCats); }
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
-    
-    renderPivot();
-    renderCategoryManager();
+    renderPivot(); renderCategoryManager();
 }
 
 document.getElementById('btn-add-cat')?.addEventListener('click', () => {
@@ -542,13 +587,9 @@ document.getElementById('btn-add-cat')?.addEventListener('click', () => {
     const val = input.value.trim();
     if (val) {
         const newCat = { id: 'custom_' + Date.now(), name: val, isCustom: true, query: val };
-        customCats.push(newCat);
-        LocalDB.saveCustomCategories(customCats);
-        
+        customCats.push(newCat); LocalDB.saveCustomCategories(customCats);
         categories = [...baseCats, ...customCats, ...systemCats];
-        input.value = '';
-        renderPivot();
-        renderCategoryManager();
+        input.value = ''; renderPivot(); renderCategoryManager();
     }
 });
 
@@ -559,7 +600,7 @@ colorButtons.forEach(btn => {
         e.target.classList.remove('border-transparent');
         e.target.classList.add('border-white');
         currentThemeColor = e.target.getAttribute('data-color');
-        if (currentNewsData.length > 0) renderTiles();
+        if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles();
     });
 });
 
@@ -573,8 +614,4 @@ document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (
 document.getElementById('btn-font-minus')?.addEventListener('click', () => { if (currentFontSizePercent > 70) { currentFontSizePercent -= 10; updateFontSize(); } });
 document.getElementById('btn-font-reset')?.addEventListener('click', () => { currentFontSizePercent = 110; updateFontSize(); });
 
-window.addEventListener('DOMContentLoaded', () => {
-    updateFontSize();
-    renderPivot();
-    handlePageChange();
-});
+window.addEventListener('DOMContentLoaded', () => { updateFontSize(); renderPivot(); handlePageChange(); });
