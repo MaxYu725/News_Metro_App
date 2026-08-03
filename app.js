@@ -1,13 +1,13 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 全新黃金陣容測試名單
+// 測試名單：移除失效節點，加入經濟、東方、成報
 let categories = [
     { id: 'hk01', name: '香港01' },
     { id: 'oncc', name: '東網' },
-    { id: 'hoytv', name: 'HOY TV' },
     { id: 'mingpao', name: '明報' },
-    { id: 'am730', name: 'AM730' },
-    { id: 'singtao', name: '星島' },
+    { id: 'hket', name: '經濟日報' },
+    { id: 'odn', name: '東方日報' },
+    { id: 'singpao', name: '成報' },
     { id: 'settings', name: '設定' }
 ];
 
