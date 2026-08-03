@@ -16,6 +16,15 @@
 </head>
 <body class="h-screen w-screen flex flex-col pt-4 relative bg-black">
 
+    <!-- 全新：全螢幕圖片燈箱 (Lightbox) -->
+    <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-300">
+        <button id="lightbox-close" class="absolute top-6 right-6 text-white text-4xl font-light hover:text-gray-400 z-10 px-4 py-2 drop-shadow-lg">&times;</button>
+        <div class="relative w-full h-full flex justify-center items-center overflow-hidden">
+            <img id="lightbox-img" src="" class="max-w-full max-h-full object-contain transition-transform duration-100 ease-out origin-center" alt="全螢幕圖片">
+        </div>
+        <p class="absolute bottom-6 text-gray-400 text-xs tracking-widest uppercase">雙指縮放 · 雙擊還原</p>
+    </div>
+
     <header class="flex-shrink-0 px-5">
         <nav class="flex space-x-6 text-2xl mb-4 text-gray-500 overflow-x-auto hide-scrollbar justify-start" id="nav-menu"></nav>
     </header>
@@ -71,13 +80,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(registration => {
-                        console.log('ServiceWorker 註冊成功，範圍為: ', registration.scope);
-                    })
-                    .catch(error => {
-                        console.log('ServiceWorker 註冊失敗: ', error);
-                    });
+                navigator.serviceWorker.register('./sw.js').catch(()=>{});
             });
         }
     </script>
