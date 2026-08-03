@@ -24,7 +24,7 @@ body {
     cursor: pointer;
     overflow: hidden;
     border-radius: 0px; 
-    min-height: 180px;
+    min-height: 150px;
     transition: transform 0.3s ease, box-shadow 0.5s ease;
     animation: fadeIn 0.7s ease-out forwards;
     opacity: 0;
@@ -79,13 +79,14 @@ body {
     opacity: 1;
 }
 
+/* 將左右邊距歸零，讓圖片畫廊能徹底滿版 */
 .tile-details-inner {
     overflow: hidden;
-    padding: 0px 24px;
+    padding: 0px 0px; 
     transition: padding 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .metro-tile.expanded .tile-details-inner {
-    padding: 24px;
+    padding: 16px 0px 24px 0px; 
 }
 
 .metro-btn {
