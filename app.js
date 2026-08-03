@@ -1,6 +1,5 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 擴充預設分類，加入香港01
 let categories = [
     { id: 'local', name: '本地' },
     { id: 'finance', name: '財經' },
@@ -13,6 +12,7 @@ let categories = [
 
 let currentIndex = 0;
 let currentNewsData = [];
+let newsCache = {}; 
 let currentThemeColor = 'bg-blue-600'; 
 
 const newsGrid = document.getElementById('news-grid');
@@ -52,7 +52,7 @@ function handlePageChange() {
         settingsView.classList.add('hidden');
         settingsView.classList.remove('flex');
         newsGrid.classList.remove('hidden');
-        fetchNews(currentCat.id);
+        fetchNews(currentCat.id, false); 
     }
 }
 
@@ -87,9 +87,17 @@ function generateGeometricBackground() {
     return svg;
 }
 
-async function fetchNews(categoryId) {
-    newsGrid.innerHTML = '';
-    loadingIndicator.classList.remove('hidden');
+async function fetchNews(categoryId, forceRefresh = false) {
+    if (!forceRefresh && newsCache[categoryId]) {
+        currentNewsData = newsCache[categoryId];
+        renderTiles();
+        return;
+    }
+
+    if (!forceRefresh || !newsCache[categoryId]) {
+        newsGrid.innerHTML = '';
+        loadingIndicator.classList.remove('hidden');
+    }
 
     try {
         const response = await fetch(`${API_BASE_URL}${categoryId}`);
@@ -97,13 +105,18 @@ async function fetchNews(categoryId) {
 
         if (result.success && result.data.length > 0) {
             currentNewsData = result.data;
+            newsCache[categoryId] = result.data;
             renderTiles();
         } else {
-            newsGrid.innerHTML = '<p class="text-gray-500">目前沒有新聞資料。</p>';
+            if (!newsCache[categoryId]) {
+                newsGrid.innerHTML = '<p class="text-gray-500">目前沒有新聞資料。</p>';
+            }
         }
     } catch (error) {
         console.error("Fetch error:", error);
-        newsGrid.innerHTML = '<p class="text-red-500">無法連接到伺服器，請檢查網路或 API 設定。</p>';
+        if (!newsCache[categoryId]) {
+            newsGrid.innerHTML = '<p class="text-red-500">無法連接到伺服器，請檢查網路或 API 設定。</p>';
+        }
     } finally {
         loadingIndicator.classList.add('hidden');
     }
@@ -274,7 +287,7 @@ mainContainer.addEventListener('touchend', async () => {
         ptrIndicator.style.height = '45px';
         const currentCat = categories[currentIndex];
         if (currentCat.id !== 'settings') {
-            await fetchNews(currentCat.id);
+            await fetchNews(currentCat.id, true); 
         }
     }
     ptrIndicator.style.height = '0px';
