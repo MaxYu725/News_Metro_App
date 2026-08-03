@@ -73,12 +73,14 @@ function generateGeometricBackground() {
     const cy = 50 + Math.random() * 200;
     const r = 100 + Math.random() * 150;
     svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.08" />`;
+
     for (let i = 0; i < (1 + Math.floor(Math.random() * 2)); i++) {
         const x = Math.random() * 300;
         const y = Math.random() * 300;
         const pts = `${x},${y} ${x+250},${y+80} ${x+180},${y+350} ${x-70},${y+270}`;
         svg += `<polygon points="${pts}" fill="white" fill-opacity="0.05" />`;
     }
+    
     svg += `</svg>`;
     return svg;
 }
@@ -112,34 +114,41 @@ function renderTiles() {
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
 
-        // 若有縮圖，套用背景圖片與半透明遮罩
-        let tileStyle = '';
+        // 構造右側小縮圖 HTML
+        let thumbHtml = '';
         if (news.imageUrl) {
-            tileStyle = `style="background-image: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.65)), url('${news.imageUrl}'); background-size: cover; background-position: center;"`;
+            thumbHtml = `
+                <div class="flex-shrink-0 ml-4">
+                    <img src="${news.imageUrl}" class="w-24 h-24 md:w-32 md:h-32 object-cover border-2 border-white/10 shadow-md bg-black/20" alt="縮圖" loading="lazy" />
+                </div>
+            `;
         }
 
-        // 展開後的圖片畫廊渲染
+        // 展開後的圖片畫廊 (改用 object-contain 不裁剪)
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
-            imagesHtml = `<div class="grid grid-cols-1 gap-4 my-4">`;
+            imagesHtml = `<div class="flex flex-col space-y-4 my-4">`;
             news.images.forEach(imgUrl => {
-                imagesHtml += `<img src="${imgUrl}" class="w-full h-auto object-cover max-h-[350px] border border-white/20" alt="新聞圖片" />`;
+                imagesHtml += `<img src="${imgUrl}" class="w-full h-auto max-h-[500px] object-contain border border-white/20 bg-black/40" alt="新聞圖片" loading="lazy" />`;
             });
             imagesHtml += `</div>`;
         }
 
         htmlContent += `
-            <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay} ${tileStyle}>
+            <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
                 ${geoBackground}
-                <div class="tile-preview p-5">
-                    <div></div>
-                    <div>
+                
+                <!-- 預覽區塊改為橫向排列 (flex-row) -->
+                <div class="tile-preview p-5 flex flex-row justify-between items-start">
+                    <div class="flex flex-col justify-between h-full flex-grow pr-2">
                         <h3 class="text-xl md:text-2xl font-bold leading-tight line-clamp-3">${news.title}</h3>
                         <p class="text-xs mt-3 opacity-80 uppercase tracking-widest truncate">
                             ${timeAgo(news.pubDate)}
                         </p>
                     </div>
+                    ${thumbHtml}
                 </div>
+                
                 <div class="tile-details">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
