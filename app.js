@@ -1,13 +1,11 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 測試名單：移除失效節點，加入經濟、東方、成報
+// 最終精簡名單：四大優質來源
 let categories = [
     { id: 'hk01', name: '香港01' },
     { id: 'oncc', name: '東網' },
     { id: 'mingpao', name: '明報' },
-    { id: 'hket', name: '經濟日報' },
-    { id: 'odn', name: '東方日報' },
-    { id: 'singpao', name: '成報' },
+    { id: 'singtao', name: '星島頭條' },
     { id: 'settings', name: '設定' }
 ];
 
