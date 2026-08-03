@@ -268,8 +268,8 @@ function renderTiles(isAppendMode = false) {
     dataToRender.forEach((news, relativeIndex) => {
         const index = offsetIndex + relativeIndex;
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
-        const cleanDescription = (news.description || '暫無詳細內文。').replace(/
-/g, '</p><p>');
+        // 修復關鍵：確保換行正則表達式完好無缺
+        const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
         const isRead = !!readHistory[news.link]; 
