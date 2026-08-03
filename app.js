@@ -1,7 +1,6 @@
 import { timeAgo, generateGeometricBackground, LocalDB, extractDynamicColor } from './utils.js';
 import { fetchNewsData } from './api.js';
 
-// 將「科技」加入到預設導覽列中
 const baseCats = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
@@ -276,19 +275,24 @@ function renderTiles(isAppendMode = false) {
         const isRead = !!readHistory[news.link]; 
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
 
+        // 【修復1】加入 referrerpolicy="no-referrer" 破解防盜鏈機制
         let thumbHtml = news.imageUrl 
-            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-28 md:h-28 object-cover border-2 border-white/10 shadow-sm bg-black/20" alt="縮圖" loading="lazy" /></div>` 
+            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-28 md:h-28 object-cover border-2 border-white/10 shadow-sm bg-black/20" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
             : '';
 
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
-            let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-auto block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" />`).join('');
+            // 【修復2】加入 max-h-[50vh] 和 object-contain 確保圖片比例完美，且不被過度拉伸
+            let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full max-h-[50vh] object-contain block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
+            
             let navButtons = news.images.length > 1 ? `
                 <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: -window.innerWidth, behavior: 'smooth'})" class="absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❮</button>
                 <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: window.innerWidth, behavior: 'smooth'})" class="absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❯</button>
                 <div class="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded tracking-widest z-10 shadow">${news.images.length} 圖</div>
             ` : '';
-            imagesHtml = `<div class="relative my-4 w-full overflow-hidden group bg-black/20 shadow-md"><div class="img-scroll-box flex overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
+            
+            // 【修復3】外框加入 items-center，取消 Flexbox 的強制垂直拉伸 (stretch)
+            imagesHtml = `<div class="relative my-4 w-full overflow-hidden group bg-black/30 shadow-md"><div class="img-scroll-box flex items-center overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
         }
 
         htmlContent += `
