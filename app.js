@@ -1,10 +1,12 @@
 import { timeAgo, generateGeometricBackground, LocalDB, extractDynamicColor } from './utils.js';
 import { fetchNewsData } from './api.js';
 
+// 將「科技」加入到預設導覽列中
 const baseCats = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
-    { id: 'ent', name: '娛樂' }
+    { id: 'ent', name: '娛樂' },
+    { id: 'tech', name: '科技' }
 ];
 const systemCats = [
     { id: 'bookmarks', name: '收藏' },
@@ -268,7 +270,6 @@ function renderTiles(isAppendMode = false) {
     dataToRender.forEach((news, relativeIndex) => {
         const index = offsetIndex + relativeIndex;
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
-        // 修復關鍵：確保換行正則表達式完好無缺
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
@@ -340,7 +341,6 @@ function attachTileEvents(startIndex = 0) {
         const index = tile.getAttribute('data-index');
         const newsItem = currentNewsData[index];
         
-        // 智慧影像主題色萃取
         if (newsItem && newsItem.imageUrl) {
             extractDynamicColor(newsItem.imageUrl).then(dominantColor => {
                 if (dominantColor) {
