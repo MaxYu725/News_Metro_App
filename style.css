@@ -19,8 +19,6 @@ body {
     font-weight: 600;
 }
 
-/* 效能極限優化：原生虛擬列表技術 */
-/* 這會讓瀏覽器自動忽略尚未捲動到的畫面渲染，達到無限順暢 */
 .metro-tile {
     position: relative;
     cursor: pointer;
@@ -41,10 +39,9 @@ body {
 }
 .metro-tile.expanded {
     box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.6), 0 15px 15px -5px rgba(0, 0, 0, 0.5);
-    content-visibility: visible; /* 展開時強制完整渲染 */
+    content-visibility: visible; 
 }
 
-/* 動態磚 (Live Tile) 翻轉動畫 */
 .live-tile-flip .tile-preview {
     animation: flipAnimation 1.5s cubic-bezier(0.45, 0.05, 0.55, 0.95);
     transform-style: preserve-3d;
@@ -143,7 +140,6 @@ body {
     transition: color 0.3s ease;
 }
 
-/* 回到頂部按鈕的隱藏狀態 */
 #back-to-top {
     transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.2s;
 }
