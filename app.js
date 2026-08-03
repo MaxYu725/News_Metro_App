@@ -1,10 +1,12 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 終極精簡三本柱
+// 全新的主題式分類 (每個分類將包含三大媒體的聚合資訊)
 let categories = [
-    { id: 'hk01', name: '香港01' },
-    { id: 'oncc', name: '東網' },
-    { id: 'mingpao', name: '明報' },
+    { id: 'local', name: '港聞' },
+    { id: 'global', name: '國際' },
+    { id: 'finance', name: '財經' },
+    { id: 'ent', name: '娛樂' },
+    { id: 'sports', name: '體育' },
     { id: 'settings', name: '設定' }
 ];
 
@@ -165,9 +167,12 @@ function renderTiles() {
                 <div class="tile-preview px-5 py-4 flex flex-row justify-between items-start">
                     <div class="flex flex-col justify-between h-full flex-grow pr-1">
                         <h3 class="text-xl md:text-2xl font-bold leading-tight line-clamp-3">${news.title}</h3>
-                        <p class="text-xs mt-3 opacity-80 uppercase tracking-widest truncate">
-                            ${timeAgo(news.pubDate)}
-                        </p>
+                        <div class="flex items-center space-x-2 mt-3">
+                            <span class="text-xs opacity-90 uppercase font-semibold text-gray-200 border border-white/20 px-1.5 py-0.5 rounded">${news.source}</span>
+                            <span class="text-xs opacity-70 uppercase tracking-widest truncate">
+                                ${timeAgo(news.pubDate)}
+                            </span>
+                        </div>
                     </div>
                     ${thumbHtml}
                 </div>
