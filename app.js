@@ -1,10 +1,11 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
-// 移除財經與體育，保留最核心的三大板塊
+// 加入了全新的「收藏」分頁
 let categories = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
     { id: 'ent', name: '娛樂' },
+    { id: 'bookmarks', name: '收藏' },
     { id: 'settings', name: '設定' }
 ];
 
@@ -13,9 +14,18 @@ let currentNewsData = [];
 let newsCache = {}; 
 let currentThemeColor = 'bg-blue-600'; 
 
+// 分頁控制狀態
+let currentPage = 0;
+let isLoadingMore = false;
+let hasMoreNews = true;
+
+// 讀取本機收藏夾
+let savedBookmarks = JSON.parse(localStorage.getItem('metro_news_bookmarks')) || {};
+
 const newsGrid = document.getElementById('news-grid');
 const settingsView = document.getElementById('settings-view');
 const loadingIndicator = document.getElementById('loading-indicator');
+const scrollLoading = document.getElementById('scroll-loading');
 const navMenu = document.getElementById('nav-menu');
 const mainContainer = document.getElementById('main-container');
 const ptrIndicator = document.getElementById('ptr-indicator');
@@ -41,16 +51,55 @@ function renderPivot() {
 function handlePageChange() {
     renderPivot();
     const currentCat = categories[currentIndex];
+    mainContainer.scrollTop = 0; // 切換分類時回到頂部
+    currentPage = 0; // 重置頁數
+    hasMoreNews = true;
+    
     if (currentCat.id === 'settings') {
         newsGrid.classList.add('hidden');
         settingsView.classList.remove('hidden');
         settingsView.classList.add('flex');
         renderCategoryManager();
+    } else if (currentCat.id === 'bookmarks') {
+        settingsView.classList.add('hidden');
+        settingsView.classList.remove('flex');
+        newsGrid.classList.remove('hidden');
+        loadBookmarks();
     } else {
         settingsView.classList.add('hidden');
         settingsView.classList.remove('flex');
         newsGrid.classList.remove('hidden');
-        fetchNews(currentCat.id, false); 
+        fetchNews(currentCat.id, false, false); 
+    }
+}
+
+// 載入收藏夾內容 (完全離線)
+function loadBookmarks() {
+    const bookmarksArray = Object.values(savedBookmarks);
+    bookmarksArray.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+    currentNewsData = bookmarksArray;
+    hasMoreNews = false; // 收藏夾一次全部顯示，無需無限捲動
+    renderTiles(false);
+    if (currentNewsData.length === 0) {
+        newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">你的收藏夾空空如也，快去收藏新聞吧！</p>';
+    }
+}
+
+function toggleBookmark(newsItem, btnElement) {
+    if (savedBookmarks[newsItem.link]) {
+        delete savedBookmarks[newsItem.link];
+        btnElement.classList.remove('saved');
+        btnElement.innerHTML = '☆ 收藏';
+    } else {
+        savedBookmarks[newsItem.link] = newsItem;
+        btnElement.classList.add('saved');
+        btnElement.innerHTML = '★ 已收藏';
+    }
+    localStorage.setItem('metro_news_bookmarks', JSON.stringify(savedBookmarks));
+    
+    // 如果正在瀏覽收藏夾分頁，移除時即時刷新
+    if (categories[currentIndex].id === 'bookmarks') {
+        loadBookmarks();
     }
 }
 
@@ -83,46 +132,70 @@ function generateGeometricBackground() {
     return svg;
 }
 
-async function fetchNews(categoryId, forceRefresh = false) {
-    if (!forceRefresh && newsCache[categoryId]) {
+// 修改 fetchNews 支援分頁 (isAppendMode) 與強制同步 (forceSync)
+async function fetchNews(categoryId, forceSync = false, isAppendMode = false) {
+    if (!isAppendMode && !forceSync && newsCache[categoryId] && currentPage === 0) {
         currentNewsData = newsCache[categoryId];
-        renderTiles();
+        renderTiles(false);
         return;
     }
 
-    if (!forceRefresh || !newsCache[categoryId]) {
+    if (!isAppendMode) {
         newsGrid.innerHTML = '';
         loadingIndicator.classList.remove('hidden');
+    } else {
+        scrollLoading.classList.remove('hidden');
+        isLoadingMore = true;
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}${categoryId}`);
+        const url = `${API_BASE_URL}${categoryId}?page=${currentPage}${forceSync ? '&sync=1' : ''}`;
+        const response = await fetch(url);
         const result = await response.json();
 
         if (result.success && result.data.length > 0) {
-            currentNewsData = result.data;
-            newsCache[categoryId] = result.data;
-            renderTiles();
+            hasMoreNews = result.hasMore;
+            
+            if (isAppendMode) {
+                currentNewsData = currentNewsData.concat(result.data);
+            } else {
+                currentNewsData = result.data;
+            }
+            
+            if (currentPage === 0) newsCache[categoryId] = currentNewsData;
+            
+            renderTiles(isAppendMode);
         } else {
-            if (!newsCache[categoryId]) {
+            hasMoreNews = false;
+            if (!isAppendMode && (!newsCache[categoryId] || newsCache[categoryId].length === 0)) {
                 newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有新聞資料。</p>';
             }
         }
     } catch (error) {
-        if (!newsCache[categoryId]) {
-            newsGrid.innerHTML = '<p class="text-red-500 text-center mt-10">無法連接到伺服器，或目標網站阻擋了連線。</p>';
+        if (!isAppendMode && !newsCache[categoryId]) {
+            newsGrid.innerHTML = '<p class="text-red-500 text-center mt-10">無法連接到資料庫伺服器。</p>';
         }
     } finally {
         loadingIndicator.classList.add('hidden');
+        scrollLoading.classList.add('hidden');
+        isLoadingMore = false;
     }
 }
 
-function renderTiles() {
+// 支援附加模式渲染
+function renderTiles(isAppendMode = false) {
     let htmlContent = '';
-    currentNewsData.forEach((news, index) => {
-        const animationDelay = `style="animation-delay: ${index * 0.05}s"`;
+    
+    // 如果是附加模式，只渲染新抓下來的這批；否則渲染全部
+    const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
+    const offsetIndex = isAppendMode ? currentPage * 20 : 0;
+
+    dataToRender.forEach((news, relativeIndex) => {
+        const index = offsetIndex + relativeIndex;
+        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
+        const isSaved = !!savedBookmarks[news.link];
 
         let thumbHtml = '';
         if (news.imageUrl) {
@@ -170,6 +243,7 @@ function renderTiles() {
                             <span class="text-xs opacity-70 uppercase tracking-widest truncate">
                                 ${timeAgo(news.pubDate)}
                             </span>
+                            ${isSaved ? '<span class="text-xs text-yellow-400">★</span>' : ''}
                         </div>
                     </div>
                     ${thumbHtml}
@@ -180,7 +254,10 @@ function renderTiles() {
                         <div>
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
-                                <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
+                                <div class="flex space-x-4">
+                                    <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
+                                    <span class="text-xs uppercase tracking-widest opacity-65">點擊收回 ∧</span>
+                                </div>
                             </div>
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3 px-5">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-2 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
@@ -196,18 +273,37 @@ function renderTiles() {
             </article>
         `;
     });
-    newsGrid.innerHTML = htmlContent;
-    attachTileEvents();
+
+    if (isAppendMode) {
+        newsGrid.insertAdjacentHTML('beforeend', htmlContent);
+    } else {
+        newsGrid.innerHTML = htmlContent;
+    }
+    
+    attachTileEvents(isAppendMode ? offsetIndex : 0);
 }
 
-function attachTileEvents() {
-    const tiles = newsGrid.querySelectorAll('.metro-tile');
-    tiles.forEach((tile, index) => {
+// 綁定事件時加入 offset，避免重複綁定舊有的 DOM
+function attachTileEvents(startIndex = 0) {
+    const tiles = Array.from(newsGrid.querySelectorAll('.metro-tile')).slice(startIndex);
+    
+    tiles.forEach((tile) => {
+        const index = tile.getAttribute('data-index');
+        
+        // 收藏按鈕事件
+        const bookmarkBtn = tile.querySelector('.bookmark-btn');
+        if (bookmarkBtn) {
+            bookmarkBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // 防止觸發展開磚塊
+                toggleBookmark(currentNewsData[index], bookmarkBtn);
+            });
+        }
+
         tile.addEventListener('click', (e) => {
             if(e.target.tagName === 'BUTTON') return;
 
             const isCurrentlyExpanded = tile.classList.contains('expanded');
-            tiles.forEach(t => t.classList.remove('expanded'));
+            newsGrid.querySelectorAll('.metro-tile').forEach(t => t.classList.remove('expanded'));
             if (!isCurrentlyExpanded) {
                 tile.classList.add('expanded');
                 setTimeout(() => {
@@ -244,6 +340,19 @@ function triggerLongPressAction(tile, link) {
     overlay.addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); });
     tile.appendChild(overlay);
 }
+
+// 實作無限向下捲動載入 (Infinite Scroll)
+mainContainer.addEventListener('scroll', () => {
+    // 距離底部 150px 時觸發，且不是設定頁或收藏頁
+    if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
+        if (mainContainer.scrollTop + mainContainer.clientHeight >= mainContainer.scrollHeight - 150) {
+            if (!isLoadingMore && hasMoreNews) {
+                currentPage++;
+                fetchNews(categories[currentIndex].id, false, true);
+            }
+        }
+    }
+});
 
 let touchStartX = 0;
 let touchStartY = 0;
@@ -302,8 +411,10 @@ mainContainer.addEventListener('touchend', async () => {
     if (pullDist > 65) {
         ptrIndicator.style.height = '45px';
         const currentCat = categories[currentIndex];
-        if (currentCat.id !== 'settings') {
-            await fetchNews(currentCat.id, true); 
+        // 觸發下拉更新：發送 sync=1 參數強制後端更新資料庫，並將分頁歸零
+        if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
+            currentPage = 0;
+            await fetchNews(currentCat.id, true, false); 
         }
     }
     ptrIndicator.style.height = '0px';
@@ -316,7 +427,7 @@ function renderCategoryManager() {
     const list = document.getElementById('category-manager-list');
     list.innerHTML = '';
     categories.forEach((cat, index) => {
-        if (cat.id === 'settings') return;
+        if (cat.id === 'settings' || cat.id === 'bookmarks') return;
         const row = document.createElement('div');
         row.className = 'flex justify-between items-center bg-white/5 px-4 py-3';
         row.innerHTML = `
@@ -328,7 +439,7 @@ function renderCategoryManager() {
 }
 
 window.deleteCategory = function(index) {
-    if (categories.length <= 2) return;
+    if (categories.length <= 3) return; // 至少保留一兩個基本板塊
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
     renderPivot();
@@ -340,7 +451,7 @@ document.getElementById('btn-add-cat').addEventListener('click', () => {
     const val = input.value.trim();
     if (val) {
         const id = val.toLowerCase().replace(/\s+/g, '_');
-        categories.splice(categories.length - 1, 0, { id: id, name: val });
+        categories.splice(categories.length - 2, 0, { id: id, name: val });
         input.value = '';
         renderPivot();
         renderCategoryManager();
@@ -379,14 +490,6 @@ document.getElementById('btn-font-minus').addEventListener('click', () => {
 });
 document.getElementById('btn-font-reset').addEventListener('click', () => {
     currentFontSizePercent = 110; updateFontSize();
-});
-
-const freqButtons = document.querySelectorAll('#update-freq-group .metro-btn');
-freqButtons.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        freqButtons.forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-    });
 });
 
 window.addEventListener('DOMContentLoaded', () => {
