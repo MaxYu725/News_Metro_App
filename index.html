@@ -73,7 +73,21 @@
         </div>
     </main>
 
-    <!-- 注意這裡：加入了 type="module" -->
     <script type="module" src="./app.js"></script>
+    
+    <!-- 註冊 Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker 註冊成功，範圍為: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker 註冊失敗: ', error);
+                    });
+            });
+        }
+    </script>
 </body>
 </html>
