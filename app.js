@@ -1,9 +1,13 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
+// 新增的搜尋專用端點
+const SEARCH_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/search';
 
+// 新增「搜尋」分頁
 let categories = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
     { id: 'ent', name: '娛樂' },
+    { id: 'search', name: '搜尋' },
     { id: 'bookmarks', name: '收藏' },
     { id: 'settings', name: '設定' }
 ];
@@ -13,12 +17,11 @@ let currentNewsData = [];
 let newsCache = {}; 
 let currentThemeColor = 'bg-blue-600'; 
 
-// 分頁控制狀態
 let currentPage = 0;
 let isLoadingMore = false;
 let hasMoreNews = true;
+let currentSearchQuery = ''; // 記住當前的搜尋字詞
 
-// 讀取本機收藏夾與已讀紀錄
 let savedBookmarks = JSON.parse(localStorage.getItem('metro_news_bookmarks')) || {};
 let readHistory = JSON.parse(localStorage.getItem('metro_news_read_history')) || {};
 
@@ -29,6 +32,26 @@ const scrollLoading = document.getElementById('scroll-loading');
 const navMenu = document.getElementById('nav-menu');
 const mainContainer = document.getElementById('main-container');
 const ptrIndicator = document.getElementById('ptr-indicator');
+const searchBarContainer = document.getElementById('search-bar-container');
+const searchInput = document.getElementById('search-input');
+const searchBtn = document.getElementById('search-btn');
+
+// 監聽搜尋輸入
+searchBtn.addEventListener('click', executeSearch);
+searchInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        searchInput.blur(); // 收起手機鍵盤
+        executeSearch();
+    }
+});
+
+function executeSearch() {
+    const query = searchInput.value.trim();
+    if (!query) return;
+    currentSearchQuery = query;
+    currentPage = 0;
+    fetchNews('search', false, false);
+}
 
 function renderPivot() {
     navMenu.innerHTML = '';
@@ -54,18 +77,31 @@ function handlePageChange() {
     mainContainer.scrollTop = 0; 
     currentPage = 0; 
     hasMoreNews = true;
+    currentSearchQuery = ''; 
     
+    // 依據選擇的頁籤切換可見區塊
     if (currentCat.id === 'settings') {
+        searchBarContainer.classList.add('hidden');
         newsGrid.classList.add('hidden');
         settingsView.classList.remove('hidden');
         settingsView.classList.add('flex');
         renderCategoryManager();
     } else if (currentCat.id === 'bookmarks') {
+        searchBarContainer.classList.add('hidden');
         settingsView.classList.add('hidden');
         settingsView.classList.remove('flex');
         newsGrid.classList.remove('hidden');
         loadBookmarks();
+    } else if (currentCat.id === 'search') {
+        settingsView.classList.add('hidden');
+        settingsView.classList.remove('flex');
+        searchBarContainer.classList.remove('hidden');
+        newsGrid.classList.remove('hidden');
+        newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">請在上方輸入關鍵字，找尋過去的新聞軌跡。</p>';
+        currentNewsData = [];
+        searchInput.value = '';
     } else {
+        searchBarContainer.classList.add('hidden');
         settingsView.classList.add('hidden');
         settingsView.classList.remove('flex');
         newsGrid.classList.remove('hidden');
@@ -101,12 +137,10 @@ function toggleBookmark(newsItem, btnElement) {
     }
 }
 
-// 標記為已讀並儲存至本機
 function markAsRead(link, titleElement) {
     if (!readHistory[link]) {
         readHistory[link] = Date.now();
         
-        // 記憶體防爆機制：超過 1000 筆時，刪除最舊的一半紀錄
         const keys = Object.keys(readHistory);
         if (keys.length > 1000) {
             const sortedKeys = keys.sort((a, b) => readHistory[b] - readHistory[a]);
@@ -118,7 +152,6 @@ function markAsRead(link, titleElement) {
         
         localStorage.setItem('metro_news_read_history', JSON.stringify(readHistory));
         
-        // 即時改變文字顏色為灰色
         if (titleElement) {
             titleElement.classList.remove('text-white');
             titleElement.classList.add('text-gray-400');
@@ -156,7 +189,8 @@ function generateGeometricBackground() {
 }
 
 async function fetchNews(categoryId, forceSync = false, isAppendMode = false) {
-    if (!isAppendMode && !forceSync && newsCache[categoryId] && currentPage === 0) {
+    // 搜尋模式下略過快取邏輯
+    if (categoryId !== 'search' && !isAppendMode && !forceSync && newsCache[categoryId] && currentPage === 0) {
         currentNewsData = newsCache[categoryId];
         renderTiles(false);
         return;
@@ -171,7 +205,14 @@ async function fetchNews(categoryId, forceSync = false, isAppendMode = false) {
     }
 
     try {
-        const url = `${API_BASE_URL}${categoryId}?page=${currentPage}${forceSync ? '&sync=1' : ''}`;
+        let url;
+        // 判斷是呼叫新聞 API 還是搜尋 API
+        if (categoryId === 'search') {
+            url = `${SEARCH_API_URL}?q=${encodeURIComponent(currentSearchQuery)}&page=${currentPage}`;
+        } else {
+            url = `${API_BASE_URL}${categoryId}?page=${currentPage}${forceSync ? '&sync=1' : ''}`;
+        }
+
         const response = await fetch(url);
         const result = await response.json();
 
@@ -184,13 +225,20 @@ async function fetchNews(categoryId, forceSync = false, isAppendMode = false) {
                 currentNewsData = result.data;
             }
             
-            if (currentPage === 0) newsCache[categoryId] = currentNewsData;
+            // 快取機制只應用於標準新聞分類
+            if (currentPage === 0 && categoryId !== 'search') {
+                newsCache[categoryId] = currentNewsData;
+            }
             
             renderTiles(isAppendMode);
         } else {
             hasMoreNews = false;
-            if (!isAppendMode && (!newsCache[categoryId] || newsCache[categoryId].length === 0)) {
-                newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有新聞資料。</p>';
+            if (!isAppendMode) {
+                if (categoryId === 'search') {
+                    newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">資料庫中找不到符合此關鍵字的新聞。</p>';
+                } else {
+                    newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有新聞資料。</p>';
+                }
             }
         }
     } catch (error) {
@@ -216,7 +264,7 @@ function renderTiles(isAppendMode = false) {
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
-        const isRead = !!readHistory[news.link]; // 檢查是否已讀
+        const isRead = !!readHistory[news.link]; 
 
         let thumbHtml = '';
         if (news.imageUrl) {
@@ -252,7 +300,6 @@ function renderTiles(isAppendMode = false) {
             `;
         }
 
-        // 根據是否已讀，切換標題的文字顏色
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
 
         htmlContent += `
@@ -328,7 +375,6 @@ function attachTileEvents(startIndex = 0) {
             newsGrid.querySelectorAll('.metro-tile').forEach(t => t.classList.remove('expanded'));
             
             if (!isCurrentlyExpanded) {
-                // 點擊展開時，觸發標記為已讀
                 const titleElement = tile.querySelector('.news-title');
                 markAsRead(currentNewsData[index].link, titleElement);
 
@@ -370,6 +416,9 @@ function triggerLongPressAction(tile, link) {
 
 mainContainer.addEventListener('scroll', () => {
     if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
+        // 搜尋頁面下，必須有輸入關鍵字才支援無限捲動
+        if (categories[currentIndex].id === 'search' && !currentSearchQuery) return;
+
         if (mainContainer.scrollTop + mainContainer.clientHeight >= mainContainer.scrollHeight - 150) {
             if (!isLoadingMore && hasMoreNews) {
                 currentPage++;
@@ -438,7 +487,12 @@ mainContainer.addEventListener('touchend', async () => {
         const currentCat = categories[currentIndex];
         if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
             currentPage = 0;
-            await fetchNews(currentCat.id, true, false); 
+            // 如果在搜尋頁下拉，且有關鍵字，就重新搜尋
+            if (currentCat.id === 'search') {
+                if (currentSearchQuery) await fetchNews('search', false, false);
+            } else {
+                await fetchNews(currentCat.id, true, false); 
+            }
         }
     }
     ptrIndicator.style.height = '0px';
@@ -451,7 +505,7 @@ function renderCategoryManager() {
     const list = document.getElementById('category-manager-list');
     list.innerHTML = '';
     categories.forEach((cat, index) => {
-        if (cat.id === 'settings' || cat.id === 'bookmarks') return;
+        if (['search', 'bookmarks', 'settings'].includes(cat.id)) return;
         const row = document.createElement('div');
         row.className = 'flex justify-between items-center bg-white/5 px-4 py-3';
         row.innerHTML = `
@@ -462,8 +516,14 @@ function renderCategoryManager() {
     });
 }
 
+// 修改刪除邏輯，保護內建的系統頁籤不被誤刪
 window.deleteCategory = function(index) {
-    if (categories.length <= 3) return; 
+    const targetCat = categories[index];
+    if (['search', 'bookmarks', 'settings'].includes(targetCat.id)) {
+        alert('系統預設板塊無法刪除！');
+        return;
+    }
+    if (categories.length <= 4) return; 
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
     renderPivot();
@@ -475,7 +535,9 @@ document.getElementById('btn-add-cat').addEventListener('click', () => {
     const val = input.value.trim();
     if (val) {
         const id = val.toLowerCase().replace(/\s+/g, '_');
-        categories.splice(categories.length - 2, 0, { id: id, name: val });
+        // 將新的分類插入在「搜尋」標籤的前面
+        const insertIndex = categories.findIndex(c => c.id === 'search');
+        categories.splice(insertIndex, 0, { id: id, name: val });
         input.value = '';
         renderPivot();
         renderCategoryManager();
