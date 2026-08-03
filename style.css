@@ -79,7 +79,6 @@ body {
     opacity: 1;
 }
 
-/* 將左右邊距歸零，讓圖片畫廊能徹底滿版 */
 .tile-details-inner {
     overflow: hidden;
     padding: 0px 0px; 
@@ -112,6 +111,14 @@ body {
     color: #000000;
     border-color: #ffffff;
     font-weight: bold;
+}
+
+.bookmark-btn {
+    transition: all 0.2s;
+}
+.bookmark-btn.saved {
+    color: #FFD700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
 @keyframes fadeIn {
