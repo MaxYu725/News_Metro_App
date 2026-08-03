@@ -126,21 +126,32 @@ DOM.lightboxImg?.addEventListener('touchend', (e) => {
     lastTapTime = currentTime;
 });
 
+// ==============================
+// 完美修復：Metro Pivot 無限延伸導航邏輯
+// ==============================
 function renderPivot() {
     if(!DOM.navMenu) return;
     DOM.navMenu.innerHTML = '';
-    categories.forEach((cat, index) => {
+    
+    // 從目前的板塊開始，向後循環渲染所有板塊
+    for (let i = 0; i < categories.length; i++) {
+        // 計算實際在陣列中的位置 (達到無限輪迴的效果)
+        const actualIndex = (currentIndex + i) % categories.length;
+        const cat = categories[actualIndex];
+
         const a = document.createElement('a');
-        a.className = `nav-link ${index === currentIndex ? 'active' : ''}`;
+        // 第一個元素永遠是 Active 狀態 (靠左)
+        a.className = `nav-link ${i === 0 ? 'active' : ''}`;
         a.innerText = cat.name;
+        
         a.addEventListener('click', () => {
-            currentIndex = index;
+            currentIndex = actualIndex;
             handlePageChange();
         });
         DOM.navMenu.appendChild(a);
-    });
-    const activeLink = DOM.navMenu.children[currentIndex];
-    if (activeLink) DOM.navMenu.scrollTo({ left: activeLink.offsetLeft - 16, behavior: 'smooth' });
+    }
+    // 強制將滾動條歸零，確保排版貼齊最左側
+    DOM.navMenu.scrollLeft = 0;
 }
 
 function handlePageChange() {
@@ -350,6 +361,7 @@ function renderTiles(isAppendMode = false) {
             imagesHtml = `<div class="relative my-4 w-full overflow-hidden group bg-black/30 shadow-md"><div class="img-scroll-box flex items-center overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
         }
 
+        // 修改重點：「✨ AI 撮要」
         htmlContent += `
             <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
                 ${geoBackground}
@@ -370,8 +382,8 @@ function renderTiles(isAppendMode = false) {
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
                                 <div class="flex space-x-4">
-                                    <!-- 全新：✨ AI 總結按鈕 -->
-                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 總結</button>
+                                    <!-- 更新為 ✨ AI 撮要 -->
+                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 撮要</button>
                                     <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors" data-index="${index}">分享 ↗</button>
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                 </div>
@@ -379,7 +391,6 @@ function renderTiles(isAppendMode = false) {
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3 px-5">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-2 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
-                            <!-- 全新：隱藏的 AI 總結顯示區塊 -->
                             <div class="ai-box hidden mx-5 my-4 bg-fuchsia-900/30 border border-fuchsia-500/40 p-4 rounded-sm">
                                 <div class="flex items-center space-x-2 mb-2">
                                     <span class="text-fuchsia-400 text-sm">✨</span>
@@ -441,26 +452,21 @@ function attachTileEvents(startIndex = 0) {
             });
         }
 
-        // ==============================
-        // ✨ AI 總結按鈕事件綁定
-        // ==============================
         const aiBtn = tile.querySelector('.ai-btn');
         const aiBox = tile.querySelector('.ai-box');
         const aiText = tile.querySelector('.ai-summary-text');
 
         if (aiBtn && aiBox && aiText) {
             aiBtn.addEventListener('click', async (e) => {
-                e.stopPropagation(); // 防止點擊按鈕時觸發文章收合
+                e.stopPropagation(); 
                 
-                // 防止重複點擊呼叫
-                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
+                // 更新錯誤判斷字串
+                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 撮要失敗，請稍後再試。') return; 
 
-                // 顯示讀取中狀態
                 aiBox.classList.remove('hidden');
                 aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
 
                 const news = currentNewsData[index];
-                // 移除所有的 HTML 標籤，把乾淨純文字送給 AI
                 const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
 
                 const res = await fetchAISummary(cleanTextForAI);
@@ -468,12 +474,16 @@ function attachTileEvents(startIndex = 0) {
                 if (res.success) {
                     aiText.innerText = res.summary;
                 } else {
-                    aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
+                    // 更新錯誤提示
+                    aiText.innerText = '⚠️ 撮要失敗，請稍後再試。';
                     console.error('AI Error:', res.error);
                 }
             });
         }
 
+        // ==============================
+        // 完美修復：捲動位置丟失問題
+        // ==============================
         tile.addEventListener('click', (e) => {
             if(e.target.tagName === 'BUTTON') return;
             if (e.target.classList.contains('lightbox-img')) {
@@ -487,11 +497,15 @@ function attachTileEvents(startIndex = 0) {
             releaseWakeLock();
             
             if (!isCurrentlyExpanded) {
+                // 展開文章：標示為已讀並滑動至視角起點
                 const titleElement = tile.querySelector('.news-title');
                 markAsRead(currentNewsData[index].link, titleElement);
                 tile.classList.add('expanded');
                 requestWakeLock();
-                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
+                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
+            } else {
+                // 收合文章：給予足夠的延遲讓 DOM 重新計算高度後，自動尋找該塊新聞並將它拉回畫面頂端！
+                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
             }
         });
 
