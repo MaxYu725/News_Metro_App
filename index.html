@@ -20,17 +20,19 @@
         <nav class="flex space-x-6 text-2xl mb-4 text-gray-500 overflow-x-auto hide-scrollbar justify-start" id="nav-menu"></nav>
     </header>
 
-    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative" id="main-container">
+    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative scroll-smooth" id="main-container">
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-200" style="height: 0px;"></div>
         
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
             <div class="loader"></div>
         </div>
         
-        <!-- 取消邊距 px，間距改為 2px，讓磚塊貼齊手機邊緣 -->
         <div id="news-grid" class="grid grid-cols-1 gap-[2px] auto-rows-auto"></div>
 
-        <!-- 設定頁面保留舒適邊距 -->
+        <div id="scroll-loading" class="w-full h-16 flex items-center justify-center hidden">
+            <div class="loader-small"></div>
+        </div>
+
         <div id="settings-view" class="hidden flex-col space-y-10 pb-10 px-5 mt-4">
             <div class="flex flex-col space-y-4">
                 <h2 class="text-3xl font-light mb-2">settings</h2>
@@ -59,15 +61,6 @@
                     <div class="flex items-center justify-center px-4 bg-white/10 text-white font-bold tracking-wider" id="font-size-display">110%</div>
                     <button class="metro-btn" id="btn-font-plus">a +</button>
                     <button class="metro-btn" id="btn-font-reset">reset</button>
-                </div>
-            </div>
-
-            <div>
-                <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">auto update frequency</p>
-                <div class="flex space-x-2" id="update-freq-group">
-                    <button class="metro-btn active">5 min</button>
-                    <button class="metro-btn">15 min</button>
-                    <button class="metro-btn">30 min</button>
                 </div>
             </div>
         </div>
