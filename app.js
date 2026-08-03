@@ -1,14 +1,13 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
+// 全新黃金陣容測試名單
 let categories = [
-    { id: 'local', name: '本地' },
-    { id: 'finance', name: '財經' },
-    { id: 'global', name: '國際' },
-    { id: 'tech', name: '科技' },
-    { id: 'ent', name: '娛樂' },
     { id: 'hk01', name: '香港01' },
     { id: 'oncc', name: '東網' },
-    { id: 'yahoo', name: 'Yahoo' }, // 改為 Yahoo
+    { id: 'hoytv', name: 'HOY TV' },
+    { id: 'mingpao', name: '明報' },
+    { id: 'am730', name: 'AM730' },
+    { id: 'singtao', name: '星島' },
     { id: 'settings', name: '設定' }
 ];
 
@@ -114,7 +113,7 @@ async function fetchNews(categoryId, forceRefresh = false) {
         }
     } catch (error) {
         if (!newsCache[categoryId]) {
-            newsGrid.innerHTML = '<p class="text-red-500 text-center mt-10">無法連接到伺服器，請檢查網路設定。</p>';
+            newsGrid.innerHTML = '<p class="text-red-500 text-center mt-10">無法連接到伺服器，或目標網站阻擋了連線。</p>';
         }
     } finally {
         loadingIndicator.classList.add('hidden');
