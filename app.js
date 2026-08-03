@@ -8,7 +8,7 @@ let categories = [
     { id: 'ent', name: '娛樂' },
     { id: 'hk01', name: '香港01' },
     { id: 'oncc', name: '東網' },
-    { id: 'now', name: 'Now新聞' },
+    { id: 'yahoo', name: 'Yahoo' }, // 改為 Yahoo
     { id: 'settings', name: '設定' }
 ];
 
@@ -188,7 +188,7 @@ function renderTiles() {
                             
                             ${imagesHtml}
 
-                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 px-5 py-6 mt-3">
+                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 px-5 py-6 mt-3 border border-white/5">
                                 <p>${cleanDescription}</p>
                             </div>
                         </div>
