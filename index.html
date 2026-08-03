@@ -23,13 +23,6 @@
     <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative scroll-smooth" id="main-container">
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-200" style="height: 0px;"></div>
         
-        <div id="search-bar-container" class="hidden px-5 mb-4 mt-2">
-            <div class="relative w-full shadow-lg">
-                <input type="text" id="search-input" placeholder="輸入關鍵字搜尋歷史新聞..." class="w-full bg-white/10 border border-white/30 px-5 py-4 text-white text-lg placeholder-gray-400 focus:outline-none focus:border-white focus:bg-white/20 transition-all" autocomplete="off">
-                <button id="search-btn" class="absolute right-0 top-0 bottom-0 px-6 font-bold tracking-widest uppercase text-white bg-white/20 hover:bg-white/40 transition-colors">搜尋</button>
-            </div>
-        </div>
-
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
             <div class="loader"></div>
         </div>
@@ -45,7 +38,7 @@
                 <h2 class="text-3xl font-light mb-2">settings</h2>
                 <div class="flex flex-col space-y-3" id="category-manager-list"></div>
                 <div class="flex space-x-2 mt-4">
-                    <input type="text" id="new-cat-input" placeholder="輸入新類別名稱..." class="bg-black border border-white/30 px-4 py-2 text-white focus:outline-none focus:border-white flex-grow">
+                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-black border border-white/30 px-4 py-2 text-white focus:outline-none focus:border-white flex-grow">
                     <button id="btn-add-cat" class="metro-btn">新增</button>
                 </div>
             </div>
@@ -75,7 +68,6 @@
 
     <script type="module" src="./app.js"></script>
     
-    <!-- 註冊 Service Worker -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
