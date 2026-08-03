@@ -1,14 +1,12 @@
 import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData } from './api.js';
 
-// 將預設板塊與自訂板塊合併
 const baseCats = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
     { id: 'ent', name: '娛樂' }
 ];
 const systemCats = [
-    { id: 'search', name: '搜尋' },
     { id: 'bookmarks', name: '收藏' },
     { id: 'settings', name: '設定' }
 ];
@@ -36,27 +34,8 @@ const DOM = {
     scrollLoading: document.getElementById('scroll-loading'),
     navMenu: document.getElementById('nav-menu'),
     mainContainer: document.getElementById('main-container'),
-    ptrIndicator: document.getElementById('ptr-indicator'),
-    searchBarContainer: document.getElementById('search-bar-container'),
-    searchInput: document.getElementById('search-input'),
-    searchBtn: document.getElementById('search-btn')
+    ptrIndicator: document.getElementById('ptr-indicator')
 };
-
-DOM.searchBtn.addEventListener('click', executeSearch);
-DOM.searchInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        DOM.searchInput.blur();
-        executeSearch();
-    }
-});
-
-function executeSearch() {
-    const query = DOM.searchInput.value.trim();
-    if (!query) return;
-    currentSearchQuery = query;
-    currentPage = 0;
-    loadNewsUI('search', false, false);
-}
 
 function renderPivot() {
     DOM.navMenu.innerHTML = '';
@@ -83,35 +62,22 @@ function handlePageChange() {
     currentSearchQuery = ''; 
     
     if (currentCat.id === 'settings') {
-        DOM.searchBarContainer.classList.add('hidden');
         DOM.newsGrid.classList.add('hidden');
         DOM.settingsView.classList.remove('hidden');
         DOM.settingsView.classList.add('flex');
         renderCategoryManager();
     } else if (currentCat.id === 'bookmarks') {
-        DOM.searchBarContainer.classList.add('hidden');
         DOM.settingsView.classList.add('hidden');
         DOM.settingsView.classList.remove('flex');
         DOM.newsGrid.classList.remove('hidden');
         renderBookmarksUI();
-    } else if (currentCat.id === 'search') {
-        DOM.settingsView.classList.add('hidden');
-        DOM.settingsView.classList.remove('flex');
-        DOM.searchBarContainer.classList.remove('hidden');
-        DOM.newsGrid.classList.remove('hidden');
-        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">請在上方輸入關鍵字，找尋過去的新聞軌跡。</p>';
-        currentNewsData = [];
-        DOM.searchInput.value = '';
     } else if (currentCat.isCustom) {
-        // 全新邏輯：如果是自訂分類 (如 iPhone)，把它視為隱藏搜尋列的專屬搜尋結果！
         DOM.settingsView.classList.add('hidden');
         DOM.settingsView.classList.remove('flex');
-        DOM.searchBarContainer.classList.add('hidden'); // 不顯示上方搜尋列
         DOM.newsGrid.classList.remove('hidden');
-        currentSearchQuery = currentCat.query; // 設定搜尋關鍵字等於分類名稱
+        currentSearchQuery = currentCat.query; 
         loadNewsUI('search', false, false); 
     } else {
-        DOM.searchBarContainer.classList.add('hidden');
         DOM.settingsView.classList.add('hidden');
         DOM.settingsView.classList.remove('flex');
         DOM.newsGrid.classList.remove('hidden');
@@ -318,7 +284,7 @@ function triggerLongPressAction(tile, link) {
 
 DOM.mainContainer.addEventListener('scroll', () => {
     if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
-        if ((categories[currentIndex].id === 'search' || categories[currentIndex].isCustom) && !currentSearchQuery) return;
+        if (categories[currentIndex].isCustom && !currentSearchQuery) return;
         if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 150) {
             if (!isLoadingMore && hasMoreNews) {
                 currentPage++;
@@ -367,12 +333,9 @@ DOM.mainContainer.addEventListener('touchend', async () => {
         const currentCat = categories[currentIndex];
         if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
             currentPage = 0;
-            if (currentCat.id === 'search' && currentSearchQuery) {
+            if (currentCat.isCustom) {
                 await loadNewsUI('search', false, false);
-            } else if (currentCat.isCustom) {
-                // 自訂版塊下拉時，只需去資料庫查詢最新紀錄
-                await loadNewsUI('search', false, false);
-            } else if (currentCat.id !== 'search') {
+            } else {
                 await loadNewsUI(currentCat.id, true, false); 
             }
         }
@@ -387,7 +350,7 @@ function renderCategoryManager() {
     const list = document.getElementById('category-manager-list');
     list.innerHTML = '';
     categories.forEach((cat, index) => {
-        if (['search', 'bookmarks', 'settings'].includes(cat.id)) return;
+        if (['bookmarks', 'settings'].includes(cat.id)) return;
         const row = document.createElement('div');
         row.className = 'flex justify-between items-center bg-white/5 px-4 py-3';
         row.innerHTML = `
@@ -400,9 +363,8 @@ function renderCategoryManager() {
 
 window.deleteCategory = function(index) {
     const target = categories[index];
-    if (['search', 'bookmarks', 'settings'].includes(target.id)) return alert('系統預設板塊無法刪除！');
+    if (['bookmarks', 'settings'].includes(target.id)) return alert('系統預設板塊無法刪除！');
     
-    // 如果刪除的是自訂板塊，同步更新 LocalStorage
     if (target.isCustom) {
         customCats = customCats.filter(c => c.id !== target.id);
         LocalDB.saveCustomCategories(customCats);
@@ -419,7 +381,6 @@ document.getElementById('btn-add-cat').addEventListener('click', () => {
     const input = document.getElementById('new-cat-input');
     const val = input.value.trim();
     if (val) {
-        // 全新：將新增的分類標記為 Custom (自訂)
         const newCat = { id: 'custom_' + Date.now(), name: val, isCustom: true, query: val };
         customCats.push(newCat);
         LocalDB.saveCustomCategories(customCats);
