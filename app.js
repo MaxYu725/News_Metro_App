@@ -34,8 +34,93 @@ const DOM = {
     scrollLoading: document.getElementById('scroll-loading'),
     navMenu: document.getElementById('nav-menu'),
     mainContainer: document.getElementById('main-container'),
-    ptrIndicator: document.getElementById('ptr-indicator')
+    ptrIndicator: document.getElementById('ptr-indicator'),
+    // Lightbox 元素
+    lightboxOverlay: document.getElementById('lightbox-overlay'),
+    lightboxImg: document.getElementById('lightbox-img'),
+    lightboxClose: document.getElementById('lightbox-close')
 };
+
+// ==========================================
+// Lightbox (圖片檢視器) 引擎與雙指縮放邏輯
+// ==========================================
+let currentScale = 1;
+let initialDistance = 0;
+
+function openLightbox(src) {
+    DOM.lightboxImg.src = src;
+    DOM.lightboxImg.style.transform = 'scale(1)';
+    currentScale = 1;
+    DOM.lightboxOverlay.classList.remove('hidden');
+    // 延遲一點點移除透明度，觸發 CSS 漸顯動畫
+    setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
+}
+
+function closeLightbox() {
+    DOM.lightboxOverlay.classList.add('opacity-0');
+    setTimeout(() => {
+        DOM.lightboxOverlay.classList.add('hidden');
+        DOM.lightboxImg.src = '';
+    }, 300);
+}
+
+DOM.lightboxClose.addEventListener('click', closeLightbox);
+DOM.lightboxOverlay.addEventListener('click', (e) => {
+    // 點擊背景區域關閉
+    if (e.target === DOM.lightboxOverlay) closeLightbox();
+});
+
+// 1. 記錄雙指剛觸碰時的距離
+DOM.lightboxImg.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+        initialDistance = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+        );
+    }
+}, { passive: false });
+
+// 2. 雙指滑動時計算比例並放大縮小
+DOM.lightboxImg.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+        e.preventDefault(); // 防止畫面滾動
+        const currentDistance = Math.hypot(
+            e.touches[0].pageX - e.touches[1].pageX,
+            e.touches[0].pageY - e.touches[1].pageY
+        );
+        const scaleChange = currentDistance / initialDistance;
+        let newScale = currentScale * scaleChange;
+        
+        // 限制縮放比例 (最小 1 倍，最大 4 倍)
+        newScale = Math.min(Math.max(1, newScale), 4);
+        DOM.lightboxImg.style.transform = `scale(${newScale})`;
+    }
+}, { passive: false });
+
+// 3. 手指離開時，記憶最後的縮放比例
+DOM.lightboxImg.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) {
+        const transform = DOM.lightboxImg.style.transform;
+        const match = transform.match(/scale\(([^)]+)\)/);
+        currentScale = match ? parseFloat(match[1]) : 1;
+    }
+});
+
+// 4. 雙擊還原 (Double Tap to Reset)
+let lastTapTime = 0;
+DOM.lightboxImg.addEventListener('touchend', (e) => {
+    const currentTime = new Date().getTime();
+    const tapLength = currentTime - lastTapTime;
+    if (tapLength < 300 && tapLength > 0) {
+        // 偵測到雙擊
+        currentScale = 1;
+        DOM.lightboxImg.style.transform = 'scale(1)';
+        e.preventDefault();
+    }
+    lastTapTime = currentTime;
+});
+// ==========================================
+
 
 function renderPivot() {
     DOM.navMenu.innerHTML = '';
@@ -177,7 +262,8 @@ function renderTiles(isAppendMode = false) {
 
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
-            let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="snap-center flex-shrink-0 w-full h-auto block" alt="新聞圖片" loading="lazy" />`).join('');
+            // 在圖片上加入 lightbox-img class
+            let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-auto block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" />`).join('');
             let navButtons = news.images.length > 1 ? `
                 <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: -window.innerWidth, behavior: 'smooth'})" class="absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❮</button>
                 <button onclick="event.stopPropagation(); this.parentElement.querySelector('.img-scroll-box').scrollBy({left: window.innerWidth, behavior: 'smooth'})" class="absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❯</button>
@@ -242,6 +328,14 @@ function attachTileEvents(startIndex = 0) {
 
         tile.addEventListener('click', (e) => {
             if(e.target.tagName === 'BUTTON') return;
+
+            // 攔截圖片點擊：如果點擊的是文章內的圖片，直接開啟燈箱，不執行收起文章的邏輯
+            if (e.target.classList.contains('lightbox-img')) {
+                e.stopPropagation();
+                openLightbox(e.target.src);
+                return;
+            }
+
             const isCurrentlyExpanded = tile.classList.contains('expanded');
             DOM.newsGrid.querySelectorAll('.metro-tile').forEach(t => t.classList.remove('expanded'));
             
