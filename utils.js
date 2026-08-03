@@ -1,4 +1,3 @@
-// 計算時間差
 export function timeAgo(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -12,7 +11,6 @@ export function timeAgo(dateString) {
     return `${Math.floor(diffHours / 24)} 天前`;
 }
 
-// 隨機生成 Metro 風格幾何背景
 export function generateGeometricBackground() {
     let svg = `<svg class="geo-bg" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg">`;
     const cx = 50 + Math.random() * 300;
@@ -29,7 +27,6 @@ export function generateGeometricBackground() {
     return svg;
 }
 
-// 本機資料管理庫
 export const LocalDB = {
     getBookmarks: () => JSON.parse(localStorage.getItem('metro_news_bookmarks')) || {},
     saveBookmarks: (data) => localStorage.setItem('metro_news_bookmarks', JSON.stringify(data)),
@@ -45,5 +42,9 @@ export const LocalDB = {
             data = newHistory;
         }
         localStorage.setItem('metro_news_read_history', JSON.stringify(data));
-    }
+    },
+
+    // 全新：儲存使用者的自訂分類 (如 iPhone, 科技)
+    getCustomCategories: () => JSON.parse(localStorage.getItem('metro_news_custom_cats')) || [],
+    saveCustomCategories: (data) => localStorage.setItem('metro_news_custom_cats', JSON.stringify(data))
 };
