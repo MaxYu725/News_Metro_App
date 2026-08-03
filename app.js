@@ -1,14 +1,20 @@
 import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData } from './api.js';
 
-let categories = [
+// 將預設板塊與自訂板塊合併
+const baseCats = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
-    { id: 'ent', name: '娛樂' },
+    { id: 'ent', name: '娛樂' }
+];
+const systemCats = [
     { id: 'search', name: '搜尋' },
     { id: 'bookmarks', name: '收藏' },
     { id: 'settings', name: '設定' }
 ];
+
+let customCats = LocalDB.getCustomCategories();
+let categories = [...baseCats, ...customCats, ...systemCats];
 
 let currentIndex = 0;
 let currentNewsData = [];
@@ -36,7 +42,6 @@ const DOM = {
     searchBtn: document.getElementById('search-btn')
 };
 
-// 搜尋事件綁定
 DOM.searchBtn.addEventListener('click', executeSearch);
 DOM.searchInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
@@ -97,6 +102,14 @@ function handlePageChange() {
         DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">請在上方輸入關鍵字，找尋過去的新聞軌跡。</p>';
         currentNewsData = [];
         DOM.searchInput.value = '';
+    } else if (currentCat.isCustom) {
+        // 全新邏輯：如果是自訂分類 (如 iPhone)，把它視為隱藏搜尋列的專屬搜尋結果！
+        DOM.settingsView.classList.add('hidden');
+        DOM.settingsView.classList.remove('flex');
+        DOM.searchBarContainer.classList.add('hidden'); // 不顯示上方搜尋列
+        DOM.newsGrid.classList.remove('hidden');
+        currentSearchQuery = currentCat.query; // 設定搜尋關鍵字等於分類名稱
+        loadNewsUI('search', false, false); 
     } else {
         DOM.searchBarContainer.classList.add('hidden');
         DOM.settingsView.classList.add('hidden');
@@ -168,7 +181,7 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
         hasMoreNews = false;
         if (!isAppendMode) {
             DOM.newsGrid.innerHTML = categoryId === 'search' 
-                ? '<p class="text-gray-500 text-center mt-10">資料庫中找不到符合此關鍵字的新聞。</p>' 
+                ? `<p class="text-gray-500 text-center mt-10">資料庫中找不到符合「${currentSearchQuery}」的新聞，等背景更新後再來看看吧！</p>` 
                 : '<p class="text-gray-500 text-center mt-10">目前沒有新聞資料。</p>';
         }
     }
@@ -303,14 +316,15 @@ function triggerLongPressAction(tile, link) {
     tile.appendChild(overlay);
 }
 
-// 捲動監聽與手勢控制
 DOM.mainContainer.addEventListener('scroll', () => {
     if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
-        if (categories[currentIndex].id === 'search' && !currentSearchQuery) return;
+        if ((categories[currentIndex].id === 'search' || categories[currentIndex].isCustom) && !currentSearchQuery) return;
         if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 150) {
             if (!isLoadingMore && hasMoreNews) {
                 currentPage++;
-                loadNewsUI(categories[currentIndex].id, false, true);
+                const isCustom = categories[currentIndex].isCustom;
+                const catId = isCustom ? 'search' : categories[currentIndex].id;
+                loadNewsUI(catId, false, true);
             }
         }
     }
@@ -353,8 +367,14 @@ DOM.mainContainer.addEventListener('touchend', async () => {
         const currentCat = categories[currentIndex];
         if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
             currentPage = 0;
-            if (currentCat.id === 'search' && currentSearchQuery) await loadNewsUI('search', false, false);
-            else if (currentCat.id !== 'search') await loadNewsUI(currentCat.id, true, false); 
+            if (currentCat.id === 'search' && currentSearchQuery) {
+                await loadNewsUI('search', false, false);
+            } else if (currentCat.isCustom) {
+                // 自訂版塊下拉時，只需去資料庫查詢最新紀錄
+                await loadNewsUI('search', false, false);
+            } else if (currentCat.id !== 'search') {
+                await loadNewsUI(currentCat.id, true, false); 
+            }
         }
     }
     DOM.ptrIndicator.style.height = '0px';
@@ -371,7 +391,7 @@ function renderCategoryManager() {
         const row = document.createElement('div');
         row.className = 'flex justify-between items-center bg-white/5 px-4 py-3';
         row.innerHTML = `
-            <span class="text-xl font-light text-gray-200">${cat.name} (${cat.id})</span>
+            <span class="text-xl font-light text-gray-200">${cat.name} ${cat.isCustom ? '<span class="text-[10px] text-blue-300 ml-1">(追蹤)</span>' : ''}</span>
             <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30" onclick="deleteCategory(${index})">刪除</button>
         `;
         list.appendChild(row);
@@ -379,10 +399,18 @@ function renderCategoryManager() {
 }
 
 window.deleteCategory = function(index) {
-    if (['search', 'bookmarks', 'settings'].includes(categories[index].id)) return alert('系統預設板塊無法刪除！');
-    if (categories.length <= 4) return; 
+    const target = categories[index];
+    if (['search', 'bookmarks', 'settings'].includes(target.id)) return alert('系統預設板塊無法刪除！');
+    
+    // 如果刪除的是自訂板塊，同步更新 LocalStorage
+    if (target.isCustom) {
+        customCats = customCats.filter(c => c.id !== target.id);
+        LocalDB.saveCustomCategories(customCats);
+    }
+    
     categories.splice(index, 1);
     if (currentIndex >= categories.length) currentIndex = categories.length - 1;
+    
     renderPivot();
     renderCategoryManager();
 }
@@ -391,8 +419,12 @@ document.getElementById('btn-add-cat').addEventListener('click', () => {
     const input = document.getElementById('new-cat-input');
     const val = input.value.trim();
     if (val) {
-        const id = val.toLowerCase().replace(/\s+/g, '_');
-        categories.splice(categories.findIndex(c => c.id === 'search'), 0, { id: id, name: val });
+        // 全新：將新增的分類標記為 Custom (自訂)
+        const newCat = { id: 'custom_' + Date.now(), name: val, isCustom: true, query: val };
+        customCats.push(newCat);
+        LocalDB.saveCustomCategories(customCats);
+        
+        categories = [...baseCats, ...customCats, ...systemCats];
         input.value = '';
         renderPivot();
         renderCategoryManager();
