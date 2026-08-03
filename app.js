@@ -1,11 +1,13 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 
+// 擴充預設分類，加入香港01
 let categories = [
     { id: 'local', name: '本地' },
     { id: 'finance', name: '財經' },
     { id: 'global', name: '國際' },
     { id: 'tech', name: '科技' },
     { id: 'ent', name: '娛樂' },
+    { id: 'hk01', name: '香港01' },
     { id: 'settings', name: '設定' }
 ];
 
@@ -114,7 +116,6 @@ function renderTiles() {
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
 
-        // 構造右側小縮圖 HTML
         let thumbHtml = '';
         if (news.imageUrl) {
             thumbHtml = `
@@ -124,7 +125,6 @@ function renderTiles() {
             `;
         }
 
-        // 展開後的圖片畫廊 (改用 object-contain 不裁剪)
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
             imagesHtml = `<div class="flex flex-col space-y-4 my-4">`;
@@ -138,7 +138,6 @@ function renderTiles() {
             <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
                 ${geoBackground}
                 
-                <!-- 預覽區塊改為橫向排列 (flex-row) -->
                 <div class="tile-preview p-5 flex flex-row justify-between items-start">
                     <div class="flex flex-col justify-between h-full flex-grow pr-2">
                         <h3 class="text-xl md:text-2xl font-bold leading-tight line-clamp-3">${news.title}</h3>
