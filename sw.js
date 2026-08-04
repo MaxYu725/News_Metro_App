@@ -1,4 +1,5 @@
-const CACHE_NAME = 'metro-news-cache-v2';
+// 升級至 v3，強制手機與電腦更新！
+const CACHE_NAME = 'metro-news-cache-v3';
 
 const URLS_TO_CACHE = [
     './',
@@ -16,7 +17,7 @@ self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
-                console.log('Opened cache v2');
+                console.log('Opened cache v3');
                 return cache.addAll(URLS_TO_CACHE);
             })
     );
@@ -39,7 +40,7 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    if (event.request.url.includes('/api/news') || event.request.url.includes('/api/search')) {
+    if (event.request.url.includes('/api/news') || event.request.url.includes('/api/search') || event.request.url.includes('/api/images') || event.request.url.includes('/api/summarize')) {
         return; 
     }
     event.respondWith(
