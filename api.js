@@ -1,7 +1,6 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 const SEARCH_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/search';
 const IMAGE_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/images';
-// 全新：AI 總結 API 路由
 const AI_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/summarize';
 
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
@@ -35,7 +34,6 @@ export async function fetchImageData(query, page) {
     }
 }
 
-// 專門用於傳送文本並接收 AI 總結的函數
 export async function fetchAISummary(text) {
     try {
         const response = await fetch(AI_API_URL, {
