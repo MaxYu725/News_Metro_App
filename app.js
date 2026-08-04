@@ -2,14 +2,14 @@ import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary } from './api.js';
 
 const baseCats = [
-    { id: 'local', name: '港聞' },
-    { id: 'global', name: '國際' },
-    { id: 'ent', name: '娛樂' }
+    { id: 'local', name: 'local' },
+    { id: 'global', name: 'world' },
+    { id: 'ent', name: 'e! news' }
 ];
 const systemCats = [
-    { id: 'gallery', name: '圖庫' }, 
-    { id: 'bookmarks', name: '收藏' },
-    { id: 'settings', name: '設定' }
+    { id: 'gallery', name: 'image' }, 
+    { id: 'bookmarks', name: 'pinned' },
+    { id: 'settings', name: 'setting' }
 ];
 
 let customCats = LocalDB.getCustomCategories();
