@@ -1,4 +1,4 @@
-import { timeAgo, generateGeometricBackground, LocalDB, extractDynamicColor } from './utils.js';
+import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary } from './api.js';
 
 const baseCats = [
@@ -67,15 +67,37 @@ setInterval(() => {
     setTimeout(() => { randomTile.classList.remove('live-tile-flip'); }, 1500); 
 }, 3500); 
 
+// ==============================
+// 全新 Lightbox：支援精準縮放與自由平移
+// ==============================
 let currentScale = 1;
+let posX = 0;
+let posY = 0;
+let startX = 0;
+let startY = 0;
+let isPanning = false;
+let isPinching = false;
 let initialDistance = 0;
+let initialScale = 1;
+let lastTapTime = 0;
 let isLightboxOpen = false;
+
+function updateLightboxTransform() {
+    if (DOM.lightboxImg) {
+        DOM.lightboxImg.style.transform = `translate(${posX}px, ${posY}px) scale(${currentScale})`;
+    }
+}
 
 function openLightbox(src) {
     if(!DOM.lightboxImg || !DOM.lightboxOverlay) return;
     DOM.lightboxImg.src = src;
-    DOM.lightboxImg.style.transform = 'scale(1)';
+    
+    // 初始化數值
     currentScale = 1;
+    posX = 0;
+    posY = 0;
+    updateLightboxTransform();
+    
     DOM.lightboxOverlay.classList.remove('hidden');
     setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
     isLightboxOpen = true;
@@ -98,30 +120,69 @@ DOM.lightboxClose?.addEventListener('click', () => closeLightbox(false));
 DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lightboxOverlay) closeLightbox(false); });
 
 DOM.lightboxImg?.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) initialDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+    if (e.touches.length === 1) {
+        isPanning = true;
+        startX = e.touches[0].clientX - posX;
+        startY = e.touches[0].clientY - posY;
+    } else if (e.touches.length === 2) {
+        isPanning = false;
+        isPinching = true;
+        initialDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialScale = currentScale;
+    }
 }, { passive: false });
 
 DOM.lightboxImg?.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-        e.preventDefault(); 
-        const currentDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-        const scaleChange = currentDistance / initialDistance;
-        let newScale = Math.min(Math.max(1, currentScale * scaleChange), 4);
-        DOM.lightboxImg.style.transform = `scale(${newScale})`;
+    e.preventDefault(); 
+    if (isPinching && e.touches.length === 2) {
+        const currentDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        
+        const newScale = Math.min(Math.max(1, initialScale * (currentDistance / initialDistance)), 5);
+        
+        // 計算雙指中心點，實現精準縮放
+        const clientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const clientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        
+        const rect = DOM.lightboxImg.getBoundingClientRect();
+        const imageCenterX = rect.left + rect.width / 2;
+        const imageCenterY = rect.top + rect.height / 2;
+        
+        const dx = clientX - imageCenterX;
+        const dy = clientY - imageCenterY;
+        
+        const scaleRatio = newScale / currentScale;
+        posX -= dx * (scaleRatio - 1);
+        posY -= dy * (scaleRatio - 1);
+        
+        currentScale = newScale;
+        updateLightboxTransform();
+
+    } else if (isPanning && e.touches.length === 1 && currentScale > 1) {
+        // 單指自由平移
+        posX = e.touches[0].clientX - startX;
+        posY = e.touches[0].clientY - startY;
+        updateLightboxTransform();
     }
 }, { passive: false });
 
-let lastTapTime = 0;
 DOM.lightboxImg?.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) {
-        const match = DOM.lightboxImg.style.transform.match(/scale\(([^)]+)\)/);
-        currentScale = match ? parseFloat(match[1]) : 1;
-    }
+    isPanning = false;
+    isPinching = false;
+    
+    // 雙擊還原
     const currentTime = new Date().getTime();
-    if (currentTime - lastTapTime < 300 && currentTime - lastTapTime > 0) {
+    const tapLength = currentTime - lastTapTime;
+    if (tapLength < 300 && tapLength > 0 && e.touches.length === 0) {
         currentScale = 1;
-        DOM.lightboxImg.style.transform = 'scale(1)';
-        e.preventDefault();
+        posX = 0;
+        posY = 0;
+        updateLightboxTransform();
     }
     lastTapTime = currentTime;
 });
@@ -408,15 +469,6 @@ function attachTileEvents(startIndex = 0) {
     tiles.forEach((tile) => {
         const index = tile.getAttribute('data-index');
         const newsItem = currentNewsData[index];
-        
-        if (newsItem && newsItem.imageUrl) {
-            extractDynamicColor(newsItem.imageUrl).then(dominantColor => {
-                if (dominantColor) {
-                    tile.classList.remove(currentThemeColor);
-                    tile.style.background = `linear-gradient(135deg, #111111 0%, ${dominantColor} 100%)`;
-                }
-            });
-        }
 
         const bookmarkBtn = tile.querySelector('.bookmark-btn');
         if (bookmarkBtn) {
