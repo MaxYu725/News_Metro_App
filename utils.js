@@ -27,25 +27,15 @@ export function generateGeometricBackground() {
     return svg;
 }
 
-// 強化版 LocalDB：防止 LocalStorage 靜默崩潰
 export const LocalDB = {
     getBookmarks: () => {
-        try {
-            const data = localStorage.getItem('metro_news_bookmarks');
-            return data ? JSON.parse(data) : {};
-        } catch (e) {
-            console.error('讀取收藏失敗', e);
-            return {};
-        }
+        try { const data = localStorage.getItem('metro_news_bookmarks'); return data ? JSON.parse(data) : {}; } 
+        catch (e) { return {}; }
     },
     saveBookmarks: (data) => {
-        try {
-            localStorage.setItem('metro_news_bookmarks', JSON.stringify(data));
-        } catch (e) {
-            alert('⚠️ 系統儲存空間不足！請嘗試刪除部分舊收藏或清理瀏覽器快取資料。');
-        }
+        try { localStorage.setItem('metro_news_bookmarks', JSON.stringify(data)); } 
+        catch (e) { alert('⚠️ 系統儲存空間不足！請嘗試清理手機瀏覽器快取。'); }
     },
-    
     getHistory: () => {
         try { return JSON.parse(localStorage.getItem('metro_news_read_history')) || {}; } catch(e){ return {}; }
     },
@@ -59,7 +49,6 @@ export const LocalDB = {
         }
         try { localStorage.setItem('metro_news_read_history', JSON.stringify(data)); } catch(e){}
     },
-
     getCustomCategories: () => {
         try { return JSON.parse(localStorage.getItem('metro_news_custom_cats')) || []; } catch(e){ return []; }
     },
@@ -114,9 +103,7 @@ export function extractDynamicColor(imageUrl) {
                 } else {
                     resolve(null);
                 }
-            } catch (e) {
-                resolve(null);
-            }
+            } catch (e) { resolve(null); }
         };
         img.onerror = () => resolve(null);
         img.src = proxyUrl;
