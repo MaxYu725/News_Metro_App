@@ -34,7 +34,7 @@ export const LocalDB = {
     },
     saveBookmarks: (data) => {
         try { localStorage.setItem('metro_news_bookmarks', JSON.stringify(data)); } 
-        catch (e) { alert('⚠️ 系統儲存空間不足！請嘗試清理手機瀏覽器快取。'); }
+        catch (e) { alert('⚠️ 系統儲存空間不足！'); }
     },
     getHistory: () => {
         try { return JSON.parse(localStorage.getItem('metro_news_read_history')) || {}; } catch(e){ return {}; }
@@ -54,11 +54,5 @@ export const LocalDB = {
     },
     saveCustomCategories: (data) => {
         try { localStorage.setItem('metro_news_custom_cats', JSON.stringify(data)); } catch(e){}
-    },
-    getEnabledSources: () => {
-        try { return JSON.parse(localStorage.getItem('metro_news_sources')) || ['明報', '香港01', '東網']; } catch(e){ return ['明報', '香港01', '東網']; }
-    },
-    saveEnabledSources: (data) => {
-        try { localStorage.setItem('metro_news_sources', JSON.stringify(data)); } catch(e){}
     }
 };
