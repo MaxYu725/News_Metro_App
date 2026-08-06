@@ -1,8 +1,8 @@
 const API_BASE_URL = 'https://news-proxy.maxyu0725.workers.dev/api/news/';
 const SEARCH_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/search';
 const IMAGE_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/images';
-// 全新：AI 總結 API 路由
 const AI_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/summarize';
+const ARTICLE_FULL_API_URL = 'https://news-proxy.maxyu0725.workers.dev/api/article-full';
 
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
     let url;
@@ -35,7 +35,6 @@ export async function fetchImageData(query, page) {
     }
 }
 
-// 專門用於傳送文本並接收 AI 總結的函數
 export async function fetchAISummary(text) {
     try {
         const response = await fetch(AI_API_URL, {
@@ -47,5 +46,16 @@ export async function fetchAISummary(text) {
         return result.success ? result : { success: false, error: result.error };
     } catch (e) {
         return { success: false, error: 'AI 伺服器無回應' };
+    }
+}
+
+// 全新：向 Worker 請求文章完整段落
+export async function fetchFullArticleContent(targetUrl) {
+    try {
+        const response = await fetch(`${ARTICLE_FULL_API_URL}?url=${encodeURIComponent(targetUrl)}`);
+        const result = await response.json();
+        return result.success ? result : { success: false, error: result.error };
+    } catch (e) {
+        return { success: false, error: '擷取全文失敗' };
     }
 }
