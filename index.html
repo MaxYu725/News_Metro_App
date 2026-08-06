@@ -41,7 +41,6 @@
     <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative scroll-smooth" id="main-container">
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-200" style="height: 0px;"></div>
         
-        <!-- 全新：圖庫專用搜尋列 -->
         <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20 transition-all duration-300">
             <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-white/10 border border-white/30 px-4 py-3 text-white focus:outline-none focus:border-white shadow-lg text-lg rounded-none">
         </div>
@@ -61,6 +60,25 @@
         </button>
 
         <div id="settings-view" class="hidden flex-col space-y-10 pb-10 px-5 mt-4">
+            <!-- 新增：自選新聞來源開關 -->
+            <div>
+                <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">news sources (新聞來源)</p>
+                <div class="flex flex-wrap gap-4 bg-white/5 p-4 rounded-none border border-white/10" id="source-selector-container">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" value="明報" class="source-checkbox w-5 h-5 accent-blue-600" checked>
+                        <span class="text-lg font-light">明報</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" value="香港01" class="source-checkbox w-5 h-5 accent-blue-600" checked>
+                        <span class="text-lg font-light">香港01</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="checkbox" value="東網" class="source-checkbox w-5 h-5 accent-blue-600" checked>
+                        <span class="text-lg font-light">東網</span>
+                    </label>
+                </div>
+            </div>
+
             <div class="flex flex-col space-y-4">
                 <h2 class="text-3xl font-light mb-2">settings</h2>
                 <div class="flex flex-col space-y-3" id="category-manager-list"></div>
