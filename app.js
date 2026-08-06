@@ -1,4 +1,4 @@
-import { timeAgo, generateGeometricBackground, LocalDB, extractDynamicColor } from './utils.js';
+import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary } from './api.js';
 
 const baseCats = [
@@ -67,15 +67,37 @@ setInterval(() => {
     setTimeout(() => { randomTile.classList.remove('live-tile-flip'); }, 1500); 
 }, 3500); 
 
+// ==============================
+// 全新 Lightbox：支援精準縮放與自由平移
+// ==============================
 let currentScale = 1;
+let posX = 0;
+let posY = 0;
+let startX = 0;
+let startY = 0;
+let isPanning = false;
+let isPinching = false;
 let initialDistance = 0;
+let initialScale = 1;
+let lastTapTime = 0;
 let isLightboxOpen = false;
+
+function updateLightboxTransform() {
+    if (DOM.lightboxImg) {
+        DOM.lightboxImg.style.transform = `translate(${posX}px, ${posY}px) scale(${currentScale})`;
+    }
+}
 
 function openLightbox(src) {
     if(!DOM.lightboxImg || !DOM.lightboxOverlay) return;
     DOM.lightboxImg.src = src;
-    DOM.lightboxImg.style.transform = 'scale(1)';
+    
+    // 初始化數值
     currentScale = 1;
+    posX = 0;
+    posY = 0;
+    updateLightboxTransform();
+    
     DOM.lightboxOverlay.classList.remove('hidden');
     setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
     isLightboxOpen = true;
@@ -98,60 +120,88 @@ DOM.lightboxClose?.addEventListener('click', () => closeLightbox(false));
 DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lightboxOverlay) closeLightbox(false); });
 
 DOM.lightboxImg?.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) initialDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+    if (e.touches.length === 1) {
+        isPanning = true;
+        startX = e.touches[0].clientX - posX;
+        startY = e.touches[0].clientY - posY;
+    } else if (e.touches.length === 2) {
+        isPanning = false;
+        isPinching = true;
+        initialDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialScale = currentScale;
+    }
 }, { passive: false });
 
 DOM.lightboxImg?.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-        e.preventDefault(); 
-        const currentDistance = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-        const scaleChange = currentDistance / initialDistance;
-        let newScale = Math.min(Math.max(1, currentScale * scaleChange), 4);
-        DOM.lightboxImg.style.transform = `scale(${newScale})`;
+    e.preventDefault(); 
+    if (isPinching && e.touches.length === 2) {
+        const currentDistance = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        
+        const newScale = Math.min(Math.max(1, initialScale * (currentDistance / initialDistance)), 5);
+        
+        // 計算雙指中心點，實現精準縮放
+        const clientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const clientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        
+        const rect = DOM.lightboxImg.getBoundingClientRect();
+        const imageCenterX = rect.left + rect.width / 2;
+        const imageCenterY = rect.top + rect.height / 2;
+        
+        const dx = clientX - imageCenterX;
+        const dy = clientY - imageCenterY;
+        
+        const scaleRatio = newScale / currentScale;
+        posX -= dx * (scaleRatio - 1);
+        posY -= dy * (scaleRatio - 1);
+        
+        currentScale = newScale;
+        updateLightboxTransform();
+
+    } else if (isPanning && e.touches.length === 1 && currentScale > 1) {
+        // 單指自由平移
+        posX = e.touches[0].clientX - startX;
+        posY = e.touches[0].clientY - startY;
+        updateLightboxTransform();
     }
 }, { passive: false });
 
-let lastTapTime = 0;
 DOM.lightboxImg?.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) {
-        const match = DOM.lightboxImg.style.transform.match(/scale\(([^)]+)\)/);
-        currentScale = match ? parseFloat(match[1]) : 1;
-    }
+    isPanning = false;
+    isPinching = false;
+    
+    // 雙擊還原
     const currentTime = new Date().getTime();
-    if (currentTime - lastTapTime < 300 && currentTime - lastTapTime > 0) {
+    const tapLength = currentTime - lastTapTime;
+    if (tapLength < 300 && tapLength > 0 && e.touches.length === 0) {
         currentScale = 1;
-        DOM.lightboxImg.style.transform = 'scale(1)';
-        e.preventDefault();
+        posX = 0;
+        posY = 0;
+        updateLightboxTransform();
     }
     lastTapTime = currentTime;
 });
 
-// ==============================
-// 完美修復：Metro Pivot 無限延伸導航邏輯
-// ==============================
 function renderPivot() {
     if(!DOM.navMenu) return;
     DOM.navMenu.innerHTML = '';
-    
-    // 從目前的板塊開始，向後循環渲染所有板塊
-    for (let i = 0; i < categories.length; i++) {
-        // 計算實際在陣列中的位置 (達到無限輪迴的效果)
-        const actualIndex = (currentIndex + i) % categories.length;
-        const cat = categories[actualIndex];
-
+    categories.forEach((cat, index) => {
         const a = document.createElement('a');
-        // 第一個元素永遠是 Active 狀態 (靠左)
-        a.className = `nav-link ${i === 0 ? 'active' : ''}`;
+        a.className = `nav-link ${index === currentIndex ? 'active' : ''}`;
         a.innerText = cat.name;
-        
         a.addEventListener('click', () => {
-            currentIndex = actualIndex;
+            currentIndex = index;
             handlePageChange();
         });
         DOM.navMenu.appendChild(a);
-    }
-    // 強制將滾動條歸零，確保排版貼齊最左側
-    DOM.navMenu.scrollLeft = 0;
+    });
+    const activeLink = DOM.navMenu.children[currentIndex];
+    if (activeLink) DOM.navMenu.scrollTo({ left: activeLink.offsetLeft - 16, behavior: 'smooth' });
 }
 
 function handlePageChange() {
@@ -361,7 +411,6 @@ function renderTiles(isAppendMode = false) {
             imagesHtml = `<div class="relative my-4 w-full overflow-hidden group bg-black/30 shadow-md"><div class="img-scroll-box flex items-center overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
         }
 
-        // 修改重點：「✨ AI 撮要」
         htmlContent += `
             <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
                 ${geoBackground}
@@ -382,8 +431,7 @@ function renderTiles(isAppendMode = false) {
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
                                 <div class="flex space-x-4">
-                                    <!-- 更新為 ✨ AI 撮要 -->
-                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 撮要</button>
+                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 總結</button>
                                     <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors" data-index="${index}">分享 ↗</button>
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                 </div>
@@ -421,15 +469,6 @@ function attachTileEvents(startIndex = 0) {
     tiles.forEach((tile) => {
         const index = tile.getAttribute('data-index');
         const newsItem = currentNewsData[index];
-        
-        if (newsItem && newsItem.imageUrl) {
-            extractDynamicColor(newsItem.imageUrl).then(dominantColor => {
-                if (dominantColor) {
-                    tile.classList.remove(currentThemeColor);
-                    tile.style.background = `linear-gradient(135deg, #111111 0%, ${dominantColor} 100%)`;
-                }
-            });
-        }
 
         const bookmarkBtn = tile.querySelector('.bookmark-btn');
         if (bookmarkBtn) {
@@ -459,9 +498,7 @@ function attachTileEvents(startIndex = 0) {
         if (aiBtn && aiBox && aiText) {
             aiBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); 
-                
-                // 更新錯誤判斷字串
-                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 撮要失敗，請稍後再試。') return; 
+                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
 
                 aiBox.classList.remove('hidden');
                 aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
@@ -474,16 +511,11 @@ function attachTileEvents(startIndex = 0) {
                 if (res.success) {
                     aiText.innerText = res.summary;
                 } else {
-                    // 更新錯誤提示
-                    aiText.innerText = '⚠️ 撮要失敗，請稍後再試。';
-                    console.error('AI Error:', res.error);
+                    aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
                 }
             });
         }
 
-        // ==============================
-        // 完美修復：捲動位置丟失問題
-        // ==============================
         tile.addEventListener('click', (e) => {
             if(e.target.tagName === 'BUTTON') return;
             if (e.target.classList.contains('lightbox-img')) {
@@ -497,15 +529,11 @@ function attachTileEvents(startIndex = 0) {
             releaseWakeLock();
             
             if (!isCurrentlyExpanded) {
-                // 展開文章：標示為已讀並滑動至視角起點
                 const titleElement = tile.querySelector('.news-title');
                 markAsRead(currentNewsData[index].link, titleElement);
                 tile.classList.add('expanded');
                 requestWakeLock();
-                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
-            } else {
-                // 收合文章：給予足夠的延遲讓 DOM 重新計算高度後，自動尋找該塊新聞並將它拉回畫面頂端！
-                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
             }
         });
 
