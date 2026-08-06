@@ -4,7 +4,8 @@ import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent 
 const baseCats = [
     { id: 'local', name: '港聞' },
     { id: 'global', name: '國際' },
-    { id: 'ent', name: '娛樂' }
+    { id: 'ent', name: '娛樂' },
+    { id: 'china', name: '中國' }
 ];
 const systemCats = [
     { id: 'gallery', name: '圖庫' }, 
@@ -16,8 +17,7 @@ let customCats = LocalDB.getCustomCategories();
 let categories = [...baseCats, ...customCats, ...systemCats];
 
 let currentIndex = 0;
-let rawNewsData = [];          
-let displayedArticles = [];    
+let currentNewsData = [];      
 let newsCache = {}; 
 let currentThemeColor = 'bg-blue-600'; 
 
@@ -28,7 +28,6 @@ let currentSearchQuery = '';
 
 let savedBookmarks = LocalDB.getBookmarks();
 let readHistory = LocalDB.getHistory();
-let enabledSources = LocalDB.getEnabledSources();
 
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
@@ -55,28 +54,10 @@ DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
     }
 });
 
-function initSourceCheckboxes() {
-    const checkboxes = document.querySelectorAll('.source-checkbox');
-    checkboxes.forEach(box => {
-        box.checked = enabledSources.includes(box.value);
-        box.addEventListener('change', () => {
-            const checkedBoxes = Array.from(document.querySelectorAll('.source-checkbox:checked')).map(cb => cb.value);
-            enabledSources = checkedBoxes;
-            LocalDB.saveEnabledSources(enabledSources);
-            if (categories[currentIndex].id !== 'gallery' && categories[currentIndex].id !== 'settings') {
-                displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
-                renderTiles(displayedArticles, false);
-            }
-        });
-    });
-}
-
 let wakeLock = null;
 async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} } }
 async function releaseWakeLock() { if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; } }
 document.addEventListener('visibilitychange', async () => { if (wakeLock !== null && document.visibilityState === 'visible') { await requestWakeLock(); } });
-
-// ✨ 已徹底移除 3D 動態磚翻轉動畫 setInterval，保持簡單流暢
 
 let currentScale = 1, posX = 0, posY = 0, startX = 0, startY = 0;
 let isPanning = false, isPinching = false, initialDistance = 0, initialScale = 1, lastTapTime = 0, isLightboxOpen = false;
@@ -221,11 +202,10 @@ function handlePageChange() {
 function renderBookmarksUI() {
     const bookmarksArray = Object.values(savedBookmarks);
     bookmarksArray.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-    rawNewsData = bookmarksArray;
-    displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
+    currentNewsData = bookmarksArray;
     hasMoreNews = false; 
-    renderTiles(displayedArticles, false);
-    if (displayedArticles.length === 0 && DOM.newsGrid) {
+    renderTiles(currentNewsData, false);
+    if (currentNewsData.length === 0 && DOM.newsGrid) {
         DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">你的收藏夾空空如也，快去收藏新聞吧！</p>';
     }
 }
@@ -268,7 +248,7 @@ async function loadGalleryUI(isAppendMode = false) {
 
     if (result.success && result.data.length > 0) {
         hasMoreNews = result.hasMore;
-        rawNewsData = isAppendMode ? rawNewsData.concat(result.data) : result.data;
+        currentNewsData = isAppendMode ? currentNewsData.concat(result.data) : result.data;
         renderGalleryTiles(isAppendMode);
     } else {
         hasMoreNews = false;
@@ -286,7 +266,7 @@ async function loadGalleryUI(isAppendMode = false) {
 function renderGalleryTiles(isAppendMode = false) {
     if (!DOM.newsGrid) return;
     let htmlContent = '';
-    const dataToRender = isAppendMode ? rawNewsData.slice(currentPage * 20) : rawNewsData;
+    const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
 
     dataToRender.forEach((imgItem, relativeIndex) => {
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
@@ -313,9 +293,8 @@ function renderGalleryTiles(isAppendMode = false) {
 
 async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
     if (categoryId !== 'search' && !isAppendMode && !forceSync && newsCache[categoryId] && currentPage === 0) {
-        rawNewsData = newsCache[categoryId];
-        displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
-        renderTiles(displayedArticles, false);
+        currentNewsData = newsCache[categoryId];
+        renderTiles(currentNewsData, false);
         return;
     }
 
@@ -334,22 +313,19 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
         const newBatch = result.data;
 
         if (isAppendMode) {
-            rawNewsData = rawNewsData.concat(newBatch);
-            const filteredNewBatch = newBatch.filter(item => enabledSources.includes(item.source));
-            const startIndex = displayedArticles.length;
-            displayedArticles = displayedArticles.concat(filteredNewBatch);
-            renderTiles(filteredNewBatch, true, startIndex);
+            const startIndex = currentNewsData.length;
+            currentNewsData = currentNewsData.concat(newBatch);
+            renderTiles(newBatch, true, startIndex);
         } else {
-            rawNewsData = newBatch;
-            if (currentPage === 0 && categoryId !== 'search') newsCache[categoryId] = rawNewsData;
-            displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
-            renderTiles(displayedArticles, false);
+            currentNewsData = newBatch;
+            if (currentPage === 0 && categoryId !== 'search') newsCache[categoryId] = currentNewsData;
+            renderTiles(currentNewsData, false);
         }
     } else {
         hasMoreNews = false;
         if (!isAppendMode && DOM.newsGrid) {
             DOM.newsGrid.innerHTML = categoryId === 'search' 
-                ? `<p class="text-gray-500 text-center mt-10">資料庫中找不到符合「${currentSearchQuery}」的新聞，等背景更新後再來看看吧！</p>` 
+                ? `<p class="text-gray-500 text-center mt-10">資料庫中找不到符合「${currentSearchQuery}」的新聞，請嘗試其他關鍵字！</p>` 
                 : '<p class="text-gray-500 text-center mt-10">目前沒有新聞資料。</p>';
         }
     }
@@ -363,7 +339,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
     if (articlesToRender.length === 0 && !isAppendMode) {
-        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有符合媒體篩選條件的新聞！</p>';
+        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有新聞！</p>';
         return;
     }
 
@@ -402,7 +378,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     <div class="flex flex-col justify-between h-full flex-grow pr-1">
                         <h3 class="news-title text-xl md:text-2xl font-bold leading-tight line-clamp-3 ${titleColorClass}">${news.title}</h3>
                         <div class="flex items-center space-x-2 mt-3">
-                            <span class="text-xs opacity-90 uppercase font-semibold text-gray-200 border border-white/20 px-1.5 py-0.5 rounded">${news.source}</span>
                             <span class="text-xs opacity-70 uppercase tracking-widest truncate">${timeAgo(news.pubDate)}</span>
                             ${isSaved ? '<span class="text-xs text-yellow-400">★</span>' : ''}
                         </div>
@@ -413,7 +388,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
-                                <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.source} · ${news.category || '即時新聞'}</span>
+                                <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.category || '即時新聞'}</span>
                                 <div class="flex space-x-4">
                                     <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 總結</button>
                                     <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors" data-index="${index}">分享 ↗</button>
@@ -454,14 +429,14 @@ function attachTileEvents(startIndex = 0) {
     
     tiles.forEach((tile) => {
         const index = parseInt(tile.getAttribute('data-index'));
-        const newsItem = displayedArticles[index];
+        const newsItem = currentNewsData[index];
         if (!newsItem) return;
 
         const bookmarkBtn = tile.querySelector('.bookmark-btn');
         if (bookmarkBtn) {
             bookmarkBtn.addEventListener('click', (e) => {
                 e.stopPropagation(); 
-                toggleBookmark(displayedArticles[index], bookmarkBtn);
+                toggleBookmark(currentNewsData[index], bookmarkBtn);
             });
         }
         
@@ -469,7 +444,7 @@ function attachTileEvents(startIndex = 0) {
         if (shareBtn) {
             shareBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); 
-                const news = displayedArticles[index];
+                const news = currentNewsData[index];
                 if (navigator.share) {
                     try { await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link }); } catch (err) {}
                 } else {
@@ -490,7 +465,7 @@ function attachTileEvents(startIndex = 0) {
                 aiBox.classList.remove('hidden');
                 aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
 
-                const news = displayedArticles[index];
+                const news = currentNewsData[index];
                 const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
 
                 const res = await fetchAISummary(cleanTextForAI);
@@ -517,14 +492,13 @@ function attachTileEvents(startIndex = 0) {
             
             if (!isCurrentlyExpanded) {
                 const titleElement = tile.querySelector('.news-title');
-                const news = displayedArticles[index];
+                const news = currentNewsData[index];
                 markAsRead(news.link, titleElement);
                 tile.classList.add('expanded');
                 requestWakeLock();
 
                 const contentBody = tile.querySelector('.article-content-body');
 
-                // 展開卡片時才發起全文請求
                 if (news && !news.isFullContentLoaded && contentBody) {
                     const originalSummary = news.description;
                     
@@ -556,7 +530,7 @@ function attachTileEvents(startIndex = 0) {
         let pressTimer = null;
         const startPress = () => {
             clearPress();
-            pressTimer = setTimeout(() => { triggerLongPressAction(tile, displayedArticles[index].link); }, 600);
+            pressTimer = setTimeout(() => { triggerLongPressAction(tile, currentNewsData[index].link); }, 600);
         };
         const clearPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
 
@@ -707,7 +681,7 @@ colorButtons.forEach(btn => {
         e.target.classList.remove('border-transparent');
         e.target.classList.add('border-white');
         currentThemeColor = e.target.getAttribute('data-color');
-        if (displayedArticles.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles(displayedArticles, false);
+        if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles(currentNewsData, false);
     });
 });
 
@@ -723,7 +697,6 @@ document.getElementById('btn-font-reset')?.addEventListener('click', () => { cur
 
 window.addEventListener('DOMContentLoaded', () => { 
     updateFontSize(); 
-    initSourceCheckboxes(); 
     renderPivot(); 
     handlePageChange(); 
 });
