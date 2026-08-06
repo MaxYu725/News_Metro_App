@@ -1,11 +1,18 @@
 import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 
+// ✨ 將所有 Zone 完整對應到前端導覽列
 const baseCats = [
     { id: 'local', name: '港聞' },
-    { id: 'global', name: '國際' },
     { id: 'ent', name: '娛樂' },
-    { id: 'china', name: '中國' }
+    { id: 'sports', name: '體育' },
+    { id: 'global', name: '國際' },
+    { id: 'china', name: '中國' },
+    { id: 'hot', name: '熱話' },
+    { id: 'life', name: '生活' },
+    { id: 'community', name: '社區' },
+    { id: 'tech', name: '科技' },
+    { id: 'video', name: '影像' }
 ];
 const systemCats = [
     { id: 'gallery', name: '圖庫' }, 
