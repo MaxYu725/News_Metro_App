@@ -27,25 +27,15 @@ export function generateGeometricBackground() {
     return svg;
 }
 
-// 強化版 LocalDB：防止 LocalStorage 靜默崩潰
 export const LocalDB = {
     getBookmarks: () => {
-        try {
-            const data = localStorage.getItem('metro_news_bookmarks');
-            return data ? JSON.parse(data) : {};
-        } catch (e) {
-            console.error('讀取收藏失敗', e);
-            return {};
-        }
+        try { const data = localStorage.getItem('metro_news_bookmarks'); return data ? JSON.parse(data) : {}; } 
+        catch (e) { return {}; }
     },
     saveBookmarks: (data) => {
-        try {
-            localStorage.setItem('metro_news_bookmarks', JSON.stringify(data));
-        } catch (e) {
-            alert('⚠️ 系統儲存空間不足！請嘗試刪除部分舊收藏或清理瀏覽器快取資料。');
-        }
+        try { localStorage.setItem('metro_news_bookmarks', JSON.stringify(data)); } 
+        catch (e) { alert('⚠️ 系統儲存空間不足！請嘗試清理手機瀏覽器快取。'); }
     },
-    
     getHistory: () => {
         try { return JSON.parse(localStorage.getItem('metro_news_read_history')) || {}; } catch(e){ return {}; }
     },
@@ -59,7 +49,6 @@ export const LocalDB = {
         }
         try { localStorage.setItem('metro_news_read_history', JSON.stringify(data)); } catch(e){}
     },
-
     getCustomCategories: () => {
         try { return JSON.parse(localStorage.getItem('metro_news_custom_cats')) || []; } catch(e){ return []; }
     },
@@ -67,58 +56,3 @@ export const LocalDB = {
         try { localStorage.setItem('metro_news_custom_cats', JSON.stringify(data)); } catch(e){}
     }
 };
-
-export function extractDynamicColor(imageUrl) {
-    return new Promise((resolve) => {
-        if (!imageUrl) return resolve(null);
-        const img = new Image();
-        img.crossOrigin = 'Anonymous'; 
-        const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}&w=64&h=64&fit=cover`;
-        
-        img.onload = () => {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = 64;
-                canvas.height = 64;
-                ctx.drawImage(img, 0, 0, 64, 64);
-                
-                const data = ctx.getImageData(0, 0, 64, 64).data;
-                let r = 0, g = 0, b = 0, count = 0;
-                
-                for (let i = 0; i < data.length; i += 4) {
-                    if (data[i + 3] < 255) continue; 
-                    const cr = data[i], cg = data[i + 1], cb = data[i + 2];
-                    const brightness = (cr * 299 + cg * 587 + cb * 114) / 1000;
-                    const colorfulness = Math.max(cr, cg, cb) - Math.min(cr, cg, cb);
-                    if (brightness > 40 && brightness < 220 && colorfulness > 30) {
-                        r += cr; g += cg; b += cb; count++;
-                    }
-                }
-                
-                if (count < 50) {
-                    r = 0; g = 0; b = 0; count = 0;
-                    for (let i = 0; i < data.length; i += 4) {
-                        if (data[i + 3] < 255) continue; 
-                        const cr = data[i], cg = data[i + 1], cb = data[i + 2];
-                        const brightness = (cr * 299 + cg * 587 + cb * 114) / 1000;
-                        if (brightness > 30 && brightness < 230) { r += cr; g += cg; b += cb; count++; }
-                    }
-                }
-                
-                if (count > 0) {
-                    const finalR = Math.floor((r / count) * 0.85);
-                    const finalG = Math.floor((g / count) * 0.85);
-                    const finalB = Math.floor((b / count) * 0.85);
-                    resolve(`rgb(${finalR}, ${finalG}, ${finalB})`);
-                } else {
-                    resolve(null);
-                }
-            } catch (e) {
-                resolve(null);
-            }
-        };
-        img.onerror = () => resolve(null);
-        img.src = proxyUrl;
-    });
-}
