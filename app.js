@@ -16,7 +16,8 @@ let customCats = LocalDB.getCustomCategories();
 let categories = [...baseCats, ...customCats, ...systemCats];
 
 let currentIndex = 0;
-let currentNewsData = [];
+let rawNewsData = [];          
+let displayedArticles = [];    
 let newsCache = {}; 
 let currentThemeColor = 'bg-blue-600'; 
 
@@ -63,7 +64,8 @@ function initSourceCheckboxes() {
             enabledSources = checkedBoxes;
             LocalDB.saveEnabledSources(enabledSources);
             if (categories[currentIndex].id !== 'gallery' && categories[currentIndex].id !== 'settings') {
-                renderTiles(false);
+                displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
+                renderTiles(displayedArticles, false);
             }
         });
     });
@@ -74,26 +76,10 @@ async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock
 async function releaseWakeLock() { if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; } }
 document.addEventListener('visibilitychange', async () => { if (wakeLock !== null && document.visibilityState === 'visible') { await requestWakeLock(); } });
 
-setInterval(() => {
-    if (!DOM.newsGrid || DOM.newsGrid.classList.contains('hidden') || currentNewsData.length === 0 || categories[currentIndex].id === 'gallery') return;
-    const tiles = Array.from(DOM.newsGrid.querySelectorAll('.metro-tile:not(.expanded)'));
-    if (tiles.length === 0) return;
-    const randomTile = tiles[Math.floor(Math.random() * tiles.length)];
-    randomTile.classList.add('live-tile-flip');
-    setTimeout(() => { randomTile.classList.remove('live-tile-flip'); }, 1500); 
-}, 3500); 
+// ✨ 已徹底移除 3D 動態磚翻轉動畫 setInterval，保持簡單流暢
 
-let currentScale = 1;
-let posX = 0;
-let posY = 0;
-let startX = 0;
-let startY = 0;
-let isPanning = false;
-let isPinching = false;
-let initialDistance = 0;
-let initialScale = 1;
-let lastTapTime = 0;
-let isLightboxOpen = false;
+let currentScale = 1, posX = 0, posY = 0, startX = 0, startY = 0;
+let isPanning = false, isPinching = false, initialDistance = 0, initialScale = 1, lastTapTime = 0, isLightboxOpen = false;
 
 function updateLightboxTransform() {
     if (DOM.lightboxImg) {
@@ -190,6 +176,7 @@ function handlePageChange() {
     if(DOM.mainContainer) DOM.mainContainer.scrollTop = 0; 
     currentPage = 0; 
     hasMoreNews = true;
+    isLoadingMore = false;
     currentSearchQuery = ''; 
     DOM.backToTopBtn?.classList.add('hidden-fab'); 
     
@@ -234,10 +221,11 @@ function handlePageChange() {
 function renderBookmarksUI() {
     const bookmarksArray = Object.values(savedBookmarks);
     bookmarksArray.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-    currentNewsData = bookmarksArray;
+    rawNewsData = bookmarksArray;
+    displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
     hasMoreNews = false; 
-    renderTiles(false);
-    if (currentNewsData.length === 0 && DOM.newsGrid) {
+    renderTiles(displayedArticles, false);
+    if (displayedArticles.length === 0 && DOM.newsGrid) {
         DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">你的收藏夾空空如也，快去收藏新聞吧！</p>';
     }
 }
@@ -280,7 +268,7 @@ async function loadGalleryUI(isAppendMode = false) {
 
     if (result.success && result.data.length > 0) {
         hasMoreNews = result.hasMore;
-        currentNewsData = isAppendMode ? currentNewsData.concat(result.data) : result.data;
+        rawNewsData = isAppendMode ? rawNewsData.concat(result.data) : result.data;
         renderGalleryTiles(isAppendMode);
     } else {
         hasMoreNews = false;
@@ -298,7 +286,7 @@ async function loadGalleryUI(isAppendMode = false) {
 function renderGalleryTiles(isAppendMode = false) {
     if (!DOM.newsGrid) return;
     let htmlContent = '';
-    const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
+    const dataToRender = isAppendMode ? rawNewsData.slice(currentPage * 20) : rawNewsData;
 
     dataToRender.forEach((imgItem, relativeIndex) => {
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
@@ -325,8 +313,9 @@ function renderGalleryTiles(isAppendMode = false) {
 
 async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
     if (categoryId !== 'search' && !isAppendMode && !forceSync && newsCache[categoryId] && currentPage === 0) {
-        currentNewsData = newsCache[categoryId];
-        renderTiles(false);
+        rawNewsData = newsCache[categoryId];
+        displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
+        renderTiles(displayedArticles, false);
         return;
     }
 
@@ -342,9 +331,20 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
 
     if (result.success && result.data.length > 0) {
         hasMoreNews = result.hasMore;
-        currentNewsData = isAppendMode ? currentNewsData.concat(result.data) : result.data;
-        if (currentPage === 0 && categoryId !== 'search') newsCache[categoryId] = currentNewsData;
-        renderTiles(isAppendMode);
+        const newBatch = result.data;
+
+        if (isAppendMode) {
+            rawNewsData = rawNewsData.concat(newBatch);
+            const filteredNewBatch = newBatch.filter(item => enabledSources.includes(item.source));
+            const startIndex = displayedArticles.length;
+            displayedArticles = displayedArticles.concat(filteredNewBatch);
+            renderTiles(filteredNewBatch, true, startIndex);
+        } else {
+            rawNewsData = newBatch;
+            if (currentPage === 0 && categoryId !== 'search') newsCache[categoryId] = rawNewsData;
+            displayedArticles = rawNewsData.filter(item => enabledSources.includes(item.source));
+            renderTiles(displayedArticles, false);
+        }
     } else {
         hasMoreNews = false;
         if (!isAppendMode && DOM.newsGrid) {
@@ -359,22 +359,18 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
     isLoadingMore = false;
 }
 
-function renderTiles(isAppendMode = false) {
+function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
-    
-    const filteredNewsData = currentNewsData.filter(item => enabledSources.includes(item.source));
 
-    let htmlContent = '';
-    const dataToRender = isAppendMode ? filteredNewsData.slice(currentPage * 20) : filteredNewsData;
-    const offsetIndex = isAppendMode ? currentPage * 20 : 0;
-
-    if (dataToRender.length === 0 && !isAppendMode) {
-        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">請在「設定」中至少勾選一個新聞來源！</p>';
+    if (articlesToRender.length === 0 && !isAppendMode) {
+        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有符合媒體篩選條件的新聞！</p>';
         return;
     }
 
-    dataToRender.forEach((news, relativeIndex) => {
-        const index = offsetIndex + relativeIndex;
+    let htmlContent = '';
+
+    articlesToRender.forEach((news, relativeIndex) => {
+        const index = startIndex + relativeIndex;
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
         const cleanDescription = (news.description || '暫無詳細內文。').replace(/\n/g, '</p><p>');
         const geoBackground = generateGeometricBackground();
@@ -449,7 +445,7 @@ function renderTiles(isAppendMode = false) {
     if (isAppendMode) DOM.newsGrid.insertAdjacentHTML('beforeend', htmlContent);
     else DOM.newsGrid.innerHTML = htmlContent;
     
-    attachTileEvents(isAppendMode ? offsetIndex : 0);
+    attachTileEvents(startIndex);
 }
 
 function attachTileEvents(startIndex = 0) {
@@ -457,14 +453,15 @@ function attachTileEvents(startIndex = 0) {
     const tiles = Array.from(DOM.newsGrid.querySelectorAll('.metro-tile')).slice(startIndex);
     
     tiles.forEach((tile) => {
-        const index = tile.getAttribute('data-index');
-        const newsItem = currentNewsData[index];
+        const index = parseInt(tile.getAttribute('data-index'));
+        const newsItem = displayedArticles[index];
+        if (!newsItem) return;
 
         const bookmarkBtn = tile.querySelector('.bookmark-btn');
         if (bookmarkBtn) {
             bookmarkBtn.addEventListener('click', (e) => {
                 e.stopPropagation(); 
-                toggleBookmark(currentNewsData[index], bookmarkBtn);
+                toggleBookmark(displayedArticles[index], bookmarkBtn);
             });
         }
         
@@ -472,7 +469,7 @@ function attachTileEvents(startIndex = 0) {
         if (shareBtn) {
             shareBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); 
-                const news = currentNewsData[index];
+                const news = displayedArticles[index];
                 if (navigator.share) {
                     try { await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link }); } catch (err) {}
                 } else {
@@ -493,7 +490,7 @@ function attachTileEvents(startIndex = 0) {
                 aiBox.classList.remove('hidden');
                 aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
 
-                const news = currentNewsData[index];
+                const news = displayedArticles[index];
                 const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
 
                 const res = await fetchAISummary(cleanTextForAI);
@@ -520,18 +517,17 @@ function attachTileEvents(startIndex = 0) {
             
             if (!isCurrentlyExpanded) {
                 const titleElement = tile.querySelector('.news-title');
-                markAsRead(currentNewsData[index].link, titleElement);
+                const news = displayedArticles[index];
+                markAsRead(news.link, titleElement);
                 tile.classList.add('expanded');
                 requestWakeLock();
 
-                // ✨ 方案 2 核心：展開後才開始請求與處理全文！
-                const news = currentNewsData[index];
                 const contentBody = tile.querySelector('.article-content-body');
 
+                // 展開卡片時才發起全文請求
                 if (news && !news.isFullContentLoaded && contentBody) {
                     const originalSummary = news.description;
                     
-                    // 插入提示狀態與原本的撮要
                     contentBody.innerHTML = `
                         <p>${originalSummary.replace(/\n/g, '</p><p class="mt-4">')}</p>
                         <div class="full-text-loader border-t border-white/10 pt-4 mt-4 flex items-center space-x-2 text-blue-400 text-sm">
@@ -540,14 +536,12 @@ function attachTileEvents(startIndex = 0) {
                         </div>
                     `;
 
-                    // 發起全文請求
                     fetchFullArticleContent(news.link).then(res => {
                         if (res.success && res.content && res.content.length > originalSummary.length) {
                             news.description = res.content;
                             news.isFullContentLoaded = true;
                             contentBody.innerHTML = `<p>${res.content.replace(/\n/g, '</p><p class="mt-4">')}</p>`;
                         } else {
-                            // 若無更多內容或抓取失敗，移除加載圖示，保留撮要
                             const loader = contentBody.querySelector('.full-text-loader');
                             if (loader) loader.remove();
                             news.isFullContentLoaded = true;
@@ -562,7 +556,7 @@ function attachTileEvents(startIndex = 0) {
         let pressTimer = null;
         const startPress = () => {
             clearPress();
-            pressTimer = setTimeout(() => { triggerLongPressAction(tile, currentNewsData[index].link); }, 600);
+            pressTimer = setTimeout(() => { triggerLongPressAction(tile, displayedArticles[index].link); }, 600);
         };
         const clearPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
 
@@ -599,6 +593,7 @@ DOM.mainContainer?.addEventListener('scroll', () => {
         if (categories[currentIndex].isCustom && !currentSearchQuery) return;
         if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 150) {
             if (!isLoadingMore && hasMoreNews) {
+                isLoadingMore = true;
                 currentPage++;
                 if (categories[currentIndex].id === 'gallery') {
                     loadGalleryUI(true);
@@ -712,7 +707,7 @@ colorButtons.forEach(btn => {
         e.target.classList.remove('border-transparent');
         e.target.classList.add('border-white');
         currentThemeColor = e.target.getAttribute('data-color');
-        if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles();
+        if (displayedArticles.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles(displayedArticles, false);
     });
 });
 
