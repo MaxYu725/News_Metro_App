@@ -27,6 +27,7 @@ let currentSearchQuery = '';
 
 let savedBookmarks = LocalDB.getBookmarks();
 let readHistory = LocalDB.getHistory();
+let enabledSources = LocalDB.getEnabledSources(); // 載入新聞來源設定
 
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
@@ -53,6 +54,22 @@ DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
     }
 });
 
+// 靜態與動態初始化新聞來源核取方塊
+function initSourceCheckboxes() {
+    const checkboxes = document.querySelectorAll('.source-checkbox');
+    checkboxes.forEach(box => {
+        box.checked = enabledSources.includes(box.value);
+        box.addEventListener('change', () => {
+            const checkedBoxes = Array.from(document.querySelectorAll('.source-checkbox:checked')).map(cb => cb.value);
+            enabledSources = checkedBoxes;
+            LocalDB.saveEnabledSources(enabledSources);
+            if (categories[currentIndex].id !== 'gallery' && categories[currentIndex].id !== 'settings') {
+                renderTiles(false);
+            }
+        });
+    });
+}
+
 let wakeLock = null;
 async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} } }
 async function releaseWakeLock() { if (wakeLock !== null) { await wakeLock.release(); wakeLock = null; } }
@@ -67,9 +84,6 @@ setInterval(() => {
     setTimeout(() => { randomTile.classList.remove('live-tile-flip'); }, 1500); 
 }, 3500); 
 
-// ==============================
-// 全新 Lightbox：支援精準縮放與自由平移
-// ==============================
 let currentScale = 1;
 let posX = 0;
 let posY = 0;
@@ -91,13 +105,8 @@ function updateLightboxTransform() {
 function openLightbox(src) {
     if(!DOM.lightboxImg || !DOM.lightboxOverlay) return;
     DOM.lightboxImg.src = src;
-    
-    // 初始化數值
-    currentScale = 1;
-    posX = 0;
-    posY = 0;
+    currentScale = 1; posX = 0; posY = 0;
     updateLightboxTransform();
-    
     DOM.lightboxOverlay.classList.remove('hidden');
     setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
     isLightboxOpen = true;
@@ -121,16 +130,10 @@ DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lig
 
 DOM.lightboxImg?.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
-        isPanning = true;
-        startX = e.touches[0].clientX - posX;
-        startY = e.touches[0].clientY - posY;
+        isPanning = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
     } else if (e.touches.length === 2) {
-        isPanning = false;
-        isPinching = true;
-        initialDistance = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
+        isPanning = false; isPinching = true;
+        initialDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         initialScale = currentScale;
     }
 }, { passive: false });
@@ -138,50 +141,28 @@ DOM.lightboxImg?.addEventListener('touchstart', (e) => {
 DOM.lightboxImg?.addEventListener('touchmove', (e) => {
     e.preventDefault(); 
     if (isPinching && e.touches.length === 2) {
-        const currentDistance = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        
+        const currentDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         const newScale = Math.min(Math.max(1, initialScale * (currentDistance / initialDistance)), 5);
-        
-        // 計算雙指中心點，實現精準縮放
         const clientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
         const clientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        
         const rect = DOM.lightboxImg.getBoundingClientRect();
-        const imageCenterX = rect.left + rect.width / 2;
-        const imageCenterY = rect.top + rect.height / 2;
-        
-        const dx = clientX - imageCenterX;
-        const dy = clientY - imageCenterY;
-        
+        const dx = clientX - (rect.left + rect.width / 2);
+        const dy = clientY - (rect.top + rect.height / 2);
         const scaleRatio = newScale / currentScale;
-        posX -= dx * (scaleRatio - 1);
-        posY -= dy * (scaleRatio - 1);
-        
+        posX -= dx * (scaleRatio - 1); posY -= dy * (scaleRatio - 1);
         currentScale = newScale;
         updateLightboxTransform();
-
     } else if (isPanning && e.touches.length === 1 && currentScale > 1) {
-        // 單指自由平移
-        posX = e.touches[0].clientX - startX;
-        posY = e.touches[0].clientY - startY;
+        posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY;
         updateLightboxTransform();
     }
 }, { passive: false });
 
 DOM.lightboxImg?.addEventListener('touchend', (e) => {
-    isPanning = false;
-    isPinching = false;
-    
-    // 雙擊還原
+    isPanning = false; isPinching = false;
     const currentTime = new Date().getTime();
-    const tapLength = currentTime - lastTapTime;
-    if (tapLength < 300 && tapLength > 0 && e.touches.length === 0) {
-        currentScale = 1;
-        posX = 0;
-        posY = 0;
+    if (currentTime - lastTapTime < 300 && currentTime - lastTapTime > 0 && e.touches.length === 0) {
+        currentScale = 1; posX = 0; posY = 0;
         updateLightboxTransform();
     }
     lastTapTime = currentTime;
@@ -381,9 +362,18 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
 
 function renderTiles(isAppendMode = false) {
     if (!DOM.newsGrid) return;
+    
+    // 【重點功能】根據使用者勾選的新聞來源進行即時篩選！
+    const filteredNewsData = currentNewsData.filter(item => enabledSources.includes(item.source));
+
     let htmlContent = '';
-    const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
+    const dataToRender = isAppendMode ? filteredNewsData.slice(currentPage * 20) : filteredNewsData;
     const offsetIndex = isAppendMode ? currentPage * 20 : 0;
+
+    if (dataToRender.length === 0 && !isAppendMode) {
+        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">請在「設定」中至少勾選一個新聞來源！</p>';
+        return;
+    }
 
     dataToRender.forEach((news, relativeIndex) => {
         const index = offsetIndex + relativeIndex;
@@ -704,4 +694,9 @@ document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (
 document.getElementById('btn-font-minus')?.addEventListener('click', () => { if (currentFontSizePercent > 70) { currentFontSizePercent -= 10; updateFontSize(); } });
 document.getElementById('btn-font-reset')?.addEventListener('click', () => { currentFontSizePercent = 110; updateFontSize(); });
 
-window.addEventListener('DOMContentLoaded', () => { updateFontSize(); renderPivot(); handlePageChange(); });
+window.addEventListener('DOMContentLoaded', () => { 
+    updateFontSize(); 
+    initSourceCheckboxes(); // 初始化新聞來源核取方塊
+    renderPivot(); 
+    handlePageChange(); 
+});
