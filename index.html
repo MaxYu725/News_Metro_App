@@ -13,16 +13,6 @@
     <link rel="apple-touch-icon" href="./ic_launcher.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
-    <script>
-        window.addEventListener('error', function(e) {
-            if(document.body) document.body.innerHTML = '<div style="color:#ff6b6b; padding:30px; font-size:16px; font-family:sans-serif; text-align:center; margin-top:20vh;"><h2>⚠️ 模組載入失敗</h2><p>這通常是因為瀏覽器快取了舊版檔案所導致。</p><p style="margin-top:20px;"><button onclick="window.location.reload(true)" style="background:#4CAF50; color:white; border:none; padding:10px 20px; border-radius:5px; font-size:16px;">點此強制重新整理</button></p></div>';
-        });
-        window.addEventListener('unhandledrejection', function(e) {
-            if(document.body && e.reason && e.reason.message && e.reason.message.includes('export')) {
-                 document.body.innerHTML = '<div style="color:#ff6b6b; padding:30px; font-size:16px; font-family:sans-serif; text-align:center; margin-top:20vh;"><h2>⚠️ 快取版本衝突</h2><p>系統偵測到新舊檔案不匹配。</p><p style="margin-top:20px;"><button onclick="window.location.reload(true)" style="background:#4CAF50; color:white; border:none; padding:10px 20px; border-radius:5px; font-size:16px;">點此強制重新整理</button></p></div>';
-            }
-        });
-    </script>
 </head>
 <body class="h-screen w-screen flex flex-col pt-4 relative bg-black">
 
@@ -60,7 +50,6 @@
         </button>
 
         <div id="settings-view" class="hidden flex-col space-y-10 pb-10 px-5 mt-4">
-            <!-- 新增：自選新聞來源開關 -->
             <div>
                 <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">news sources (新聞來源)</p>
                 <div class="flex flex-wrap gap-4 bg-white/5 p-4 rounded-none border border-white/10" id="source-selector-container">
