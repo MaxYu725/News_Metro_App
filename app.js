@@ -1,5 +1,5 @@
 import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
-import { fetchNewsData, fetchImageData, fetchAISummary } from './api.js';
+import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 
 const baseCats = [
     { id: 'local', name: '港聞' },
@@ -27,7 +27,7 @@ let currentSearchQuery = '';
 
 let savedBookmarks = LocalDB.getBookmarks();
 let readHistory = LocalDB.getHistory();
-let enabledSources = LocalDB.getEnabledSources(); // 載入新聞來源設定
+let enabledSources = LocalDB.getEnabledSources();
 
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
@@ -54,7 +54,6 @@ DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
     }
 });
 
-// 靜態與動態初始化新聞來源核取方塊
 function initSourceCheckboxes() {
     const checkboxes = document.querySelectorAll('.source-checkbox');
     checkboxes.forEach(box => {
@@ -363,7 +362,6 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
 function renderTiles(isAppendMode = false) {
     if (!DOM.newsGrid) return;
     
-    // 【重點功能】根據使用者勾選的新聞來源進行即時篩選！
     const filteredNewsData = currentNewsData.filter(item => enabledSources.includes(item.source));
 
     let htmlContent = '';
@@ -438,7 +436,9 @@ function renderTiles(isAppendMode = false) {
                             </div>
 
                             ${imagesHtml}
-                            <div class="text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 px-5 py-6 mt-3 border border-white/5"><p>${cleanDescription}</p></div>
+                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed space-y-4 bg-black/30 px-5 py-6 mt-3 border border-white/5">
+                                <p>${cleanDescription}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -523,6 +523,38 @@ function attachTileEvents(startIndex = 0) {
                 markAsRead(currentNewsData[index].link, titleElement);
                 tile.classList.add('expanded');
                 requestWakeLock();
+
+                // ✨ 方案 2 核心：展開後才開始請求與處理全文！
+                const news = currentNewsData[index];
+                const contentBody = tile.querySelector('.article-content-body');
+
+                if (news && !news.isFullContentLoaded && contentBody) {
+                    const originalSummary = news.description;
+                    
+                    // 插入提示狀態與原本的撮要
+                    contentBody.innerHTML = `
+                        <p>${originalSummary.replace(/\n/g, '</p><p class="mt-4">')}</p>
+                        <div class="full-text-loader border-t border-white/10 pt-4 mt-4 flex items-center space-x-2 text-blue-400 text-sm">
+                            <span class="loader-small"></span>
+                            <span class="animate-pulse">正在為您載入與處理完整文章...</span>
+                        </div>
+                    `;
+
+                    // 發起全文請求
+                    fetchFullArticleContent(news.link).then(res => {
+                        if (res.success && res.content && res.content.length > originalSummary.length) {
+                            news.description = res.content;
+                            news.isFullContentLoaded = true;
+                            contentBody.innerHTML = `<p>${res.content.replace(/\n/g, '</p><p class="mt-4">')}</p>`;
+                        } else {
+                            // 若無更多內容或抓取失敗，移除加載圖示，保留撮要
+                            const loader = contentBody.querySelector('.full-text-loader');
+                            if (loader) loader.remove();
+                            news.isFullContentLoaded = true;
+                        }
+                    });
+                }
+
                 setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
             }
         });
@@ -696,7 +728,7 @@ document.getElementById('btn-font-reset')?.addEventListener('click', () => { cur
 
 window.addEventListener('DOMContentLoaded', () => { 
     updateFontSize(); 
-    initSourceCheckboxes(); // 初始化新聞來源核取方塊
+    initSourceCheckboxes(); 
     renderPivot(); 
     handlePageChange(); 
 });
