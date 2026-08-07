@@ -449,7 +449,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
             ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-28 md:h-28 object-cover border-2 border-white/10 shadow-sm bg-black/20" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
             : '';
 
-        // 優化：精簡且左置的圖片框架
+        // ✨ 預設全寬圖片容器，點擊 AI 時動態切換寬度
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
             let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-full object-cover block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
@@ -460,7 +460,12 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                 <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10 shadow">${news.images.length} 圖</div>
             ` : '';
             
-            imagesHtml = `<div class="relative w-36 h-36 md:w-52 md:h-44 flex-shrink-0 overflow-hidden bg-black/40 border border-white/10 rounded-xs shadow-md"><div class="img-scroll-box flex items-center h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
+            imagesHtml = `
+                <div class="img-container relative w-full h-52 md:h-64 flex-shrink-0 overflow-hidden bg-black/40 border border-white/10 rounded-xs shadow-md transition-all duration-300">
+                    <div class="img-scroll-box flex items-center h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>
+                    ${navButtons}
+                </div>
+            `;
         }
 
         htmlContent += `
@@ -496,17 +501,15 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
-                            <!-- 左置圖片 + 右側 AI 摘要對齊區 -->
-                            <div class="px-5 mb-4 flex flex-row gap-4 items-start">
+                            <!-- 圖片與 AI 總結對齊區 -->
+                            <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-stretch">
                                 ${imagesHtml}
-                                <div class="flex-1 min-w-0">
-                                    <div class="ai-box hidden bg-fuchsia-900/30 border border-fuchsia-500/40 p-3 rounded-xs h-full">
-                                        <div class="flex items-center space-x-1.5 mb-1.5">
-                                            <span class="text-fuchsia-400 text-xs">✨</span>
-                                            <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Workers AI 摘要</span>
-                                        </div>
-                                        <p class="ai-summary-text text-xs md:text-sm font-light text-gray-200 leading-relaxed tracking-wide"></p>
+                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-300 bg-fuchsia-900/30 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start">
+                                    <div class="flex items-center space-x-1.5 mb-1.5">
+                                        <span class="text-fuchsia-400 text-xs">✨</span>
+                                        <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Workers AI 摘要</span>
                                     </div>
+                                    <p class="ai-summary-text text-xs md:text-sm font-light text-gray-200 leading-relaxed tracking-wide overflow-y-auto hide-scrollbar max-h-40"></p>
                                 </div>
                             </div>
 
@@ -536,7 +539,6 @@ function attachTileEvents(startIndex = 0) {
         const newsItem = currentNewsData[index];
         if (!newsItem) return;
 
-        // 優化：滾動距離適應縮小後的圖片框
         const scrollBox = tile.querySelector('.img-scroll-box');
         const prevBtn = tile.querySelector('.btn-prev-img');
         const nextBtn = tile.querySelector('.btn-next-img');
@@ -581,6 +583,18 @@ function attachTileEvents(startIndex = 0) {
                 e.stopPropagation(); 
                 if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
 
+                // ✨ 點擊 AI 總結時，將全寬圖片與 AI 區塊改為各佔 50% (w-1/2)
+                const imgContainer = tile.querySelector('.img-container');
+                if (imgContainer) {
+                    imgContainer.classList.remove('w-full', 'h-52', 'md:h-64');
+                    imgContainer.classList.add('w-1/2', 'h-40', 'md:h-48');
+                    aiBox.classList.remove('w-full');
+                    aiBox.classList.add('w-1/2', 'h-40', 'md:h-48');
+                } else {
+                    aiBox.classList.remove('w-1/2');
+                    aiBox.classList.add('w-full');
+                }
+
                 aiBox.classList.remove('hidden');
                 aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
 
@@ -606,10 +620,15 @@ function attachTileEvents(startIndex = 0) {
             }
 
             const isCurrentlyExpanded = tile.classList.contains('expanded');
-            DOM.newsGrid.querySelectorAll('.metro-tile').forEach(t => t.classList.remove('expanded'));
             releaseWakeLock();
             
-            if (!isCurrentlyExpanded) {
+            if (isCurrentlyExpanded) {
+                // 🚀 修復卡頓：點擊已展開的磚塊時，直接順暢收起
+                tile.classList.remove('expanded');
+                isTileExpandedState = false;
+            } else {
+                DOM.newsGrid.querySelectorAll('.metro-tile.expanded').forEach(t => t.classList.remove('expanded'));
+
                 const titleElement = tile.querySelector('.news-title');
                 const news = currentNewsData[index];
                 markAsRead(news.link, titleElement);
@@ -644,9 +663,7 @@ function attachTileEvents(startIndex = 0) {
                     });
                 }
 
-                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 200);
-            } else {
-                isTileExpandedState = false;
+                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
             }
         });
 
