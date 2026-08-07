@@ -54,5 +54,17 @@ export const LocalDB = {
     },
     saveCustomCategories: (data) => {
         try { localStorage.setItem('metro_news_custom_cats', JSON.stringify(data)); } catch(e){}
+    },
+    // 新增：讀取與儲存用戶設定顯示的分類板塊
+    getVisibleCategories: () => {
+        try {
+            const data = localStorage.getItem('metro_news_visible_cats');
+            return data ? JSON.parse(data) : ['latest', 'local', 'global'];
+        } catch (e) {
+            return ['latest', 'local', 'global'];
+        }
+    },
+    saveVisibleCategories: (data) => {
+        try { localStorage.setItem('metro_news_visible_cats', JSON.stringify(data)); } catch(e){}
     }
 };
