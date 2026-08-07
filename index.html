@@ -49,18 +49,28 @@
             ↑
         </button>
 
-        <div id="settings-view" class="hidden flex-col space-y-10 pb-10 px-5 mt-4">
-            <div class="flex flex-col space-y-4">
-                <h2 class="text-3xl font-light mb-2">settings</h2>
-                <div class="flex flex-col space-y-3" id="category-manager-list"></div>
-                <div class="flex space-x-2 mt-4">
+        <div id="settings-view" class="hidden flex-col space-y-8 pb-10 px-5 mt-4">
+            <h2 class="text-3xl font-light mb-2">settings</h2>
+            
+            <!-- 板塊顯示/隱藏控制區 -->
+            <div>
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">導覽列板塊顯示設定</p>
+                <div id="category-visibility-list" class="grid grid-cols-2 gap-2"></div>
+            </div>
+
+            <!-- 自訂關鍵字追蹤區 -->
+            <div class="flex flex-col space-y-3">
+                <p class="text-xs text-gray-400 uppercase tracking-widest">自訂追蹤關鍵字</p>
+                <div class="flex flex-col space-y-2" id="category-manager-list"></div>
+                <div class="flex space-x-2 mt-2">
                     <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-black border border-white/30 px-4 py-2 text-white focus:outline-none focus:border-white flex-grow">
                     <button id="btn-add-cat" class="metro-btn">新增</button>
                 </div>
             </div>
 
+            <!-- 主題顏色區 -->
             <div>
-                <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">accent color</p>
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">accent color</p>
                 <div class="flex space-x-3">
                     <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-white transition-all" data-color="bg-blue-600"></button>
                     <button class="color-btn w-10 h-10 bg-green-600 border-2 border-transparent transition-all" data-color="bg-green-600"></button>
@@ -70,8 +80,9 @@
                 </div>
             </div>
 
+            <!-- 字型大小設定 -->
             <div>
-                <p class="text-sm text-gray-500 uppercase tracking-widest mb-3">typography size</p>
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">typography size</p>
                 <div class="flex space-x-2">
                     <button class="metro-btn" id="btn-font-minus">a -</button>
                     <div class="flex items-center justify-center px-4 bg-white/10 text-white font-bold tracking-wider" id="font-size-display">110%</div>
