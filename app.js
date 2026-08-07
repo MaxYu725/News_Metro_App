@@ -56,6 +56,7 @@ let currentSearchQuery = '';
 
 let savedBookmarks = LocalDB.getBookmarks();
 let readHistory = LocalDB.getHistory();
+let aiSummaryCache = LocalDB.getAISummaries(); // ✨ 載入 AI 快取資料
 
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
@@ -424,6 +425,28 @@ function formatParagraphs(text) {
         .join('');
 }
 
+// ✨ 輔助函式：動態調整圖片與 AI 摘要框版面並顯現內容
+function showAISummaryInTile(tile, summaryText) {
+    const aiBox = tile.querySelector('.ai-box');
+    const aiText = tile.querySelector('.ai-summary-text');
+    const imgContainer = tile.querySelector('.img-container');
+
+    if (!aiBox || !aiText) return;
+
+    if (imgContainer) {
+        imgContainer.classList.remove('w-full', 'h-52', 'md:h-64');
+        imgContainer.classList.add('w-1/2', 'h-48', 'md:h-56');
+        aiBox.classList.remove('w-full');
+        aiBox.classList.add('w-1/2', 'h-48', 'md:h-56');
+    } else {
+        aiBox.classList.remove('w-1/2');
+        aiBox.classList.add('w-full', 'h-auto');
+    }
+
+    aiBox.classList.remove('hidden');
+    aiText.innerText = summaryText;
+}
+
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -441,6 +464,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
         const isRead = !!readHistory[news.link]; 
+        const hasCachedAI = !!aiSummaryCache[news.link]; // 檢查是否有 AI 快取
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
 
         const catName = categoryMap[news.category] || news.category || '即時';
@@ -473,9 +497,12 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                 <div class="tile-preview px-5 py-4 flex flex-row justify-between items-start">
                     <div class="flex flex-col justify-between h-full flex-grow pr-1">
                         <div>
-                            <span class="inline-block bg-white/20 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-xs font-bold tracking-wider mb-2 uppercase border border-white/10">
-                                ${catName}
-                            </span>
+                            <div class="flex items-center space-x-2 mb-2">
+                                <span class="bg-white/20 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-xs font-bold tracking-wider uppercase border border-white/10">
+                                    ${catName}
+                                </span>
+                                ${hasCachedAI ? '<span class="text-[10px] text-fuchsia-300 font-bold tracking-wider">✨ AI 已摘要</span>' : ''}
+                            </div>
                             <h3 class="news-title text-xl md:text-2xl font-bold leading-tight line-clamp-3 ${titleColorClass}">${news.title}</h3>
                         </div>
                         <div class="flex items-center space-x-2 mt-3">
@@ -580,30 +607,28 @@ function attachTileEvents(startIndex = 0) {
         if (aiBtn && aiBox && aiText) {
             aiBtn.addEventListener('click', async (e) => {
                 e.stopPropagation(); 
-                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
+                const news = currentNewsData[index];
 
-                // ✨ 修復被遮蔽：動態調整圖片與 AI 框寬度，且不硬鎖固定高度
-                const imgContainer = tile.querySelector('.img-container');
-                if (imgContainer) {
-                    imgContainer.classList.remove('w-full', 'h-52', 'md:h-64');
-                    imgContainer.classList.add('w-1/2', 'h-48', 'md:h-56');
-                    aiBox.classList.remove('w-full');
-                    aiBox.classList.add('w-1/2', 'h-48', 'md:h-56');
-                } else {
-                    aiBox.classList.remove('w-1/2');
-                    aiBox.classList.add('w-full', 'h-auto');
+                // ✨ 1. 若本地暫存已有，直接顯示，不請求 API
+                if (aiSummaryCache[news.link]) {
+                    showAISummaryInTile(tile, aiSummaryCache[news.link]);
+                    return;
                 }
 
-                aiBox.classList.remove('hidden');
+                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
+
+                // 初始化加載介面
+                showAISummaryInTile(tile, '');
                 aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
 
-                const news = currentNewsData[index];
                 const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
-
                 const res = await fetchAISummary(cleanTextForAI);
                 
                 if (res.success) {
                     aiText.innerText = res.summary;
+                    // ✨ 2. 寫入快取與 LocalStorage
+                    aiSummaryCache[news.link] = res.summary;
+                    LocalDB.saveAISummary(news.link, res.summary);
                 } else {
                     aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
                 }
@@ -634,6 +659,11 @@ function attachTileEvents(startIndex = 0) {
                 
                 isTileExpandedState = true;
                 requestWakeLock();
+
+                // ✨ 3. 曾有 AI 總結的文章，點開磚塊時直接自動顯示
+                if (news && aiSummaryCache[news.link]) {
+                    showAISummaryInTile(tile, aiSummaryCache[news.link]);
+                }
 
                 const contentBody = tile.querySelector('.article-content-body');
 
