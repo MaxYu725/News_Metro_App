@@ -281,7 +281,6 @@ function markAsRead(link, titleElement) {
     }
 }
 
-// ✨ 新增：新聞磚骨架屏生成器
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
@@ -304,7 +303,6 @@ function renderSkeletonTiles(count = 6) {
     DOM.newsGrid.innerHTML = skeletonHtml;
 }
 
-// ✨ 新增：圖庫骨架屏生成器
 function renderGallerySkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
@@ -451,17 +449,18 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
             ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-28 md:h-28 object-cover border-2 border-white/10 shadow-sm bg-black/20" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
             : '';
 
+        // 優化：精簡且左置的圖片框架
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
-            let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full max-h-[50vh] object-contain block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
+            let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-full object-cover block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
             
             let navButtons = news.images.length > 1 ? `
-                <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❮</button>
-                <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-3 py-4 z-10 shadow-lg active:bg-white active:text-black transition-colors">❯</button>
-                <div class="absolute bottom-2 right-2 bg-black/70 text-white text-[10px] px-2 py-1 rounded tracking-widest z-10 shadow">${news.images.length} 圖</div>
+                <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 shadow active:bg-white active:text-black transition-colors">❮</button>
+                <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 shadow active:bg-white active:text-black transition-colors">❯</button>
+                <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10 shadow">${news.images.length} 圖</div>
             ` : '';
             
-            imagesHtml = `<div class="relative my-4 w-full overflow-hidden group bg-black/30 shadow-md"><div class="img-scroll-box flex items-center overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
+            imagesHtml = `<div class="relative w-36 h-36 md:w-52 md:h-44 flex-shrink-0 overflow-hidden bg-black/40 border border-white/10 rounded-xs shadow-md"><div class="img-scroll-box flex items-center h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>${navButtons}</div>`;
         }
 
         htmlContent += `
@@ -485,6 +484,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                 <div class="tile-details">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
+                            <!-- 頂部功能導覽 -->
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="bg-white/20 text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
                                 <div class="flex space-x-4">
@@ -493,19 +493,25 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                 </div>
                             </div>
-                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3 px-5 mt-2">${news.title}</h3>
-                            <p class="text-xs opacity-70 mb-2 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
+                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2">${news.title}</h3>
+                            <p class="text-xs opacity-70 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
-                            <div class="ai-box hidden mx-5 my-4 bg-fuchsia-900/30 border border-fuchsia-500/40 p-4 rounded-sm">
-                                <div class="flex items-center space-x-2 mb-2">
-                                    <span class="text-fuchsia-400 text-sm">✨</span>
-                                    <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Cloudflare Workers AI</span>
+                            <!-- 左置圖片 + 右側 AI 摘要對齊區 -->
+                            <div class="px-5 mb-4 flex flex-row gap-4 items-start">
+                                ${imagesHtml}
+                                <div class="flex-1 min-w-0">
+                                    <div class="ai-box hidden bg-fuchsia-900/30 border border-fuchsia-500/40 p-3 rounded-xs h-full">
+                                        <div class="flex items-center space-x-1.5 mb-1.5">
+                                            <span class="text-fuchsia-400 text-xs">✨</span>
+                                            <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Workers AI 摘要</span>
+                                        </div>
+                                        <p class="ai-summary-text text-xs md:text-sm font-light text-gray-200 leading-relaxed tracking-wide"></p>
+                                    </div>
                                 </div>
-                                <p class="ai-summary-text text-sm font-light text-gray-200 leading-relaxed tracking-wide"></p>
                             </div>
 
-                            ${imagesHtml}
-                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/30 px-5 py-6 mt-3 border border-white/5">
+                            <!-- 下方獨立完整內文 -->
+                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/30 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
                         </div>
@@ -530,17 +536,18 @@ function attachTileEvents(startIndex = 0) {
         const newsItem = currentNewsData[index];
         if (!newsItem) return;
 
+        // 優化：滾動距離適應縮小後的圖片框
         const scrollBox = tile.querySelector('.img-scroll-box');
         const prevBtn = tile.querySelector('.btn-prev-img');
         const nextBtn = tile.querySelector('.btn-next-img');
         if (scrollBox && prevBtn && nextBtn) {
             prevBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                scrollBox.scrollBy({ left: -window.innerWidth, behavior: 'smooth' });
+                scrollBox.scrollBy({ left: -scrollBox.clientWidth, behavior: 'smooth' });
             });
             nextBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                scrollBox.scrollBy({ left: window.innerWidth, behavior: 'smooth' });
+                scrollBox.scrollBy({ left: scrollBox.clientWidth, behavior: 'smooth' });
             });
         }
 
