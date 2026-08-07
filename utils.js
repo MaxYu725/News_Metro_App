@@ -55,7 +55,6 @@ export const LocalDB = {
     saveCustomCategories: (data) => {
         try { localStorage.setItem('metro_news_custom_cats', JSON.stringify(data)); } catch(e){}
     },
-    // 新增：讀取與儲存用戶設定顯示的分類板塊
     getVisibleCategories: () => {
         try {
             const data = localStorage.getItem('metro_news_visible_cats');
@@ -66,5 +65,20 @@ export const LocalDB = {
     },
     saveVisibleCategories: (data) => {
         try { localStorage.setItem('metro_news_visible_cats', JSON.stringify(data)); } catch(e){}
+    },
+    // ✨ 新增：AI 總結快取讀取與儲存
+    getAISummaries: () => {
+        try { return JSON.parse(localStorage.getItem('metro_news_ai_cache')) || {}; } catch(e){ return {}; }
+    },
+    saveAISummary: (link, summary) => {
+        try {
+            const cache = LocalDB.getAISummaries();
+            cache[link] = summary;
+            const keys = Object.keys(cache);
+            if (keys.length > 500) {
+                delete cache[keys[0]]; // 超過 500 筆時自動清理舊快取
+            }
+            localStorage.setItem('metro_news_ai_cache', JSON.stringify(cache));
+        } catch(e){}
     }
 };
