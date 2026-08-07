@@ -19,27 +19,25 @@ body {
     font-weight: 600;
 }
 
+/* 🚀 效能優化：移除 content-visibility 與 perspective，開啟 translateZ(0) 硬體加速 */
 .metro-tile {
     position: relative;
     cursor: pointer;
     overflow: hidden;
     border-radius: 0px; 
-    min-height: 150px;
-    transition: transform 0.3s ease, box-shadow 0.5s ease;
-    animation: fadeIn 0.7s ease-out forwards;
+    min-height: 140px;
+    transition: transform 0.2s ease, box-shadow 0.3s ease;
+    animation: fadeIn 0.4s ease-out forwards;
     opacity: 0;
     user-select: none;
     -webkit-user-select: none;
-    content-visibility: auto; 
-    contain-intrinsic-size: 150px; 
-    perspective: 1000px;
+    transform: translateZ(0);
 }
 .metro-tile:active {
     transform: scale(0.98);
 }
 .metro-tile.expanded {
-    box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.6), 0 15px 15px -5px rgba(0, 0, 0, 0.5);
-    content-visibility: visible; 
+    box-shadow: 0 15px 25px -5px rgba(0, 0, 0, 0.7);
 }
 
 .geo-bg {
@@ -58,7 +56,7 @@ body {
 }
 
 .tile-preview {
-    transition: opacity 0.3s ease;
+    transition: opacity 0.2s ease;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -72,11 +70,13 @@ body {
     overflow: hidden;
 }
 
+/* 🚀 解決收起卡頓：過渡優化為 0.35s 並加入 will-change */
 .tile-details {
     display: grid;
     grid-template-rows: 0fr;
-    transition: grid-template-rows 0.7s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
+    transition: grid-template-rows 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease;
     opacity: 0;
+    will-change: grid-template-rows, opacity;
 }
 .metro-tile.expanded .tile-details {
     grid-template-rows: 1fr;
@@ -86,7 +86,7 @@ body {
 .tile-details-inner {
     overflow: hidden;
     padding: 0px 0px; 
-    transition: padding 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: padding 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .metro-tile.expanded .tile-details-inner {
     padding: 16px 0px 24px 0px; 
@@ -139,7 +139,7 @@ body {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(15px); }
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
@@ -164,7 +164,6 @@ body {
     100% { transform: rotate(360deg); } 
 }
 
-/* ✨ 新增：骨架屏 (Skeleton Screen) 閃爍動畫 */
 @keyframes skeletonPulse {
     0%, 100% { opacity: 0.12; }
     50% { opacity: 0.28; }
