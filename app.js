@@ -1,7 +1,6 @@
 import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 
-// 所有可選的基礎新聞類別
 const allBaseCats = [
     { id: 'latest', name: '即時' },
     { id: 'local', name: '港聞' },
@@ -282,10 +281,46 @@ function markAsRead(link, titleElement) {
     }
 }
 
+// ✨ 新增：新聞磚骨架屏生成器
+function renderSkeletonTiles(count = 6) {
+    if (!DOM.newsGrid) return;
+    let skeletonHtml = '';
+    for (let i = 0; i < count; i++) {
+        skeletonHtml += `
+            <div class="metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[140px]">
+                <div class="flex flex-col justify-between h-full flex-grow pr-3">
+                    <div>
+                        <div class="w-12 h-3.5 skeleton-pulse mb-3"></div>
+                        <div class="w-full h-5 skeleton-pulse mb-2"></div>
+                        <div class="w-4/5 h-5 skeleton-pulse mb-2"></div>
+                        <div class="w-1/2 h-5 skeleton-pulse"></div>
+                    </div>
+                    <div class="w-16 h-3 skeleton-pulse mt-4"></div>
+                </div>
+                <div class="w-20 h-20 md:w-28 md:h-28 skeleton-pulse flex-shrink-0 ml-3"></div>
+            </div>
+        `;
+    }
+    DOM.newsGrid.innerHTML = skeletonHtml;
+}
+
+// ✨ 新增：圖庫骨架屏生成器
+function renderGallerySkeletonTiles(count = 6) {
+    if (!DOM.newsGrid) return;
+    let skeletonHtml = '';
+    for (let i = 0; i < count; i++) {
+        skeletonHtml += `
+            <div class="metro-tile relative overflow-hidden bg-white/5 h-48 md:h-64 pointer-events-none border border-white/5 opacity-100">
+                <div class="w-full h-full skeleton-pulse"></div>
+            </div>
+        `;
+    }
+    DOM.newsGrid.innerHTML = skeletonHtml;
+}
+
 async function loadGalleryUI(isAppendMode = false) {
     if (!isAppendMode && DOM.newsGrid) {
-        DOM.newsGrid.innerHTML = '';
-        DOM.loadingIndicator?.classList.remove('hidden');
+        renderGallerySkeletonTiles(6);
     } else {
         DOM.scrollLoading?.classList.remove('hidden');
         isLoadingMore = true;
@@ -346,8 +381,7 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
     }
 
     if (!isAppendMode && DOM.newsGrid) {
-        DOM.newsGrid.innerHTML = '';
-        DOM.loadingIndicator?.classList.remove('hidden');
+        renderSkeletonTiles(6);
     } else {
         DOM.scrollLoading?.classList.remove('hidden');
         isLoadingMore = true;
@@ -411,7 +445,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const isRead = !!readHistory[news.link]; 
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
 
-        // 解析並呈現類別標籤 (Category Tag)
         const catName = categoryMap[news.category] || news.category || '即時';
 
         let thumbHtml = news.imageUrl 
@@ -726,7 +759,6 @@ DOM.mainContainer?.addEventListener('touchend', async () => {
     ptrStartY = 0; ptrCurrentY = 0;
 }, { passive: true });
 
-// 渲染設定頁面的分類顯示開關與搜尋關鍵字管理
 function renderCategoryManager() {
     const visibilityList = document.getElementById('category-visibility-list');
     if (visibilityList) {
