@@ -163,3 +163,13 @@ body {
     0% { transform: rotate(0deg); } 
     100% { transform: rotate(360deg); } 
 }
+
+/* ✨ 新增：骨架屏 (Skeleton Screen) 閃爍動畫 */
+@keyframes skeletonPulse {
+    0%, 100% { opacity: 0.12; }
+    50% { opacity: 0.28; }
+}
+.skeleton-pulse {
+    animation: skeletonPulse 1.4s ease-in-out infinite;
+    background-color: #ffffff;
+}
