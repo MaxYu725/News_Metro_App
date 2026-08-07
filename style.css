@@ -42,17 +42,6 @@ body {
     content-visibility: visible; 
 }
 
-.live-tile-flip .tile-preview {
-    animation: flipAnimation 1.5s cubic-bezier(0.45, 0.05, 0.55, 0.95);
-    transform-style: preserve-3d;
-}
-
-@keyframes flipAnimation {
-    0% { transform: rotateX(0deg); }
-    50% { transform: rotateX(-180deg); opacity: 0.2; }
-    100% { transform: rotateX(-360deg); opacity: 1; }
-}
-
 .geo-bg {
     position: absolute;
     top: 0;
