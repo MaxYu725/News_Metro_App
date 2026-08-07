@@ -39,7 +39,8 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    if (event.request.url.includes('/api/news') || event.request.url.includes('/api/search')) {
+    // 修正：所有 API 請求（含 /api/news, /api/summarize, /api/article-full 等）及非 GET 請求均跳過 Service Worker
+    if (event.request.url.includes('/api/') || event.request.method !== 'GET') {
         return; 
     }
     event.respondWith(
