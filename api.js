@@ -1,8 +1,8 @@
-const API_BASE_URL = 'https://news-proxy.max-yu.workers.dev/api/news/';
-const SEARCH_API_URL = 'https://news-proxy.max-yu.workers.dev/api/search';
-const IMAGE_API_URL = 'https://news-proxy.max-yu.workers.dev/api/images';
-const AI_API_URL = 'https://news-proxy.max-yu.workers.dev/api/summarize';
-const ARTICLE_FULL_API_URL = 'https://news-proxy.max-yu.workers.dev/api/article-full';
+const API_BASE_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/news/';
+const SEARCH_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/search';
+const IMAGE_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/images';
+const AI_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/summarize';
+const ARTICLE_FULL_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/article-full';
 
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
     let url;
