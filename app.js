@@ -1,11 +1,13 @@
 import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 
-const baseCats = [
+// 所有可選的基礎新聞類別
+const allBaseCats = [
+    { id: 'latest', name: '即時' },
     { id: 'local', name: '港聞' },
+    { id: 'global', name: '國際' },
     { id: 'ent', name: '娛樂' },
     { id: 'sports', name: '體育' },
-    { id: 'global', name: '國際' },
     { id: 'china', name: '中國' },
     { id: 'hot', name: '熱話' },
     { id: 'life', name: '生活' },
@@ -13,14 +15,35 @@ const baseCats = [
     { id: 'tech', name: '科技' },
     { id: 'video', name: '影像' }
 ];
+
+const categoryMap = {
+    'latest': '即時',
+    'local': '港聞',
+    'global': '國際',
+    'ent': '娛樂',
+    'sports': '體育',
+    'china': '中國',
+    'hot': '熱話',
+    'life': '生活',
+    'community': '社區',
+    'tech': '科技',
+    'video': '影像'
+};
+
 const systemCats = [
     { id: 'gallery', name: '圖庫' }, 
     { id: 'bookmarks', name: '收藏' },
     { id: 'settings', name: '設定' }
 ];
 
+let visibleCatIds = LocalDB.getVisibleCategories();
 let customCats = LocalDB.getCustomCategories();
-let categories = [...baseCats, ...customCats, ...systemCats];
+
+function getActiveBaseCats() {
+    return allBaseCats.filter(cat => visibleCatIds.includes(cat.id));
+}
+
+let categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
 
 let currentIndex = 0;
 let currentNewsData = [];      
@@ -60,7 +83,6 @@ DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
     }
 });
 
-// 修正 WakeLock 邏輯
 let wakeLock = null;
 let isTileExpandedState = false;
 
@@ -389,6 +411,9 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const isRead = !!readHistory[news.link]; 
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
 
+        // 解析並呈現類別標籤 (Category Tag)
+        const catName = categoryMap[news.category] || news.category || '即時';
+
         let thumbHtml = news.imageUrl 
             ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-28 md:h-28 object-cover border-2 border-white/10 shadow-sm bg-black/20" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
             : '';
@@ -411,7 +436,12 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                 ${geoBackground}
                 <div class="tile-preview px-5 py-4 flex flex-row justify-between items-start">
                     <div class="flex flex-col justify-between h-full flex-grow pr-1">
-                        <h3 class="news-title text-xl md:text-2xl font-bold leading-tight line-clamp-3 ${titleColorClass}">${news.title}</h3>
+                        <div>
+                            <span class="inline-block bg-white/20 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-xs font-bold tracking-wider mb-2 uppercase border border-white/10">
+                                ${catName}
+                            </span>
+                            <h3 class="news-title text-xl md:text-2xl font-bold leading-tight line-clamp-3 ${titleColorClass}">${news.title}</h3>
+                        </div>
                         <div class="flex items-center space-x-2 mt-3">
                             <span class="text-xs opacity-70 uppercase tracking-widest truncate">${timeAgo(news.pubDate)}</span>
                             ${isSaved ? '<span class="text-xs text-yellow-400">★</span>' : ''}
@@ -423,14 +453,14 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
-                                <span class="text-xs uppercase tracking-widest opacity-80 font-semibold">${news.category || '即時新聞'}</span>
+                                <span class="bg-white/20 text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
                                 <div class="flex space-x-4">
                                     <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 總結</button>
                                     <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors" data-index="${index}">分享 ↗</button>
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                 </div>
                             </div>
-                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3 px-5">${news.title}</h3>
+                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-3 px-5 mt-2">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-2 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
                             <div class="ai-box hidden mx-5 my-4 bg-fuchsia-900/30 border border-fuchsia-500/40 p-4 rounded-sm">
@@ -467,7 +497,6 @@ function attachTileEvents(startIndex = 0) {
         const newsItem = currentNewsData[index];
         if (!newsItem) return;
 
-        // 綁定圖片滾動按鈕事件
         const scrollBox = tile.querySelector('.img-scroll-box');
         const prevBtn = tile.querySelector('.btn-prev-img');
         const nextBtn = tile.querySelector('.btn-next-img');
@@ -637,7 +666,6 @@ DOM.mainContainer?.addEventListener('scroll', () => {
 
 DOM.backToTopBtn?.addEventListener('click', () => { DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' }); });
 
-// 修正：左右滑動手勢避免與橫向滾動元件衝突
 let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
 document.addEventListener('touchstart', e => { 
     touchStartX = e.changedTouches[0].screenX; 
@@ -645,8 +673,7 @@ document.addEventListener('touchstart', e => {
 }, { passive: true });
 
 document.addEventListener('touchend', e => { 
-    // 若觸發於選單、圖片滾動區、燈箱或設定輸入框內，忽略頁面滑動
-    if (e.target.closest('#nav-menu, .img-scroll-box, #lightbox-overlay, input')) return;
+    if (e.target.closest('#nav-menu, .img-scroll-box, #lightbox-overlay, input, #category-visibility-list')) return;
     
     touchEndX = e.changedTouches[0].screenX; 
     touchEndY = e.changedTouches[0].screenY; 
@@ -699,21 +726,54 @@ DOM.mainContainer?.addEventListener('touchend', async () => {
     ptrStartY = 0; ptrCurrentY = 0;
 }, { passive: true });
 
+// 渲染設定頁面的分類顯示開關與搜尋關鍵字管理
 function renderCategoryManager() {
+    const visibilityList = document.getElementById('category-visibility-list');
+    if (visibilityList) {
+        visibilityList.innerHTML = '';
+        allBaseCats.forEach((cat) => {
+            const isVisible = visibleCatIds.includes(cat.id);
+            const label = document.createElement('label');
+            label.className = 'flex items-center justify-between bg-white/5 hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/5';
+            label.innerHTML = `
+                <span class="text-base font-light text-gray-200">${cat.name}</span>
+                <input type="checkbox" class="w-5 h-5 accent-blue-600 cursor-pointer" ${isVisible ? 'checked' : ''} data-id="${cat.id}">
+            `;
+            label.querySelector('input').addEventListener('change', (e) => {
+                const targetId = e.target.getAttribute('data-id');
+                if (e.target.checked) {
+                    if (!visibleCatIds.includes(targetId)) visibleCatIds.push(targetId);
+                } else {
+                    if (visibleCatIds.length <= 1) {
+                        alert('至少需保留一個板塊顯示！');
+                        e.target.checked = true;
+                        return;
+                    }
+                    visibleCatIds = visibleCatIds.filter(id => id !== targetId);
+                }
+                LocalDB.saveVisibleCategories(visibleCatIds);
+                categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
+                if (currentIndex >= categories.length) currentIndex = 0;
+                renderPivot();
+            });
+            visibilityList.appendChild(label);
+        });
+    }
+
     const list = document.getElementById('category-manager-list');
     if(!list) return;
     list.innerHTML = '';
     const customCategoriesOnly = categories.filter(cat => cat.isCustom);
     if (customCategoriesOnly.length === 0) {
-        list.innerHTML = '<p class="text-gray-500 text-sm py-4">目前沒有自訂追蹤關鍵字。</p>';
+        list.innerHTML = '<p class="text-gray-500 text-sm py-2">目前沒有自訂追蹤關鍵字。</p>';
         return;
     }
     customCategoriesOnly.forEach((cat) => {
         const realIndex = categories.findIndex(c => c.id === cat.id);
         const row = document.createElement('div');
-        row.className = 'flex justify-between items-center bg-white/5 px-4 py-3 mb-2 rounded';
+        row.className = 'flex justify-between items-center bg-white/5 px-4 py-3 mb-2 rounded border border-white/5';
         row.innerHTML = `
-            <span class="text-xl font-light text-gray-200">${cat.name} <span class="text-[10px] text-blue-300 ml-1">(追蹤)</span></span>
+            <span class="text-base font-light text-gray-200">${cat.name} <span class="text-[10px] text-blue-300 ml-1">(關鍵字)</span></span>
             <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30 rounded" onclick="deleteCategory(${realIndex})">刪除</button>
         `;
         list.appendChild(row);
@@ -735,7 +795,7 @@ document.getElementById('btn-add-cat')?.addEventListener('click', () => {
     if (val) {
         const newCat = { id: 'custom_' + Date.now(), name: val, isCustom: true, query: val };
         customCats.push(newCat); LocalDB.saveCustomCategories(customCats);
-        categories = [...baseCats, ...customCats, ...systemCats];
+        categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
         if (input) input.value = ''; 
         renderPivot(); 
         renderCategoryManager();
