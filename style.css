@@ -25,7 +25,6 @@ body {
     cursor: pointer;
     overflow: hidden;
     border-radius: 0px; 
-    min-height: 130px;
     transition: transform 0.18s ease-out;
     animation: fadeIn 0.25s ease-out forwards;
     opacity: 0;
@@ -40,7 +39,7 @@ body {
 }
 
 .metro-tile.expanded {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9);
     z-index: 10;
 }
 
@@ -61,10 +60,9 @@ body {
 
 .tile-preview {
     transition: opacity 0.15s ease;
-    height: 100%;
+    width: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
 }
 
 .metro-tile.expanded .tile-preview {
@@ -94,7 +92,7 @@ body {
     padding: 16px 0px 24px 0px; 
 }
 
-/* ✨ 全文載入與過渡優化 */
+/* 全文載入過渡動畫 */
 .article-content-body {
     transition: opacity 0.18s ease-in-out;
 }
@@ -170,7 +168,7 @@ body {
     100% { transform: rotate(360deg); } 
 }
 
-/* 骨架屏輕量化閃爍 */
+/* 骨架屏閃爍 */
 @keyframes skeletonPulse {
     0%, 100% { opacity: 0.12; }
     50% { opacity: 0.25; }
