@@ -286,21 +286,24 @@ function markAsRead(link, titleElement) {
     }
 }
 
+/* ✨ 全新全寬頂欄 + 全黑主體 骨架屏 */
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[130px]">
-                <div class="flex flex-col justify-between h-full flex-grow pr-3">
-                    <div>
-                        <div class="w-12 h-3 skeleton-pulse mb-3"></div>
-                        <div class="w-full h-5 skeleton-pulse mb-2"></div>
-                        <div class="w-4/5 h-5 skeleton-pulse"></div>
-                    </div>
-                    <div class="w-16 h-3 skeleton-pulse mt-4"></div>
+            <div class="metro-tile bg-black border-b border-white/10 flex flex-col pointer-events-none opacity-100">
+                <div class="w-full bg-white/10 px-5 py-2 flex justify-between items-center">
+                    <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
+                    <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
                 </div>
-                <div class="w-20 h-20 md:w-24 md:h-24 skeleton-pulse flex-shrink-0 ml-3"></div>
+                <div class="bg-black px-5 py-4 flex flex-row items-center justify-between min-h-[105px]">
+                    <div class="flex-grow pr-3 space-y-2">
+                        <div class="w-full h-5 skeleton-pulse rounded-xs"></div>
+                        <div class="w-4/5 h-5 skeleton-pulse rounded-xs"></div>
+                    </div>
+                    <div class="w-20 h-20 md:w-24 md:h-24 skeleton-pulse flex-shrink-0 ml-2 rounded-xs"></div>
+                </div>
             </div>
         `;
     }
@@ -312,15 +315,18 @@ function appendBottomSkeletons(count = 3) {
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="bottom-skeleton-item metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[130px]">
-                <div class="flex flex-col justify-between h-full flex-grow pr-3">
-                    <div>
-                        <div class="w-12 h-3 skeleton-pulse mb-3"></div>
-                        <div class="w-full h-5 skeleton-pulse mb-2"></div>
-                    </div>
-                    <div class="w-16 h-3 skeleton-pulse mt-4"></div>
+            <div class="bottom-skeleton-item metro-tile bg-black border-b border-white/10 flex flex-col pointer-events-none opacity-100">
+                <div class="w-full bg-white/10 px-5 py-2 flex justify-between items-center">
+                    <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
+                    <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
                 </div>
-                <div class="w-20 h-20 skeleton-pulse flex-shrink-0 ml-3"></div>
+                <div class="bg-black px-5 py-4 flex flex-row items-center justify-between min-h-[105px]">
+                    <div class="flex-grow pr-3 space-y-2">
+                        <div class="w-full h-5 skeleton-pulse rounded-xs"></div>
+                        <div class="w-3/4 h-5 skeleton-pulse rounded-xs"></div>
+                    </div>
+                    <div class="w-20 h-20 skeleton-pulse flex-shrink-0 ml-2 rounded-xs"></div>
+                </div>
             </div>
         `;
     }
@@ -471,6 +477,7 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
+/* ✨ 重點精修：全寬強調色頂欄 + 全黑置中內容區域 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -485,7 +492,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const index = startIndex + relativeIndex;
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
         const cleanDescription = formatParagraphs(news.description || '暫無詳細內文。');
-        const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
         const isRead = !!readHistory[news.link]; 
         const hasCachedAI = !!aiSummaryCache[news.link];
@@ -494,7 +500,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const catName = categoryMap[news.category] || news.category || '即時';
 
         let thumbHtml = news.imageUrl 
-            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-28 md:h-28 object-cover border-2 border-white/10 shadow-sm bg-black/20" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
+            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/10 shadow-sm bg-black/40" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
             : '';
 
         let imagesHtml = '';
@@ -516,31 +522,35 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         }
 
         htmlContent += `
-            <article class="metro-tile ${currentThemeColor}" data-index="${index}" ${animationDelay}>
-                ${geoBackground}
-                <div class="tile-preview px-5 py-4 flex flex-row justify-between items-start">
-                    <div class="flex flex-col justify-between h-full flex-grow pr-1">
-                        <div>
-                            <div class="flex items-center space-x-2 mb-2">
-                                <span class="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-xs font-bold tracking-wider uppercase border border-white/10">
-                                    ${catName}
-                                </span>
-                                ${hasCachedAI ? '<span class="text-[10px] text-fuchsia-300 font-bold tracking-wider">✨ AI 已摘要</span>' : ''}
-                            </div>
-                            <h3 class="news-title text-xl md:text-2xl font-bold leading-tight line-clamp-3 ${titleColorClass}">${news.title}</h3>
+            <article class="metro-tile bg-black border-b border-white/10" data-index="${index}" ${animationDelay}>
+                <div class="tile-preview flex flex-col w-full">
+                    <!-- 全寬強調色頂欄：類別在左，更新時間在右 -->
+                    <div class="tile-header w-full ${currentThemeColor} px-5 py-2 flex items-center justify-between shadow-sm">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-bold tracking-wider text-white uppercase">${catName}</span>
+                            ${hasCachedAI ? '<span class="text-[10px] bg-black/30 text-fuchsia-200 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
                         </div>
-                        <div class="flex items-center space-x-2 mt-3">
-                            <span class="text-xs opacity-70 uppercase tracking-widest truncate">${timeAgo(news.pubDate)}</span>
-                            ${isSaved ? '<span class="text-xs text-yellow-400">★</span>' : ''}
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs text-white/90 font-medium tracking-wide">${timeAgo(news.pubDate)}</span>
+                            ${isSaved ? '<span class="text-xs text-yellow-300">★</span>' : ''}
                         </div>
                     </div>
-                    ${thumbHtml}
+                    
+                    <!-- 全黑背景主體區域：標題與縮圖置中對齊 -->
+                    <div class="tile-body bg-black px-5 py-4 flex flex-row items-center justify-between min-h-[95px]">
+                        <div class="flex-grow pr-2 flex flex-col justify-center">
+                            <h3 class="news-title text-lg md:text-xl font-bold leading-snug line-clamp-3 ${titleColorClass}">${news.title}</h3>
+                        </div>
+                        ${thumbHtml}
+                    </div>
                 </div>
-                <div class="tile-details">
+
+                <!-- 展開詳情區域 -->
+                <div class="tile-details bg-black">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
-                                <span class="bg-white/20 text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
+                                <span class="${currentThemeColor} text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
                                 <div class="flex space-x-4">
                                     <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors">✨ AI 總結</button>
                                     <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors">分享 ↗</button>
@@ -561,7 +571,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/30 px-5 py-6 border-t border-white/10">
+                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/50 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
                         </div>
@@ -690,11 +700,9 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
 
             const contentBody = tile.querySelector('.article-content-body');
 
-            // ✨ 文章展開精修：加入段落 Skeleton Screen 與淡入動畫
             if (news && !news.isFullContentLoaded && contentBody) {
                 const originalSummary = news.description;
                 
-                // 構建多行文章骨架屏預留高度
                 const articleSkeletonHtml = `
                     <div class="article-skeleton-container border-t border-white/10 pt-4 mt-4">
                         <div class="flex items-center space-x-2 text-blue-400 text-xs mb-4">
@@ -723,7 +731,6 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
                         news.description = res.content;
                         news.isFullContentLoaded = true;
                         
-                        // 柔和淡入動畫，平滑替換全文
                         contentBody.style.opacity = '0.3';
                         setTimeout(() => {
                             contentBody.innerHTML = formatParagraphs(res.content);
