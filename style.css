@@ -75,7 +75,7 @@ body {
     overflow: hidden;
 }
 
-/* 🚀 告別 CPU Reflow：改用高效能 max-height + opacity 組合過渡 */
+/* 🚀 高效能 max-height + opacity 展收動畫 */
 .tile-details {
     max-height: 0;
     opacity: 0;
@@ -85,13 +85,18 @@ body {
 }
 
 .metro-tile.expanded .tile-details {
-    max-height: 2500px; /* 足夠納入長文章的高度上限 */
+    max-height: 3500px; /* 擴大上限以順暢包覆完整全文 */
     opacity: 1;
     transition: max-height 0.32s ease-in-out, opacity 0.22s ease-in-out;
 }
 
 .tile-details-inner {
     padding: 16px 0px 24px 0px; 
+}
+
+/* ✨ 全文載入與過渡優化 */
+.article-content-body {
+    transition: opacity 0.18s ease-in-out;
 }
 
 .metro-btn {
@@ -168,7 +173,7 @@ body {
 /* 骨架屏輕量化閃爍 */
 @keyframes skeletonPulse {
     0%, 100% { opacity: 0.12; }
-    50% { opacity: 0.22; }
+    50% { opacity: 0.25; }
 }
 .skeleton-pulse {
     animation: skeletonPulse 1.2s ease-in-out infinite;
