@@ -56,7 +56,7 @@ let currentSearchQuery = '';
 
 let savedBookmarks = LocalDB.getBookmarks();
 let readHistory = LocalDB.getHistory();
-let aiSummaryCache = LocalDB.getAISummaries(); // ✨ 載入 AI 快取資料
+let aiSummaryCache = LocalDB.getAISummaries();
 
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
@@ -282,6 +282,7 @@ function markAsRead(link, titleElement) {
     }
 }
 
+// 首頁加載全頁骨架屏
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
@@ -304,6 +305,33 @@ function renderSkeletonTiles(count = 6) {
     DOM.newsGrid.innerHTML = skeletonHtml;
 }
 
+// ✨ 新增：往下滾動追加（Infinite Scroll）時的底部骨架屏
+function appendBottomSkeletons(count = 3) {
+    if (!DOM.newsGrid) return;
+    let skeletonHtml = '';
+    for (let i = 0; i < count; i++) {
+        skeletonHtml += `
+            <div class="bottom-skeleton-item metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[140px]">
+                <div class="flex flex-col justify-between h-full flex-grow pr-3">
+                    <div>
+                        <div class="w-12 h-3.5 skeleton-pulse mb-3"></div>
+                        <div class="w-full h-5 skeleton-pulse mb-2"></div>
+                        <div class="w-3/4 h-5 skeleton-pulse mb-2"></div>
+                    </div>
+                    <div class="w-16 h-3 skeleton-pulse mt-4"></div>
+                </div>
+                <div class="w-20 h-20 skeleton-pulse flex-shrink-0 ml-3"></div>
+            </div>
+        `;
+    }
+    DOM.newsGrid.insertAdjacentHTML('beforeend', skeletonHtml);
+}
+
+function removeBottomSkeletons() {
+    if (!DOM.newsGrid) return;
+    DOM.newsGrid.querySelectorAll('.bottom-skeleton-item').forEach(el => el.remove());
+}
+
 function renderGallerySkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
@@ -321,11 +349,13 @@ async function loadGalleryUI(isAppendMode = false) {
     if (!isAppendMode && DOM.newsGrid) {
         renderGallerySkeletonTiles(6);
     } else {
-        DOM.scrollLoading?.classList.remove('hidden');
         isLoadingMore = true;
+        appendBottomSkeletons(2);
     }
 
     const result = await fetchImageData(currentSearchQuery, currentPage);
+
+    if (isAppendMode) removeBottomSkeletons();
 
     if (result.success && result.data.length > 0) {
         hasMoreNews = result.hasMore;
@@ -382,11 +412,14 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
     if (!isAppendMode && DOM.newsGrid) {
         renderSkeletonTiles(6);
     } else {
-        DOM.scrollLoading?.classList.remove('hidden');
         isLoadingMore = true;
+        // ✨ 往下捲動時加入底部 3 個骨架屏，視覺無縫連結
+        appendBottomSkeletons(3);
     }
 
     const result = await fetchNewsData(categoryId, currentPage, forceSync, currentSearchQuery);
+
+    if (isAppendMode) removeBottomSkeletons();
 
     if (result.success && result.data.length > 0) {
         hasMoreNews = result.hasMore;
@@ -425,7 +458,6 @@ function formatParagraphs(text) {
         .join('');
 }
 
-// ✨ 輔助函式：動態調整圖片與 AI 摘要框版面並顯現內容
 function showAISummaryInTile(tile, summaryText) {
     const aiBox = tile.querySelector('.ai-box');
     const aiText = tile.querySelector('.ai-summary-text');
@@ -459,12 +491,12 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
 
     articlesToRender.forEach((news, relativeIndex) => {
         const index = startIndex + relativeIndex;
-        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
+        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.04}s"`;
         const cleanDescription = formatParagraphs(news.description || '暫無詳細內文。');
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
         const isRead = !!readHistory[news.link]; 
-        const hasCachedAI = !!aiSummaryCache[news.link]; // 檢查是否有 AI 快取
+        const hasCachedAI = !!aiSummaryCache[news.link];
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
 
         const catName = categoryMap[news.category] || news.category || '即時';
@@ -515,7 +547,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                 <div class="tile-details">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
-                            <!-- 頂部功能導覽 -->
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="bg-white/20 text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
                                 <div class="flex space-x-4">
@@ -527,7 +558,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
-                            <!-- 圖片與 AI 總結對齊區 -->
                             <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-start">
                                 ${imagesHtml}
                                 <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-300 bg-fuchsia-900/30 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
@@ -539,7 +569,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <!-- 下方獨立完整內文 -->
                             <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/30 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
@@ -609,7 +638,6 @@ function attachTileEvents(startIndex = 0) {
                 e.stopPropagation(); 
                 const news = currentNewsData[index];
 
-                // ✨ 1. 若本地暫存已有，直接顯示，不請求 API
                 if (aiSummaryCache[news.link]) {
                     showAISummaryInTile(tile, aiSummaryCache[news.link]);
                     return;
@@ -617,7 +645,6 @@ function attachTileEvents(startIndex = 0) {
 
                 if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
 
-                // 初始化加載介面
                 showAISummaryInTile(tile, '');
                 aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
 
@@ -626,7 +653,6 @@ function attachTileEvents(startIndex = 0) {
                 
                 if (res.success) {
                     aiText.innerText = res.summary;
-                    // ✨ 2. 寫入快取與 LocalStorage
                     aiSummaryCache[news.link] = res.summary;
                     LocalDB.saveAISummary(news.link, res.summary);
                 } else {
@@ -660,7 +686,6 @@ function attachTileEvents(startIndex = 0) {
                 isTileExpandedState = true;
                 requestWakeLock();
 
-                // ✨ 3. 曾有 AI 總結的文章，點開磚塊時直接自動顯示
                 if (news && aiSummaryCache[news.link]) {
                     showAISummaryInTile(tile, aiSummaryCache[news.link]);
                 }
