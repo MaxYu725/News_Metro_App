@@ -19,20 +19,20 @@ body {
     font-weight: 600;
 }
 
-/* 🚀 核心優化：開啟 CSS Containment，獨立計算區域，徹底解決收起/滾動卡頓 */
+/* 🚀 低端機極致效能優化：開啟硬件加速隔離區 */
 .metro-tile {
     position: relative;
     cursor: pointer;
     overflow: hidden;
     border-radius: 0px; 
     min-height: 130px;
-    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s ease;
-    animation: fadeIn 0.35s ease-out forwards;
+    transition: transform 0.18s ease-out;
+    animation: fadeIn 0.25s ease-out forwards;
     opacity: 0;
     user-select: none;
     -webkit-user-select: none;
-    transform: translateZ(0);
-    contain: layout paint style; /* 隔離重繪範疇 */
+    transform: translateZ(0); /* 強制 GPU 合成圖層 */
+    contain: content;
 }
 
 .metro-tile:active {
@@ -40,7 +40,7 @@ body {
 }
 
 .metro-tile.expanded {
-    box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.75);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
     z-index: 10;
 }
 
@@ -49,7 +49,7 @@ body {
     top: 0;
     left: 0;
     width: 100%;
-    height: 600px;
+    height: 100%;
     pointer-events: none;
     z-index: 0;
 }
@@ -60,7 +60,7 @@ body {
 }
 
 .tile-preview {
-    transition: opacity 0.2s ease;
+    transition: opacity 0.15s ease;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -75,27 +75,22 @@ body {
     overflow: hidden;
 }
 
-/* 🚀 極致滑順展收：優化 Bezier 曲線與過渡時長 */
+/* 🚀 告別 CPU Reflow：改用高效能 max-height + opacity 組合過渡 */
 .tile-details {
-    display: grid;
-    grid-template-rows: 0fr;
-    transition: grid-template-rows 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease;
+    max-height: 0;
     opacity: 0;
-    will-change: grid-template-rows, opacity;
+    overflow: hidden;
+    transition: max-height 0.28s cubic-bezier(0, 1, 0, 1), opacity 0.2s ease-in-out;
+    will-change: max-height, opacity;
 }
 
 .metro-tile.expanded .tile-details {
-    grid-template-rows: 1fr;
+    max-height: 2500px; /* 足夠納入長文章的高度上限 */
     opacity: 1;
+    transition: max-height 0.32s ease-in-out, opacity 0.22s ease-in-out;
 }
 
 .tile-details-inner {
-    overflow: hidden;
-    padding: 0px 0px; 
-    transition: padding 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.metro-tile.expanded .tile-details-inner {
     padding: 16px 0px 24px 0px; 
 }
 
@@ -108,7 +103,7 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.15s, border-color 0.15s;
 }
 .metro-btn:hover {
     background-color: rgba(255, 255, 255, 0.1);
@@ -125,58 +120,57 @@ body {
 }
 
 .bookmark-btn, .share-btn {
-    transition: all 0.2s;
+    transition: color 0.15s, opacity 0.15s;
 }
 .bookmark-btn.saved {
     color: #FFD700;
-    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
 .news-title {
-    transition: color 0.3s ease;
+    transition: color 0.2s ease;
 }
 
 #back-to-top {
-    transition: opacity 0.3s ease, transform 0.3s ease, background-color 0.2s;
+    transition: opacity 0.2s ease, transform 0.2s ease;
 }
 #back-to-top.hidden-fab {
     opacity: 0;
-    transform: translateY(30px) scale(0.8);
+    transform: translateY(20px) scale(0.8);
     pointer-events: none;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
+    from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
 .loader {
-    border: 4px solid rgba(255, 255, 255, 0.1);
+    border: 3px solid rgba(255, 255, 255, 0.1);
     border-left-color: #ffffff;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1.2s linear infinite;
+    width: 36px;
+    height: 36px;
+    animation: spin 1s linear infinite;
 }
 .loader-small {
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-left-color: #ffffff;
     border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    animation: spin 1s linear infinite;
+    width: 20px;
+    height: 20px;
+    animation: spin 0.8s linear infinite;
 }
 @keyframes spin { 
     0% { transform: rotate(0deg); } 
     100% { transform: rotate(360deg); } 
 }
 
-/* ✨ 骨架屏 (Skeleton Screen) 動態燈光閃爍效果 */
+/* 骨架屏輕量化閃爍 */
 @keyframes skeletonPulse {
     0%, 100% { opacity: 0.12; }
-    50% { opacity: 0.28; }
+    50% { opacity: 0.22; }
 }
 .skeleton-pulse {
-    animation: skeletonPulse 1.4s ease-in-out infinite;
+    animation: skeletonPulse 1.2s ease-in-out infinite;
     background-color: #ffffff;
 }
