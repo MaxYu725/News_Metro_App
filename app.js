@@ -575,8 +575,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     else DOM.newsGrid.innerHTML = htmlContent;
 }
 
-// 🚀 核心極限優化：全站事件委派 (Event Delegation) 系統
-// 只用 1 個 Event Listener 解決所有的點擊、圖庫輪播、AI 摘要與 Tile 展開！
+// 🚀 全站事件委派 (Event Delegation) 系統
 DOM.newsGrid?.addEventListener('click', async (e) => {
     const target = e.target;
 
@@ -691,25 +690,48 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
 
             const contentBody = tile.querySelector('.article-content-body');
 
+            // ✨ 文章展開精修：加入段落 Skeleton Screen 與淡入動畫
             if (news && !news.isFullContentLoaded && contentBody) {
                 const originalSummary = news.description;
                 
+                // 構建多行文章骨架屏預留高度
+                const articleSkeletonHtml = `
+                    <div class="article-skeleton-container border-t border-white/10 pt-4 mt-4">
+                        <div class="flex items-center space-x-2 text-blue-400 text-xs mb-4">
+                            <span class="loader-small"></span>
+                            <span class="animate-pulse font-bold tracking-wider">正在載入完整文章...</span>
+                        </div>
+                        <div class="space-y-3 opacity-60">
+                            <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                            <div class="w-11/12 h-4 skeleton-pulse rounded-xs"></div>
+                            <div class="w-4/5 h-4 skeleton-pulse rounded-xs"></div>
+                            <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                            <div class="w-3/4 h-4 skeleton-pulse rounded-xs mb-2"></div>
+                            <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                            <div class="w-5/6 h-4 skeleton-pulse rounded-xs"></div>
+                        </div>
+                    </div>
+                `;
+
                 contentBody.innerHTML = `
                     ${formatParagraphs(originalSummary)}
-                    <div class="full-text-loader border-t border-white/10 pt-4 mt-4 flex items-center space-x-2 text-blue-400 text-sm">
-                        <span class="loader-small"></span>
-                        <span class="animate-pulse">正在為您載入與處理完整文章...</span>
-                    </div>
+                    ${articleSkeletonHtml}
                 `;
 
                 fetchFullArticleContent(news.link).then(res => {
                     if (res.success && res.content && res.content.length > originalSummary.length) {
                         news.description = res.content;
                         news.isFullContentLoaded = true;
-                        contentBody.innerHTML = formatParagraphs(res.content);
+                        
+                        // 柔和淡入動畫，平滑替換全文
+                        contentBody.style.opacity = '0.3';
+                        setTimeout(() => {
+                            contentBody.innerHTML = formatParagraphs(res.content);
+                            contentBody.style.opacity = '1';
+                        }, 120);
                     } else {
-                        const loader = contentBody.querySelector('.full-text-loader');
-                        if (loader) loader.remove();
+                        const skeleton = contentBody.querySelector('.article-skeleton-container');
+                        if (skeleton) skeleton.remove();
                         news.isFullContentLoaded = true;
                     }
                 });
