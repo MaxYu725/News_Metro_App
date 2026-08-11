@@ -11,20 +11,12 @@ export function timeAgo(dateString) {
     return `${Math.floor(diffHours / 24)} 天前`;
 }
 
+// 🚀 低端機 GPU 優化：極簡化 SVG 背景，大幅降低繪製負擔
 export function generateGeometricBackground() {
-    let svg = `<svg class="geo-bg" viewBox="0 0 400 600" xmlns="http://www.w3.org/2000/svg">`;
-    const cx = 50 + Math.random() * 300;
-    const cy = 50 + Math.random() * 200;
-    const r = 100 + Math.random() * 150;
-    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.08" />`;
-    for (let i = 0; i < (1 + Math.floor(Math.random() * 2)); i++) {
-        const x = Math.random() * 300;
-        const y = Math.random() * 300;
-        const pts = `${x},${y} ${x+250},${y+80} ${x+180},${y+350} ${x-70},${y+270}`;
-        svg += `<polygon points="${pts}" fill="white" fill-opacity="0.05" />`;
-    }
-    svg += `</svg>`;
-    return svg;
+    const cx = 80 + Math.floor(Math.random() * 200);
+    const cy = 60 + Math.floor(Math.random() * 150);
+    const r = 80 + Math.floor(Math.random() * 80);
+    return `<svg class="geo-bg" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"><circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.04" /></svg>`;
 }
 
 export const LocalDB = {
@@ -41,10 +33,10 @@ export const LocalDB = {
     },
     saveHistory: (data) => {
         const keys = Object.keys(data);
-        if (keys.length > 1000) {
+        if (keys.length > 500) {
             const sortedKeys = keys.sort((a, b) => data[b] - data[a]);
             const newHistory = {};
-            sortedKeys.slice(0, 500).forEach(k => newHistory[k] = data[k]);
+            sortedKeys.slice(0, 300).forEach(k => newHistory[k] = data[k]);
             data = newHistory;
         }
         try { localStorage.setItem('metro_news_read_history', JSON.stringify(data)); } catch(e){}
@@ -66,7 +58,6 @@ export const LocalDB = {
     saveVisibleCategories: (data) => {
         try { localStorage.setItem('metro_news_visible_cats', JSON.stringify(data)); } catch(e){}
     },
-    // ✨ 新增：AI 總結快取讀取與儲存
     getAISummaries: () => {
         try { return JSON.parse(localStorage.getItem('metro_news_ai_cache')) || {}; } catch(e){ return {}; }
     },
@@ -75,8 +66,8 @@ export const LocalDB = {
             const cache = LocalDB.getAISummaries();
             cache[link] = summary;
             const keys = Object.keys(cache);
-            if (keys.length > 500) {
-                delete cache[keys[0]]; // 超過 500 筆時自動清理舊快取
+            if (keys.length > 300) {
+                delete cache[keys[0]];
             }
             localStorage.setItem('metro_news_ai_cache', JSON.stringify(cache));
         } catch(e){}
