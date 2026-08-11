@@ -16,8 +16,9 @@
 </head>
 <body class="h-screen w-screen flex flex-col pt-4 relative bg-black">
 
-    <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-300">
-        <button id="lightbox-close" class="absolute top-6 right-6 text-white text-4xl font-light hover:text-gray-400 z-10 px-4 py-2 drop-shadow-lg">&times;</button>
+    <!-- 🚀 移除 backdrop-blur 效能殺手，改用純色高半透明 bg-black/95 -->
+    <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-200">
+        <button id="lightbox-close" class="absolute top-6 right-6 text-white text-4xl font-light hover:text-gray-400 z-10 px-4 py-2">&times;</button>
         <div class="relative w-full h-full flex justify-center items-center overflow-hidden">
             <img id="lightbox-img" src="" class="max-w-full max-h-full object-contain transition-transform duration-100 ease-out origin-center" alt="全螢幕圖片">
         </div>
@@ -29,10 +30,10 @@
     </header>
 
     <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative scroll-smooth" id="main-container">
-        <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-200" style="height: 0px;"></div>
+        <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-150" style="height: 0px;"></div>
         
-        <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20 transition-all duration-300">
-            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-white/10 border border-white/30 px-4 py-3 text-white focus:outline-none focus:border-white shadow-lg text-lg rounded-none">
+        <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20">
+            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-white/10 border border-white/30 px-4 py-3 text-white focus:outline-none focus:border-white text-lg rounded-none">
         </div>
 
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
@@ -45,20 +46,19 @@
             <div class="loader-small"></div>
         </div>
 
-        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-white/10 backdrop-blur-md border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 shadow-[0_0_15px_rgba(255,255,255,0.1)] hover:bg-white/30 active:scale-95 transition-all">
+        <!-- 🚀 移除 backdrop-blur-md，改用 bg-black/80 提升滾動幀率 -->
+        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-black/80 border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/30 active:scale-95">
             ↑
         </button>
 
         <div id="settings-view" class="hidden flex-col space-y-8 pb-10 px-5 mt-4">
             <h2 class="text-3xl font-light mb-2">settings</h2>
             
-            <!-- 板塊顯示/隱藏控制區 -->
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">導覽列板塊顯示設定</p>
                 <div id="category-visibility-list" class="grid grid-cols-2 gap-2"></div>
             </div>
 
-            <!-- 自訂關鍵字追蹤區 -->
             <div class="flex flex-col space-y-3">
                 <p class="text-xs text-gray-400 uppercase tracking-widest">自訂追蹤關鍵字</p>
                 <div class="flex flex-col space-y-2" id="category-manager-list"></div>
@@ -68,19 +68,17 @@
                 </div>
             </div>
 
-            <!-- 主題顏色區 -->
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">accent color</p>
                 <div class="flex space-x-3">
-                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-white transition-all" data-color="bg-blue-600"></button>
-                    <button class="color-btn w-10 h-10 bg-green-600 border-2 border-transparent transition-all" data-color="bg-green-600"></button>
-                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent transition-all" data-color="bg-purple-700"></button>
-                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent transition-all" data-color="bg-red-600"></button>
-                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent transition-all" data-color="bg-orange-600"></button>
+                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-white" data-color="bg-blue-600"></button>
+                    <button class="color-btn w-10 h-10 bg-green-600 border-2 border-transparent" data-color="bg-green-600"></button>
+                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent" data-color="bg-purple-700"></button>
+                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent" data-color="bg-red-600"></button>
+                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent" data-color="bg-orange-600"></button>
                 </div>
             </div>
 
-            <!-- 字型大小設定 -->
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">typography size</p>
                 <div class="flex space-x-2">
