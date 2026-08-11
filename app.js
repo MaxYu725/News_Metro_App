@@ -131,7 +131,7 @@ function closeLightbox(fromHardwareBackBtn = false) {
     setTimeout(() => {
         DOM.lightboxOverlay.classList.add('hidden');
         if(DOM.lightboxImg) DOM.lightboxImg.src = '';
-    }, 300);
+    }, 200);
     isLightboxOpen = false;
     if (!fromHardwareBackBtn) history.back(); 
 }
@@ -260,12 +260,16 @@ function renderBookmarksUI() {
 function toggleBookmark(newsItem, btnElement) {
     if (savedBookmarks[newsItem.link]) {
         delete savedBookmarks[newsItem.link];
-        btnElement.classList.remove('saved');
-        btnElement.innerHTML = '☆ 收藏';
+        if (btnElement) {
+            btnElement.classList.remove('saved');
+            btnElement.innerHTML = '☆ 收藏';
+        }
     } else {
         savedBookmarks[newsItem.link] = newsItem;
-        btnElement.classList.add('saved');
-        btnElement.innerHTML = '★ 已收藏';
+        if (btnElement) {
+            btnElement.classList.add('saved');
+            btnElement.innerHTML = '★ 已收藏';
+        }
     }
     LocalDB.saveBookmarks(savedBookmarks);
     if (categories[currentIndex].id === 'bookmarks') renderBookmarksUI();
@@ -282,41 +286,37 @@ function markAsRead(link, titleElement) {
     }
 }
 
-// 首頁加載全頁骨架屏
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[140px]">
+            <div class="metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[130px]">
                 <div class="flex flex-col justify-between h-full flex-grow pr-3">
                     <div>
-                        <div class="w-12 h-3.5 skeleton-pulse mb-3"></div>
+                        <div class="w-12 h-3 skeleton-pulse mb-3"></div>
                         <div class="w-full h-5 skeleton-pulse mb-2"></div>
-                        <div class="w-4/5 h-5 skeleton-pulse mb-2"></div>
-                        <div class="w-1/2 h-5 skeleton-pulse"></div>
+                        <div class="w-4/5 h-5 skeleton-pulse"></div>
                     </div>
                     <div class="w-16 h-3 skeleton-pulse mt-4"></div>
                 </div>
-                <div class="w-20 h-20 md:w-28 md:h-28 skeleton-pulse flex-shrink-0 ml-3"></div>
+                <div class="w-20 h-20 md:w-24 md:h-24 skeleton-pulse flex-shrink-0 ml-3"></div>
             </div>
         `;
     }
     DOM.newsGrid.innerHTML = skeletonHtml;
 }
 
-// ✨ 新增：往下滾動追加（Infinite Scroll）時的底部骨架屏
 function appendBottomSkeletons(count = 3) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="bottom-skeleton-item metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[140px]">
+            <div class="bottom-skeleton-item metro-tile bg-white/5 border border-white/5 px-5 py-4 flex flex-row justify-between items-start pointer-events-none opacity-100 min-h-[130px]">
                 <div class="flex flex-col justify-between h-full flex-grow pr-3">
                     <div>
-                        <div class="w-12 h-3.5 skeleton-pulse mb-3"></div>
+                        <div class="w-12 h-3 skeleton-pulse mb-3"></div>
                         <div class="w-full h-5 skeleton-pulse mb-2"></div>
-                        <div class="w-3/4 h-5 skeleton-pulse mb-2"></div>
                     </div>
                     <div class="w-16 h-3 skeleton-pulse mt-4"></div>
                 </div>
@@ -380,10 +380,10 @@ function renderGalleryTiles(isAppendMode = false) {
     const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
 
     dataToRender.forEach((imgItem, relativeIndex) => {
-        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.05}s"`;
+        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
         htmlContent += `
             <article class="metro-tile relative group cursor-pointer overflow-hidden bg-black/20 h-48 md:h-64" ${animationDelay}>
-                <img src="${imgItem.thumbUrl}" data-full="${imgItem.imageUrl}" class="gallery-img w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="Gallery Image" loading="lazy" referrerpolicy="no-referrer" />
+                <img src="${imgItem.thumbUrl}" data-full="${imgItem.imageUrl}" class="gallery-img w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="Gallery Image" loading="lazy" referrerpolicy="no-referrer" />
                 <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <span class="text-[10px] text-white/80 uppercase tracking-widest leading-tight block truncate">${imgItem.tags}</span>
                 </div>
@@ -393,13 +393,6 @@ function renderGalleryTiles(isAppendMode = false) {
 
     if (isAppendMode) DOM.newsGrid.insertAdjacentHTML('beforeend', htmlContent);
     else DOM.newsGrid.innerHTML = htmlContent;
-
-    DOM.newsGrid.querySelectorAll('.gallery-img').forEach(img => {
-        img.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openLightbox(e.target.getAttribute('data-full'));
-        });
-    });
 }
 
 async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
@@ -413,7 +406,6 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
         renderSkeletonTiles(6);
     } else {
         isLoadingMore = true;
-        // ✨ 往下捲動時加入底部 3 個骨架屏，視覺無縫連結
         appendBottomSkeletons(3);
     }
 
@@ -491,7 +483,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
 
     articlesToRender.forEach((news, relativeIndex) => {
         const index = startIndex + relativeIndex;
-        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.04}s"`;
+        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
         const cleanDescription = formatParagraphs(news.description || '暫無詳細內文。');
         const geoBackground = generateGeometricBackground();
         const isSaved = !!savedBookmarks[news.link];
@@ -510,13 +502,13 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
             let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-full object-cover block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
             
             let navButtons = news.images.length > 1 ? `
-                <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 shadow active:bg-white active:text-black transition-colors">❮</button>
-                <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 shadow active:bg-white active:text-black transition-colors">❯</button>
-                <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10 shadow">${news.images.length} 圖</div>
+                <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❮</button>
+                <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❯</button>
+                <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10">${news.images.length} 圖</div>
             ` : '';
             
             imagesHtml = `
-                <div class="img-container relative w-full h-52 md:h-64 flex-shrink-0 overflow-hidden bg-black/40 border border-white/10 rounded-xs shadow-md transition-all duration-300">
+                <div class="img-container relative w-full h-52 md:h-64 flex-shrink-0 overflow-hidden bg-black/40 border border-white/10 rounded-xs shadow-md transition-all duration-200">
                     <div class="img-scroll-box flex items-center h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>
                     ${navButtons}
                 </div>
@@ -530,7 +522,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     <div class="flex flex-col justify-between h-full flex-grow pr-1">
                         <div>
                             <div class="flex items-center space-x-2 mb-2">
-                                <span class="bg-white/20 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-xs font-bold tracking-wider uppercase border border-white/10">
+                                <span class="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-xs font-bold tracking-wider uppercase border border-white/10">
                                     ${catName}
                                 </span>
                                 ${hasCachedAI ? '<span class="text-[10px] text-fuchsia-300 font-bold tracking-wider">✨ AI 已摘要</span>' : ''}
@@ -550,9 +542,9 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
                                 <span class="bg-white/20 text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
                                 <div class="flex space-x-4">
-                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors" data-index="${index}">✨ AI 總結</button>
-                                    <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors" data-index="${index}">分享 ↗</button>
-                                    <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}" data-index="${index}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
+                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors">✨ AI 總結</button>
+                                    <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors">分享 ↗</button>
+                                    <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                 </div>
                             </div>
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2">${news.title}</h3>
@@ -560,7 +552,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             
                             <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-start">
                                 ${imagesHtml}
-                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-300 bg-fuchsia-900/30 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
+                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-200 bg-fuchsia-900/30 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
                                     <div class="flex items-center space-x-1.5 mb-2 flex-shrink-0">
                                         <span class="text-fuchsia-400 text-xs">✨</span>
                                         <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Workers AI 摘要</span>
@@ -581,173 +573,152 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
 
     if (isAppendMode) DOM.newsGrid.insertAdjacentHTML('beforeend', htmlContent);
     else DOM.newsGrid.innerHTML = htmlContent;
-    
-    attachTileEvents(startIndex);
 }
 
-function attachTileEvents(startIndex = 0) {
-    if(!DOM.newsGrid) return;
-    const tiles = Array.from(DOM.newsGrid.querySelectorAll('.metro-tile')).slice(startIndex);
-    
-    tiles.forEach((tile) => {
+// 🚀 核心極限優化：全站事件委派 (Event Delegation) 系統
+// 只用 1 個 Event Listener 解決所有的點擊、圖庫輪播、AI 摘要與 Tile 展開！
+DOM.newsGrid?.addEventListener('click', async (e) => {
+    const target = e.target;
+
+    // 1. 圖片燈箱觸發
+    if (target.classList.contains('lightbox-img') || target.classList.contains('gallery-img')) {
+        e.stopPropagation();
+        const fullSrc = target.getAttribute('data-full') || target.src;
+        if (fullSrc) openLightbox(fullSrc);
+        return;
+    }
+
+    // 2. 輪播上一張 / 下一張按鈕
+    if (target.classList.contains('btn-prev-img')) {
+        e.stopPropagation();
+        const scrollBox = target.closest('.img-container')?.querySelector('.img-scroll-box');
+        if (scrollBox) scrollBox.scrollBy({ left: -scrollBox.clientWidth, behavior: 'smooth' });
+        return;
+    }
+    if (target.classList.contains('btn-next-img')) {
+        e.stopPropagation();
+        const scrollBox = target.closest('.img-container')?.querySelector('.img-scroll-box');
+        if (scrollBox) scrollBox.scrollBy({ left: scrollBox.clientWidth, behavior: 'smooth' });
+        return;
+    }
+
+    // 3. AI 總結按鈕
+    const aiBtn = target.closest('.ai-btn');
+    if (aiBtn) {
+        e.stopPropagation();
+        const tile = aiBtn.closest('.metro-tile');
         const index = parseInt(tile.getAttribute('data-index'));
-        const newsItem = currentNewsData[index];
-        if (!newsItem) return;
+        const news = currentNewsData[index];
+        if (!news) return;
 
-        const scrollBox = tile.querySelector('.img-scroll-box');
-        const prevBtn = tile.querySelector('.btn-prev-img');
-        const nextBtn = tile.querySelector('.btn-next-img');
-        if (scrollBox && prevBtn && nextBtn) {
-            prevBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                scrollBox.scrollBy({ left: -scrollBox.clientWidth, behavior: 'smooth' });
-            });
-            nextBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                scrollBox.scrollBy({ left: scrollBox.clientWidth, behavior: 'smooth' });
-            });
+        if (aiSummaryCache[news.link]) {
+            showAISummaryInTile(tile, aiSummaryCache[news.link]);
+            return;
         }
 
-        const bookmarkBtn = tile.querySelector('.bookmark-btn');
-        if (bookmarkBtn) {
-            bookmarkBtn.addEventListener('click', (e) => {
-                e.stopPropagation(); 
-                toggleBookmark(currentNewsData[index], bookmarkBtn);
-            });
-        }
-        
-        const shareBtn = tile.querySelector('.share-btn');
-        if (shareBtn) {
-            shareBtn.addEventListener('click', async (e) => {
-                e.stopPropagation(); 
-                const news = currentNewsData[index];
-                if (navigator.share) {
-                    try { await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link }); } catch (err) {}
-                } else {
-                    navigator.clipboard.writeText(news.link).then(() => { alert('已複製新聞連結！'); });
-                }
-            });
-        }
-
-        const aiBtn = tile.querySelector('.ai-btn');
         const aiBox = tile.querySelector('.ai-box');
         const aiText = tile.querySelector('.ai-summary-text');
+        if (aiBox && aiText && !aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return;
 
-        if (aiBtn && aiBox && aiText) {
-            aiBtn.addEventListener('click', async (e) => {
-                e.stopPropagation(); 
-                const news = currentNewsData[index];
+        showAISummaryInTile(tile, '');
+        if (aiText) aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
 
-                if (aiSummaryCache[news.link]) {
-                    showAISummaryInTile(tile, aiSummaryCache[news.link]);
-                    return;
-                }
+        const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
+        const res = await fetchAISummary(cleanTextForAI);
 
-                if (!aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return; 
-
-                showAISummaryInTile(tile, '');
-                aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
-
-                const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
-                const res = await fetchAISummary(cleanTextForAI);
-                
-                if (res.success) {
-                    aiText.innerText = res.summary;
-                    aiSummaryCache[news.link] = res.summary;
-                    LocalDB.saveAISummary(news.link, res.summary);
-                } else {
-                    aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
-                }
-            });
+        if (res.success) {
+            if (aiText) aiText.innerText = res.summary;
+            aiSummaryCache[news.link] = res.summary;
+            LocalDB.saveAISummary(news.link, res.summary);
+        } else {
+            if (aiText) aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
         }
+        return;
+    }
 
-        tile.addEventListener('click', (e) => {
-            if(e.target.tagName === 'BUTTON') return;
-            if (e.target.classList.contains('lightbox-img')) {
-                e.stopPropagation();
-                openLightbox(e.target.src);
-                return;
-            }
+    // 4. 收藏按鈕
+    const bookmarkBtn = target.closest('.bookmark-btn');
+    if (bookmarkBtn) {
+        e.stopPropagation();
+        const tile = bookmarkBtn.closest('.metro-tile');
+        const index = parseInt(tile.getAttribute('data-index'));
+        if (currentNewsData[index]) toggleBookmark(currentNewsData[index], bookmarkBtn);
+        return;
+    }
 
-            const isCurrentlyExpanded = tile.classList.contains('expanded');
-            releaseWakeLock();
-            
-            if (isCurrentlyExpanded) {
-                tile.classList.remove('expanded');
-                isTileExpandedState = false;
+    // 5. 分享按鈕
+    const shareBtn = target.closest('.share-btn');
+    if (shareBtn) {
+        e.stopPropagation();
+        const tile = shareBtn.closest('.metro-tile');
+        const index = parseInt(tile.getAttribute('data-index'));
+        const news = currentNewsData[index];
+        if (news) {
+            if (navigator.share) {
+                try { await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link }); } catch (err) {}
             } else {
-                DOM.newsGrid.querySelectorAll('.metro-tile.expanded').forEach(t => t.classList.remove('expanded'));
-
-                const titleElement = tile.querySelector('.news-title');
-                const news = currentNewsData[index];
-                markAsRead(news.link, titleElement);
-                tile.classList.add('expanded');
-                
-                isTileExpandedState = true;
-                requestWakeLock();
-
-                if (news && aiSummaryCache[news.link]) {
-                    showAISummaryInTile(tile, aiSummaryCache[news.link]);
-                }
-
-                const contentBody = tile.querySelector('.article-content-body');
-
-                if (news && !news.isFullContentLoaded && contentBody) {
-                    const originalSummary = news.description;
-                    
-                    contentBody.innerHTML = `
-                        ${formatParagraphs(originalSummary)}
-                        <div class="full-text-loader border-t border-white/10 pt-4 mt-4 flex items-center space-x-2 text-blue-400 text-sm">
-                            <span class="loader-small"></span>
-                            <span class="animate-pulse">正在為您載入與處理完整文章...</span>
-                        </div>
-                    `;
-
-                    fetchFullArticleContent(news.link).then(res => {
-                        if (res.success && res.content && res.content.length > originalSummary.length) {
-                            news.description = res.content;
-                            news.isFullContentLoaded = true;
-                            contentBody.innerHTML = formatParagraphs(res.content);
-                        } else {
-                            const loader = contentBody.querySelector('.full-text-loader');
-                            if (loader) loader.remove();
-                            news.isFullContentLoaded = true;
-                        }
-                    });
-                }
-
-                setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
+                navigator.clipboard.writeText(news.link).then(() => { alert('已複製新聞連結！'); });
             }
-        });
+        }
+        return;
+    }
 
-        let pressTimer = null;
-        const startPress = () => {
-            clearPress();
-            pressTimer = setTimeout(() => { triggerLongPressAction(tile, currentNewsData[index].link); }, 600);
-        };
-        const clearPress = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+    // 6. 磚塊 (Tile) 展開 / 收起觸發
+    const tile = target.closest('.metro-tile');
+    if (tile && !target.closest('button')) {
+        const index = parseInt(tile.getAttribute('data-index'));
+        const news = currentNewsData[index];
+        const isCurrentlyExpanded = tile.classList.contains('expanded');
+        
+        releaseWakeLock();
 
-        tile.addEventListener('touchstart', startPress);
-        tile.addEventListener('touchend', clearPress);
-        tile.addEventListener('touchmove', clearPress);
-        tile.addEventListener('mousedown', startPress);
-        tile.addEventListener('mouseup', clearPress);
-        tile.addEventListener('mouseleave', clearPress);
-    });
-}
+        if (isCurrentlyExpanded) {
+            tile.classList.remove('expanded');
+            isTileExpandedState = false;
+        } else {
+            DOM.newsGrid.querySelectorAll('.metro-tile.expanded').forEach(t => t.classList.remove('expanded'));
 
-function triggerLongPressAction(tile, link) {
-    if (tile.querySelector('.long-press-overlay')) return;
-    const overlay = document.createElement('div');
-    overlay.className = 'long-press-overlay absolute inset-0 bg-black/80 z-20 flex flex-col items-center justify-center p-4 animate-fade-in';
-    overlay.innerHTML = `
-        <p class="text-xs uppercase tracking-widest text-gray-400 mb-3">快捷操作</p>
-        <a href="${link}" target="_blank" onclick="event.stopPropagation()" class="bg-white text-black font-bold px-6 py-3 text-sm tracking-wider uppercase hover:bg-gray-200 transition-colors shadow-lg">網頁檢視 ↗</a>
-        <span class="text-[10px] text-gray-500 mt-4">點擊任意處關閉</span>
-    `;
-    overlay.addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); });
-    tile.appendChild(overlay);
-}
+            const titleElement = tile.querySelector('.news-title');
+            if (news) markAsRead(news.link, titleElement);
+            
+            tile.classList.add('expanded');
+            isTileExpandedState = true;
+            requestWakeLock();
+
+            if (news && aiSummaryCache[news.link]) {
+                showAISummaryInTile(tile, aiSummaryCache[news.link]);
+            }
+
+            const contentBody = tile.querySelector('.article-content-body');
+
+            if (news && !news.isFullContentLoaded && contentBody) {
+                const originalSummary = news.description;
+                
+                contentBody.innerHTML = `
+                    ${formatParagraphs(originalSummary)}
+                    <div class="full-text-loader border-t border-white/10 pt-4 mt-4 flex items-center space-x-2 text-blue-400 text-sm">
+                        <span class="loader-small"></span>
+                        <span class="animate-pulse">正在為您載入與處理完整文章...</span>
+                    </div>
+                `;
+
+                fetchFullArticleContent(news.link).then(res => {
+                    if (res.success && res.content && res.content.length > originalSummary.length) {
+                        news.description = res.content;
+                        news.isFullContentLoaded = true;
+                        contentBody.innerHTML = formatParagraphs(res.content);
+                    } else {
+                        const loader = contentBody.querySelector('.full-text-loader');
+                        if (loader) loader.remove();
+                        news.isFullContentLoaded = true;
+                    }
+                });
+            }
+
+            setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 80);
+        }
+    }
+});
 
 DOM.mainContainer?.addEventListener('scroll', () => {
     if (DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
@@ -758,7 +729,7 @@ DOM.mainContainer?.addEventListener('scroll', () => {
 
     if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
         if (categories[currentIndex].isCustom && !currentSearchQuery) return;
-        if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 150) {
+        if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 180) {
             if (!isLoadingMore && hasMoreNews) {
                 isLoadingMore = true;
                 currentPage++;
@@ -772,7 +743,7 @@ DOM.mainContainer?.addEventListener('scroll', () => {
             }
         }
     }
-});
+}, { passive: true });
 
 DOM.backToTopBtn?.addEventListener('click', () => { DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' }); });
 
@@ -929,8 +900,8 @@ function updateFontSize() {
     document.documentElement.style.fontSize = (16 * (currentFontSizePercent / 100)) + 'px';
     localStorage.setItem('metro_font_size', currentFontSizePercent);
 }
-document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
-document.getElementById('btn-font-minus')?.addEventListener('click', () => { if (currentFontSizePercent > 70) { currentFontSizePercent -= 10; updateFontSize(); } });
+document.getElementById('btn-font-minus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
+document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (currentFontSizePercent > 70) { currentFontSizePercent -= 10; updateFontSize(); } });
 document.getElementById('btn-font-reset')?.addEventListener('click', () => { currentFontSizePercent = 110; updateFontSize(); });
 
 window.addEventListener('DOMContentLoaded', () => { 
