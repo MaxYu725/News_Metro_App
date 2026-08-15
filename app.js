@@ -47,9 +47,9 @@ let categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
 let currentIndex = 0;
 let currentNewsData = [];      
 let newsCache = {}; 
-let currentThemeBorder = 'border-emerald-500';
-let currentThemeText = 'text-emerald-400';
-let currentThemeBg = 'bg-emerald-600';
+let currentThemeBorder = 'border-l-cyan-400';
+let currentThemeText = 'text-cyan-400';
+let currentThemeBg = 'bg-cyan-500';
 
 let currentPage = 0;
 let isLoadingMore = false;
@@ -255,7 +255,7 @@ function renderBookmarksUI() {
     hasMoreNews = false; 
     renderTiles(currentNewsData, false);
     if (currentNewsData.length === 0 && DOM.newsGrid) {
-        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">你的收藏夾空空如也，快去收藏新聞吧！</p>';
+        DOM.newsGrid.innerHTML = '<p class="text-gray-400 text-center mt-12 tracking-wider font-light">你的收藏夾空空如也，快去收藏新聞吧！</p>';
     }
 }
 
@@ -295,8 +295,8 @@ function renderSkeletonTiles(count = 6) {
         skeletonHtml += `
             <div class="metro-tile ${currentThemeBorder} flex flex-col pointer-events-none opacity-100 p-4">
                 <div class="w-full flex justify-between items-center mb-3">
-                    <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
-                    <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
+                    <div class="w-12 h-3 skeleton-pulse rounded-xs"></div>
+                    <div class="w-16 h-3 skeleton-pulse rounded-xs"></div>
                 </div>
                 <div class="flex flex-row items-center justify-between min-h-[75px]">
                     <div class="flex-grow pr-3 space-y-2">
@@ -318,8 +318,8 @@ function appendBottomSkeletons(count = 3) {
         skeletonHtml += `
             <div class="bottom-skeleton-item metro-tile ${currentThemeBorder} flex flex-col pointer-events-none opacity-100 p-4">
                 <div class="w-full flex justify-between items-center mb-3">
-                    <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
-                    <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
+                    <div class="w-12 h-3 skeleton-pulse rounded-xs"></div>
+                    <div class="w-16 h-3 skeleton-pulse rounded-xs"></div>
                 </div>
                 <div class="flex flex-row items-center justify-between min-h-[75px]">
                     <div class="flex-grow pr-3 space-y-2">
@@ -372,7 +372,7 @@ async function loadGalleryUI(isAppendMode = false) {
         hasMoreNews = false;
         if (!isAppendMode && DOM.newsGrid) {
             const errorMsg = result.error ? `錯誤: ${result.error}` : '找不到相關圖片，換個關鍵字試試看吧！';
-            DOM.newsGrid.innerHTML = `<p class="text-gray-500 text-center mt-10 col-span-2">${errorMsg}</p>`;
+            DOM.newsGrid.innerHTML = `<p class="text-gray-400 text-center mt-10 col-span-2">${errorMsg}</p>`;
         }
     }
 
@@ -389,7 +389,7 @@ function renderGalleryTiles(isAppendMode = false) {
     dataToRender.forEach((imgItem, relativeIndex) => {
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
         htmlContent += `
-            <article class="metro-tile relative group cursor-pointer overflow-hidden bg-black/40 h-48 md:h-64 border border-white/10" ${animationDelay}>
+            <article class="metro-tile relative group cursor-pointer overflow-hidden bg-[#12131c]/90 h-48 md:h-64 border border-white/10" ${animationDelay}>
                 <img src="${imgItem.thumbUrl}" data-full="${imgItem.imageUrl}" class="gallery-img w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="Gallery Image" loading="lazy" referrerpolicy="no-referrer" />
                 <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <span class="text-[10px] text-white/80 uppercase tracking-widest leading-tight block truncate">${imgItem.tags}</span>
@@ -437,8 +437,8 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
         hasMoreNews = false;
         if (!isAppendMode && DOM.newsGrid) {
             DOM.newsGrid.innerHTML = categoryId === 'search' 
-                ? `<p class="text-gray-500 text-center mt-10">資料庫中找不到符合「${currentSearchQuery}」的新聞，請嘗試其他關鍵字！</p>` 
-                : '<p class="text-gray-500 text-center mt-10">目前沒有新聞資料。</p>';
+                ? `<p class="text-gray-400 text-center mt-10">資料庫中找不到符合「${currentSearchQuery}」的新聞，請嘗試其他關鍵字！</p>` 
+                : '<p class="text-gray-400 text-center mt-10">目前沒有新聞資料。</p>';
         }
     }
 
@@ -478,12 +478,12 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
-/* ✨ 徹底修復：移除所有卡片內文的硬編碼黑底，改為全半透明，透出背景地圖 */
+/* ✨ 核心重構：精緻左側條 + 清爽半透明底卡片 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
     if (articlesToRender.length === 0 && !isAppendMode) {
-        DOM.newsGrid.innerHTML = '<p class="text-gray-500 text-center mt-10">目前沒有新聞！</p>';
+        DOM.newsGrid.innerHTML = '<p class="text-gray-400 text-center mt-10">目前沒有新聞！</p>';
         return;
     }
 
@@ -532,7 +532,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             ${hasCachedAI ? '<span class="text-[10px] bg-fuchsia-950/80 text-fuchsia-300 border border-fuchsia-500/30 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
                         </div>
                         <div class="flex items-center space-x-2">
-                            <span class="text-xs text-white/50 tracking-wider font-medium">${timeAgo(news.pubDate)}</span>
+                            <span class="text-xs text-white/40 tracking-wider font-medium">${timeAgo(news.pubDate)}</span>
                             ${isSaved ? '<span class="text-xs text-yellow-300">★</span>' : ''}
                         </div>
                     </div>
@@ -545,7 +545,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     </div>
                 </div>
 
-                <!-- 展開時的詳情卡片：全透明底，與背景地圖和諧相融 -->
+                <!-- 展開時的詳情卡片 -->
                 <div class="tile-details bg-transparent border-t border-white/10">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
@@ -558,7 +558,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2 text-white">${news.title}</h3>
-                            <p class="text-xs opacity-70 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
+                            <p class="text-xs opacity-60 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
                             <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-start">
                                 ${imagesHtml}
@@ -571,7 +571,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <!-- 內文區塊：移除硬編碼黑底，使用半透明底提升閱讀感 -->
                             <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/40 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
@@ -700,7 +699,7 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
                 
                 const articleSkeletonHtml = `
                     <div class="article-skeleton-container border-t border-white/10 pt-4 mt-4">
-                        <div class="flex items-center space-x-2 text-blue-400 text-xs mb-4">
+                        <div class="flex items-center space-x-2 text-cyan-400 text-xs mb-4">
                             <span class="loader-small"></span>
                             <span class="animate-pulse font-bold tracking-wider">正在載入完整文章...</span>
                         </div>
@@ -838,10 +837,10 @@ function renderCategoryManager() {
         allBaseCats.forEach((cat) => {
             const isVisible = visibleCatIds.includes(cat.id);
             const label = document.createElement('label');
-            label.className = 'flex items-center justify-between bg-black/60 hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/10';
+            label.className = 'flex items-center justify-between bg-[#12131c]/90 hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/10';
             label.innerHTML = `
                 <span class="text-base font-light text-gray-200">${cat.name}</span>
-                <input type="checkbox" class="w-5 h-5 accent-blue-600 cursor-pointer" ${isVisible ? 'checked' : ''} data-id="${cat.id}">
+                <input type="checkbox" class="w-5 h-5 accent-cyan-500 cursor-pointer" ${isVisible ? 'checked' : ''} data-id="${cat.id}">
             `;
             label.querySelector('input').addEventListener('change', (e) => {
                 const targetId = e.target.getAttribute('data-id');
@@ -869,15 +868,15 @@ function renderCategoryManager() {
     list.innerHTML = '';
     const customCategoriesOnly = categories.filter(cat => cat.isCustom);
     if (customCategoriesOnly.length === 0) {
-        list.innerHTML = '<p class="text-gray-500 text-sm py-2">目前沒有自訂追蹤關鍵字。</p>';
+        list.innerHTML = '<p class="text-gray-400 text-sm py-2">目前沒有自訂追蹤關鍵字。</p>';
         return;
     }
     customCategoriesOnly.forEach((cat) => {
         const realIndex = categories.findIndex(c => c.id === cat.id);
         const row = document.createElement('div');
-        row.className = 'flex justify-between items-center bg-black/60 px-4 py-3 mb-2 rounded border border-white/10';
+        row.className = 'flex justify-between items-center bg-[#12131c]/90 px-4 py-3 mb-2 rounded border border-white/10';
         row.innerHTML = `
-            <span class="text-base font-light text-gray-200">${cat.name} <span class="text-[10px] text-blue-300 ml-1">(關鍵字)</span></span>
+            <span class="text-base font-light text-gray-200">${cat.name} <span class="text-[10px] text-cyan-300 ml-1">(關鍵字)</span></span>
             <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30 rounded" onclick="deleteCategory(${realIndex})">刪除</button>
         `;
         list.appendChild(row);
