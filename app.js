@@ -288,7 +288,6 @@ function markAsRead(link, titleElement) {
     }
 }
 
-/* 懸浮半透明卡片骨架屏 */
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
@@ -479,7 +478,7 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
-/* ✨ 核心精修：全懸浮暗黑半透明卡片 + 左側 Accent 彩色邊條 */
+/* ✨ 徹底修復：移除所有卡片內文的硬編碼黑底，改為全半透明，透出背景地圖 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -525,8 +524,8 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
 
         htmlContent += `
             <article class="metro-tile ${currentThemeBorder}" data-index="${index}" ${animationDelay}>
-                <div class="tile-preview flex flex-col w-full p-4">
-                    <!-- 上排：類別 Tag + 時間 (精緻簡約排版) -->
+                <!-- 收起時的預覽卡片 -->
+                <div class="tile-preview flex flex-col w-full p-4 bg-transparent">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center space-x-2">
                             <span class="text-xs font-bold tracking-wider uppercase ${currentThemeText}">${catName}</span>
@@ -538,7 +537,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                         </div>
                     </div>
                     
-                    <!-- 下排：標題與縮圖垂直置中 -->
                     <div class="flex flex-row items-center justify-between min-h-[75px]">
                         <div class="flex-grow pr-2 flex flex-col justify-center">
                             <h3 class="news-title text-base md:text-lg font-bold leading-snug line-clamp-3 ${titleColorClass}">${news.title}</h3>
@@ -547,8 +545,8 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     </div>
                 </div>
 
-                <!-- 展開詳情區域 -->
-                <div class="tile-details bg-black/60 border-t border-white/10">
+                <!-- 展開時的詳情卡片：全透明底，與背景地圖和諧相融 -->
+                <div class="tile-details bg-transparent border-t border-white/10">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
@@ -559,12 +557,12 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                     <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
                                 </div>
                             </div>
-                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2">${news.title}</h3>
+                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2 text-white">${news.title}</h3>
                             <p class="text-xs opacity-70 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
                             
                             <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-start">
                                 ${imagesHtml}
-                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-200 bg-fuchsia-900/30 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
+                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-200 bg-fuchsia-950/60 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
                                     <div class="flex items-center space-x-1.5 mb-2 flex-shrink-0">
                                         <span class="text-fuchsia-400 text-xs">✨</span>
                                         <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Workers AI 摘要</span>
@@ -573,7 +571,8 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/60 px-5 py-6 border-t border-white/10">
+                            <!-- 內文區塊：移除硬編碼黑底，使用半透明底提升閱讀感 -->
+                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/40 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
                         </div>
@@ -914,25 +913,9 @@ colorButtons.forEach(btn => {
         e.target.classList.remove('border-transparent');
         e.target.classList.add('border-white');
         
-        const color = e.target.getAttribute('data-color');
-        currentThemeBg = color;
-        
-        if (color === 'bg-blue-600') {
-            currentThemeBorder = 'border-blue-500';
-            currentThemeText = 'text-blue-400';
-        } else if (color === 'bg-green-600') {
-            currentThemeBorder = 'border-emerald-500';
-            currentThemeText = 'text-emerald-400';
-        } else if (color === 'bg-purple-700') {
-            currentThemeBorder = 'border-purple-500';
-            currentThemeText = 'text-purple-400';
-        } else if (color === 'bg-red-600') {
-            currentThemeBorder = 'border-red-500';
-            currentThemeText = 'text-red-400';
-        } else if (color === 'bg-orange-600') {
-            currentThemeBorder = 'border-orange-500';
-            currentThemeText = 'text-orange-400';
-        }
+        currentThemeBg = e.target.getAttribute('data-color');
+        currentThemeBorder = e.target.getAttribute('data-border');
+        currentThemeText = e.target.getAttribute('data-text');
 
         if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles(currentNewsData, false);
     });
