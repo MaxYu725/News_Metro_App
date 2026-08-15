@@ -19,13 +19,13 @@ body {
     font-weight: 600;
 }
 
-/* 🚀 低端機極致效能優化：開啟硬件加速隔離區 */
+/* 🚀 高效能 Metro UI 卡片 (帶 Accent 左側條與全黑半透明主體) */
 .metro-tile {
     position: relative;
     cursor: pointer;
     overflow: hidden;
     border-radius: 0px; 
-    transition: transform 0.18s ease-out;
+    transition: transform 0.18s ease-out, box-shadow 0.2s ease;
     animation: fadeIn 0.25s ease-out forwards;
     opacity: 0;
     user-select: none;
@@ -39,18 +39,8 @@ body {
 }
 
 .metro-tile.expanded {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9);
-    z-index: 10;
-}
-
-.geo-bg {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
+    z-index: 20;
 }
 
 .tile-preview, .tile-details {
@@ -73,7 +63,7 @@ body {
     overflow: hidden;
 }
 
-/* 🚀 高效能 max-height + opacity 展收動畫 */
+/* 高效能 max-height + opacity 展收動畫 */
 .tile-details {
     max-height: 0;
     opacity: 0;
@@ -168,7 +158,7 @@ body {
     100% { transform: rotate(360deg); } 
 }
 
-/* 骨架屏閃爍 */
+/* 骨架屏閃爍效果 */
 @keyframes skeletonPulse {
     0%, 100% { opacity: 0.12; }
     50% { opacity: 0.25; }
