@@ -11,14 +11,6 @@ export function timeAgo(dateString) {
     return `${Math.floor(diffHours / 24)} 天前`;
 }
 
-// 🚀 低端機 GPU 優化：極簡化 SVG 背景，大幅降低繪製負擔
-export function generateGeometricBackground() {
-    const cx = 80 + Math.floor(Math.random() * 200);
-    const cy = 60 + Math.floor(Math.random() * 150);
-    const r = 80 + Math.floor(Math.random() * 80);
-    return `<svg class="geo-bg" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"><circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.04" /></svg>`;
-}
-
 export const LocalDB = {
     getBookmarks: () => {
         try { const data = localStorage.getItem('metro_news_bookmarks'); return data ? JSON.parse(data) : {}; } 
