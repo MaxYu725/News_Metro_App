@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#08080c">
     <link rel="manifest" href="./manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,14 +14,28 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
 </head>
-<body class="h-screen w-screen flex flex-col pt-4 relative bg-black select-none">
+<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#08080c] text-white select-none overflow-hidden">
 
-    <!-- ✨ 暗黑香港全境地圖背景容器：調亮地圖並調輕遮罩，確保清晰可見 -->
-    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1600&q=80" 
-             class="w-full h-full object-cover opacity-45 filter grayscale-[60%] brightness-90 scale-105" 
-             alt="HK Dark Map Background">
-        <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/90"></div>
+    <!-- 高對比暗黑科技地圖背景 (Dark Vector Map Overlay) -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#08080c]">
+        <!-- 向量城市地形/地圖網格 SVG 紋理 -->
+        <svg class="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+            <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-opacity="0.15"/>
+                </pattern>
+                <radialGradient id="map-glow" cx="50%" cy="40%" r="60%">
+                    <stop offset="0%" stop-color="#1e293b" stop-opacity="0.6"/>
+                    <stop offset="100%" stop-color="#08080c" stop-opacity="0.95"/>
+                </radialGradient>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#map-glow)" />
+            <rect width="100%" height="100%" fill="url(#grid)" />
+            <!-- 向量海岸線與區域輪廓幾何點綴 -->
+            <path d="M-50,200 Q150,120 300,280 T600,180 T900,350" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.25" stroke-dasharray="4,4"/>
+            <path d="M0,450 Q250,380 450,520 T800,410" fill="none" stroke="#ffffff" stroke-width="1" stroke-opacity="0.2"/>
+        </svg>
+        <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80"></div>
     </div>
 
     <!-- 圖片全螢幕燈箱 (Lightbox) -->
@@ -35,7 +49,7 @@
 
     <!-- 頂部導覽列 (Header Pivot) -->
     <header class="flex-shrink-0 px-5 relative z-10">
-        <nav class="flex space-x-6 text-2xl mb-4 text-gray-500 overflow-x-auto hide-scrollbar justify-start" id="nav-menu"></nav>
+        <nav class="flex space-x-6 text-2xl mb-4 text-gray-400 overflow-x-auto hide-scrollbar justify-start" id="nav-menu"></nav>
     </header>
 
     <!-- 主內容滾動區域 -->
@@ -43,7 +57,7 @@
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-150" style="height: 0px;"></div>
         
         <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20">
-            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-black/80 border border-white/30 px-4 py-3 text-white focus:outline-none focus:border-white text-lg rounded-none">
+            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-[#12131c]/90 border border-white/20 px-4 py-3 text-white focus:outline-none focus:border-cyan-400 text-lg rounded-none shadow-lg">
         </div>
 
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
@@ -56,13 +70,13 @@
             <div class="loader-small"></div>
         </div>
 
-        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-black/80 border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/30 active:scale-95">
+        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-[#12131c]/90 border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/20 active:scale-95 shadow-2xl">
             ↑
         </button>
 
         <!-- 設定視圖 (Settings View) -->
         <div id="settings-view" class="hidden flex-col space-y-8 pb-10 px-5 mt-4">
-            <h2 class="text-3xl font-light mb-2">settings</h2>
+            <h2 class="text-3xl font-light mb-2 text-white">settings</h2>
             
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">導覽列板塊顯示設定</p>
@@ -73,7 +87,7 @@
                 <p class="text-xs text-gray-400 uppercase tracking-widest">自訂追蹤關鍵字</p>
                 <div class="flex flex-col space-y-2" id="category-manager-list"></div>
                 <div class="flex space-x-2 mt-2">
-                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-black border border-white/30 px-4 py-2 text-white focus:outline-none focus:border-white flex-grow">
+                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-[#12131c] border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow">
                     <button id="btn-add-cat" class="metro-btn">新增</button>
                 </div>
             </div>
@@ -81,11 +95,11 @@
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">accent color</p>
                 <div class="flex space-x-3">
-                    <button class="color-btn w-10 h-10 bg-emerald-600 border-2 border-white" data-color="bg-emerald-600" data-border="border-emerald-500" data-text="text-emerald-400"></button>
-                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-transparent" data-color="bg-blue-600" data-border="border-blue-500" data-text="text-blue-400"></button>
-                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent" data-color="bg-purple-700" data-border="border-purple-500" data-text="text-purple-400"></button>
-                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent" data-color="bg-red-600" data-border="border-red-500" data-text="text-red-400"></button>
-                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent" data-color="bg-orange-600" data-border="border-orange-500" data-text="text-orange-400"></button>
+                    <button class="color-btn w-10 h-10 bg-cyan-500 border-2 border-white" data-color="bg-cyan-500" data-border="border-l-cyan-400" data-text="text-cyan-400"></button>
+                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-transparent" data-color="bg-blue-600" data-border="border-l-blue-500" data-text="text-blue-400"></button>
+                    <button class="color-btn w-10 h-10 bg-purple-600 border-2 border-transparent" data-color="bg-purple-600" data-border="border-l-purple-400" data-text="text-purple-400"></button>
+                    <button class="color-btn w-10 h-10 bg-emerald-500 border-2 border-transparent" data-color="bg-emerald-500" data-border="border-l-emerald-400" data-text="text-emerald-400"></button>
+                    <button class="color-btn w-10 h-10 bg-orange-500 border-2 border-transparent" data-color="bg-orange-500" data-border="border-l-orange-400" data-text="text-orange-400"></button>
                 </div>
             </div>
 
