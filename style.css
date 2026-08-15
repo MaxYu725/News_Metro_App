@@ -19,13 +19,18 @@ body {
     font-weight: 600;
 }
 
-/* 🚀 高效能 Metro UI 卡片 (帶 Accent 左側條與全黑半透明主體) */
+/* 🚀 Metro UI 暗黑懸浮卡片 (媲美 Weather Forecast 質感) */
 .metro-tile {
     position: relative;
     cursor: pointer;
     overflow: hidden;
-    border-radius: 0px; 
-    transition: transform 0.18s ease-out, box-shadow 0.2s ease;
+    border-radius: 2px;
+    margin: 8px 16px; /* 卡片間距，讓背景地圖透出 */
+    background-color: rgba(19, 17, 28, 0.85); /* 半透明紫黑背景 */
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left-width: 5px; /* 左側 Accent 條 */
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+    transition: transform 0.18s ease-out, box-shadow 0.2s ease, background-color 0.2s ease;
     animation: fadeIn 0.25s ease-out forwards;
     opacity: 0;
     user-select: none;
@@ -36,10 +41,12 @@ body {
 
 .metro-tile:active {
     transform: scale(0.985);
+    background-color: rgba(25, 22, 38, 0.95);
 }
 
 .metro-tile.expanded {
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.9);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.95);
+    border-color: rgba(255, 255, 255, 0.25);
     z-index: 20;
 }
 
@@ -73,7 +80,7 @@ body {
 }
 
 .metro-tile.expanded .tile-details {
-    max-height: 3500px; /* 擴大上限以順暢包覆完整全文 */
+    max-height: 3500px;
     opacity: 1;
     transition: max-height 0.32s ease-in-out, opacity 0.22s ease-in-out;
 }
