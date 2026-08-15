@@ -1,4 +1,4 @@
-import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
+import { timeAgo, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 
 const allBaseCats = [
@@ -48,6 +48,7 @@ let currentIndex = 0;
 let currentNewsData = [];      
 let newsCache = {}; 
 let currentThemeColor = 'bg-blue-600'; 
+let currentThemeBorder = 'border-blue-500';
 
 let currentPage = 0;
 let isLoadingMore = false;
@@ -211,7 +212,7 @@ function handlePageChange() {
     releaseWakeLock();
     
     DOM.gallerySearchContainer?.classList.add('hidden');
-    if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 gap-[2px] auto-rows-auto';
+    if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 gap-[3px] auto-rows-auto';
 
     if (currentCat.id === 'settings') {
         DOM.newsGrid?.classList.add('hidden');
@@ -228,7 +229,7 @@ function handlePageChange() {
         DOM.settingsView?.classList.remove('flex');
         DOM.newsGrid?.classList.remove('hidden');
         DOM.gallerySearchContainer?.classList.remove('hidden');
-        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-[2px] auto-rows-auto px-5'; 
+        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-[3px] auto-rows-auto px-5'; 
         
         currentSearchQuery = DOM.gallerySearchInput?.value.trim() || 'Japan travel';
         loadGalleryUI(false);
@@ -286,21 +287,21 @@ function markAsRead(link, titleElement) {
     }
 }
 
-/* ✨ 全新全寬頂欄 + 全黑主體 骨架屏 */
+/* 骨架屏：支援 Accent 左邊條與深色底圖相容 */
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="metro-tile bg-black border-b border-white/10 flex flex-col pointer-events-none opacity-100">
-                <div class="w-full bg-white/10 px-5 py-2 flex justify-between items-center">
+            <div class="metro-tile bg-[#12111a]/90 border-l-4 ${currentThemeBorder} border-r border-t border-b border-white/10 flex flex-col pointer-events-none opacity-100">
+                <div class="w-full ${currentThemeColor} px-4 py-1.5 flex justify-between items-center">
                     <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
                     <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
                 </div>
-                <div class="bg-black px-5 py-4 flex flex-row items-center justify-between min-h-[105px]">
+                <div class="bg-black/80 px-4 py-3.5 flex flex-row items-center justify-between min-h-[95px]">
                     <div class="flex-grow pr-3 space-y-2">
-                        <div class="w-full h-5 skeleton-pulse rounded-xs"></div>
-                        <div class="w-4/5 h-5 skeleton-pulse rounded-xs"></div>
+                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                        <div class="w-4/5 h-4 skeleton-pulse rounded-xs"></div>
                     </div>
                     <div class="w-20 h-20 md:w-24 md:h-24 skeleton-pulse flex-shrink-0 ml-2 rounded-xs"></div>
                 </div>
@@ -315,15 +316,15 @@ function appendBottomSkeletons(count = 3) {
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="bottom-skeleton-item metro-tile bg-black border-b border-white/10 flex flex-col pointer-events-none opacity-100">
-                <div class="w-full bg-white/10 px-5 py-2 flex justify-between items-center">
+            <div class="bottom-skeleton-item metro-tile bg-[#12111a]/90 border-l-4 ${currentThemeBorder} border-r border-t border-b border-white/10 flex flex-col pointer-events-none opacity-100">
+                <div class="w-full ${currentThemeColor} px-4 py-1.5 flex justify-between items-center">
                     <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
                     <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
                 </div>
-                <div class="bg-black px-5 py-4 flex flex-row items-center justify-between min-h-[105px]">
+                <div class="bg-black/80 px-4 py-3.5 flex flex-row items-center justify-between min-h-[95px]">
                     <div class="flex-grow pr-3 space-y-2">
-                        <div class="w-full h-5 skeleton-pulse rounded-xs"></div>
-                        <div class="w-3/4 h-5 skeleton-pulse rounded-xs"></div>
+                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                        <div class="w-3/4 h-4 skeleton-pulse rounded-xs"></div>
                     </div>
                     <div class="w-20 h-20 skeleton-pulse flex-shrink-0 ml-2 rounded-xs"></div>
                 </div>
@@ -388,7 +389,7 @@ function renderGalleryTiles(isAppendMode = false) {
     dataToRender.forEach((imgItem, relativeIndex) => {
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
         htmlContent += `
-            <article class="metro-tile relative group cursor-pointer overflow-hidden bg-black/20 h-48 md:h-64" ${animationDelay}>
+            <article class="metro-tile relative group cursor-pointer overflow-hidden bg-black/40 h-48 md:h-64 border border-white/10" ${animationDelay}>
                 <img src="${imgItem.thumbUrl}" data-full="${imgItem.imageUrl}" class="gallery-img w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="Gallery Image" loading="lazy" referrerpolicy="no-referrer" />
                 <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <span class="text-[10px] text-white/80 uppercase tracking-widest leading-tight block truncate">${imgItem.tags}</span>
@@ -477,7 +478,7 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
-/* ✨ 重點精修：全寬強調色頂欄 + 全黑置中內容區域 */
+/* 渲染卡片 (包含全寬頂欄 + Accent 左邊條 + 暗黑置中區域) */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -522,10 +523,10 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         }
 
         htmlContent += `
-            <article class="metro-tile bg-black border-b border-white/10" data-index="${index}" ${animationDelay}>
+            <article class="metro-tile bg-[#12111a]/90 border-l-4 ${currentThemeBorder} border-r border-t border-b border-white/10" data-index="${index}" ${animationDelay}>
                 <div class="tile-preview flex flex-col w-full">
-                    <!-- 全寬強調色頂欄：類別在左，更新時間在右 -->
-                    <div class="tile-header w-full ${currentThemeColor} px-5 py-2 flex items-center justify-between shadow-sm">
+                    <!-- 全寬強調色頂欄 -->
+                    <div class="tile-header w-full ${currentThemeColor} px-4 py-1.5 flex items-center justify-between shadow-sm">
                         <div class="flex items-center space-x-2">
                             <span class="text-xs font-bold tracking-wider text-white uppercase">${catName}</span>
                             ${hasCachedAI ? '<span class="text-[10px] bg-black/30 text-fuchsia-200 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
@@ -536,17 +537,17 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                         </div>
                     </div>
                     
-                    <!-- 全黑背景主體區域：標題與縮圖置中對齊 -->
-                    <div class="tile-body bg-black px-5 py-4 flex flex-row items-center justify-between min-h-[95px]">
+                    <!-- 主體黑半透明內容區：內容置中 -->
+                    <div class="tile-body bg-black/80 px-4 py-3.5 flex flex-row items-center justify-between min-h-[95px]">
                         <div class="flex-grow pr-2 flex flex-col justify-center">
-                            <h3 class="news-title text-lg md:text-xl font-bold leading-snug line-clamp-3 ${titleColorClass}">${news.title}</h3>
+                            <h3 class="news-title text-base md:text-lg font-bold leading-snug line-clamp-3 ${titleColorClass}">${news.title}</h3>
                         </div>
                         ${thumbHtml}
                     </div>
                 </div>
 
                 <!-- 展開詳情區域 -->
-                <div class="tile-details bg-black">
+                <div class="tile-details bg-black/90">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
@@ -571,7 +572,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/50 px-5 py-6 border-t border-white/10">
+                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/60 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
                         </div>
@@ -585,11 +586,10 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     else DOM.newsGrid.innerHTML = htmlContent;
 }
 
-// 🚀 全站事件委派 (Event Delegation) 系統
+// 🚀 事件委派 (Event Delegation) 系統
 DOM.newsGrid?.addEventListener('click', async (e) => {
     const target = e.target;
 
-    // 1. 圖片燈箱觸發
     if (target.classList.contains('lightbox-img') || target.classList.contains('gallery-img')) {
         e.stopPropagation();
         const fullSrc = target.getAttribute('data-full') || target.src;
@@ -597,7 +597,6 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         return;
     }
 
-    // 2. 輪播上一張 / 下一張按鈕
     if (target.classList.contains('btn-prev-img')) {
         e.stopPropagation();
         const scrollBox = target.closest('.img-container')?.querySelector('.img-scroll-box');
@@ -611,7 +610,6 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         return;
     }
 
-    // 3. AI 總結按鈕
     const aiBtn = target.closest('.ai-btn');
     if (aiBtn) {
         e.stopPropagation();
@@ -645,7 +643,6 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         return;
     }
 
-    // 4. 收藏按鈕
     const bookmarkBtn = target.closest('.bookmark-btn');
     if (bookmarkBtn) {
         e.stopPropagation();
@@ -655,7 +652,6 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         return;
     }
 
-    // 5. 分享按鈕
     const shareBtn = target.closest('.share-btn');
     if (shareBtn) {
         e.stopPropagation();
@@ -672,7 +668,6 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         return;
     }
 
-    // 6. 磚塊 (Tile) 展開 / 收起觸發
     const tile = target.closest('.metro-tile');
     if (tile && !target.closest('button')) {
         const index = parseInt(tile.getAttribute('data-index'));
@@ -843,7 +838,7 @@ function renderCategoryManager() {
         allBaseCats.forEach((cat) => {
             const isVisible = visibleCatIds.includes(cat.id);
             const label = document.createElement('label');
-            label.className = 'flex items-center justify-between bg-white/5 hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/5';
+            label.className = 'flex items-center justify-between bg-black/60 hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/10';
             label.innerHTML = `
                 <span class="text-base font-light text-gray-200">${cat.name}</span>
                 <input type="checkbox" class="w-5 h-5 accent-blue-600 cursor-pointer" ${isVisible ? 'checked' : ''} data-id="${cat.id}">
@@ -880,7 +875,7 @@ function renderCategoryManager() {
     customCategoriesOnly.forEach((cat) => {
         const realIndex = categories.findIndex(c => c.id === cat.id);
         const row = document.createElement('div');
-        row.className = 'flex justify-between items-center bg-white/5 px-4 py-3 mb-2 rounded border border-white/5';
+        row.className = 'flex justify-between items-center bg-black/60 px-4 py-3 mb-2 rounded border border-white/10';
         row.innerHTML = `
             <span class="text-base font-light text-gray-200">${cat.name} <span class="text-[10px] text-blue-300 ml-1">(關鍵字)</span></span>
             <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30 rounded" onclick="deleteCategory(${realIndex})">刪除</button>
@@ -918,6 +913,7 @@ colorButtons.forEach(btn => {
         e.target.classList.remove('border-transparent');
         e.target.classList.add('border-white');
         currentThemeColor = e.target.getAttribute('data-color');
+        currentThemeBorder = e.target.getAttribute('data-border');
         if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles(currentNewsData, false);
     });
 });
@@ -930,7 +926,8 @@ function updateFontSize() {
     localStorage.setItem('metro_font_size', currentFontSizePercent);
 }
 document.getElementById('btn-font-minus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
-document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (currentFontSizePercent > 70) { currentFontSizePercent -= 10; updateFontSize(); } });
+document.getElementById('btn-font-[#plus]')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
+document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
 document.getElementById('btn-font-reset')?.addEventListener('click', () => { currentFontSizePercent = 110; updateFontSize(); });
 
 window.addEventListener('DOMContentLoaded', () => { 
