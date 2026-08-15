@@ -47,8 +47,9 @@ let categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
 let currentIndex = 0;
 let currentNewsData = [];      
 let newsCache = {}; 
-let currentThemeColor = 'bg-blue-600'; 
-let currentThemeBorder = 'border-blue-500';
+let currentThemeBorder = 'border-emerald-500';
+let currentThemeText = 'text-emerald-400';
+let currentThemeBg = 'bg-emerald-600';
 
 let currentPage = 0;
 let isLoadingMore = false;
@@ -212,7 +213,7 @@ function handlePageChange() {
     releaseWakeLock();
     
     DOM.gallerySearchContainer?.classList.add('hidden');
-    if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 gap-[3px] auto-rows-auto';
+    if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 auto-rows-auto';
 
     if (currentCat.id === 'settings') {
         DOM.newsGrid?.classList.add('hidden');
@@ -229,7 +230,7 @@ function handlePageChange() {
         DOM.settingsView?.classList.remove('flex');
         DOM.newsGrid?.classList.remove('hidden');
         DOM.gallerySearchContainer?.classList.remove('hidden');
-        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-[3px] auto-rows-auto px-5'; 
+        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4'; 
         
         currentSearchQuery = DOM.gallerySearchInput?.value.trim() || 'Japan travel';
         loadGalleryUI(false);
@@ -287,18 +288,18 @@ function markAsRead(link, titleElement) {
     }
 }
 
-/* 骨架屏：支援 Accent 左邊條與深色底圖相容 */
+/* 懸浮半透明卡片骨架屏 */
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="metro-tile bg-[#12111a]/90 border-l-4 ${currentThemeBorder} border-r border-t border-b border-white/10 flex flex-col pointer-events-none opacity-100">
-                <div class="w-full ${currentThemeColor} px-4 py-1.5 flex justify-between items-center">
+            <div class="metro-tile ${currentThemeBorder} flex flex-col pointer-events-none opacity-100 p-4">
+                <div class="w-full flex justify-between items-center mb-3">
                     <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
                     <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
                 </div>
-                <div class="bg-black/80 px-4 py-3.5 flex flex-row items-center justify-between min-h-[95px]">
+                <div class="flex flex-row items-center justify-between min-h-[75px]">
                     <div class="flex-grow pr-3 space-y-2">
                         <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
                         <div class="w-4/5 h-4 skeleton-pulse rounded-xs"></div>
@@ -316,12 +317,12 @@ function appendBottomSkeletons(count = 3) {
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
-            <div class="bottom-skeleton-item metro-tile bg-[#12111a]/90 border-l-4 ${currentThemeBorder} border-r border-t border-b border-white/10 flex flex-col pointer-events-none opacity-100">
-                <div class="w-full ${currentThemeColor} px-4 py-1.5 flex justify-between items-center">
+            <div class="bottom-skeleton-item metro-tile ${currentThemeBorder} flex flex-col pointer-events-none opacity-100 p-4">
+                <div class="w-full flex justify-between items-center mb-3">
                     <div class="w-12 h-3.5 skeleton-pulse rounded-xs"></div>
                     <div class="w-16 h-3.5 skeleton-pulse rounded-xs"></div>
                 </div>
-                <div class="bg-black/80 px-4 py-3.5 flex flex-row items-center justify-between min-h-[95px]">
+                <div class="flex flex-row items-center justify-between min-h-[75px]">
                     <div class="flex-grow pr-3 space-y-2">
                         <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
                         <div class="w-3/4 h-4 skeleton-pulse rounded-xs"></div>
@@ -478,7 +479,7 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
-/* 渲染卡片 (包含全寬頂欄 + Accent 左邊條 + 暗黑置中區域) */
+/* ✨ 核心精修：全懸浮暗黑半透明卡片 + 左側 Accent 彩色邊條 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -523,22 +524,22 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         }
 
         htmlContent += `
-            <article class="metro-tile bg-[#12111a]/90 border-l-4 ${currentThemeBorder} border-r border-t border-b border-white/10" data-index="${index}" ${animationDelay}>
-                <div class="tile-preview flex flex-col w-full">
-                    <!-- 全寬強調色頂欄 -->
-                    <div class="tile-header w-full ${currentThemeColor} px-4 py-1.5 flex items-center justify-between shadow-sm">
+            <article class="metro-tile ${currentThemeBorder}" data-index="${index}" ${animationDelay}>
+                <div class="tile-preview flex flex-col w-full p-4">
+                    <!-- 上排：類別 Tag + 時間 (精緻簡約排版) -->
+                    <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center space-x-2">
-                            <span class="text-xs font-bold tracking-wider text-white uppercase">${catName}</span>
-                            ${hasCachedAI ? '<span class="text-[10px] bg-black/30 text-fuchsia-200 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
+                            <span class="text-xs font-bold tracking-wider uppercase ${currentThemeText}">${catName}</span>
+                            ${hasCachedAI ? '<span class="text-[10px] bg-fuchsia-950/80 text-fuchsia-300 border border-fuchsia-500/30 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
                         </div>
                         <div class="flex items-center space-x-2">
-                            <span class="text-xs text-white/90 font-medium tracking-wide">${timeAgo(news.pubDate)}</span>
+                            <span class="text-xs text-white/50 tracking-wider font-medium">${timeAgo(news.pubDate)}</span>
                             ${isSaved ? '<span class="text-xs text-yellow-300">★</span>' : ''}
                         </div>
                     </div>
                     
-                    <!-- 主體黑半透明內容區：內容置中 -->
-                    <div class="tile-body bg-black/80 px-4 py-3.5 flex flex-row items-center justify-between min-h-[95px]">
+                    <!-- 下排：標題與縮圖垂直置中 -->
+                    <div class="flex flex-row items-center justify-between min-h-[75px]">
                         <div class="flex-grow pr-2 flex flex-col justify-center">
                             <h3 class="news-title text-base md:text-lg font-bold leading-snug line-clamp-3 ${titleColorClass}">${news.title}</h3>
                         </div>
@@ -547,11 +548,11 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                 </div>
 
                 <!-- 展開詳情區域 -->
-                <div class="tile-details bg-black/90">
+                <div class="tile-details bg-black/60 border-t border-white/10">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
                             <div class="flex justify-between items-center mb-2 mt-2 px-5">
-                                <span class="${currentThemeColor} text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
+                                <span class="${currentThemeBg} text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
                                 <div class="flex space-x-4">
                                     <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors">✨ AI 總結</button>
                                     <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors">分享 ↗</button>
@@ -912,8 +913,27 @@ colorButtons.forEach(btn => {
         colorButtons.forEach(b => { b.classList.remove('border-white'); b.classList.add('border-transparent'); });
         e.target.classList.remove('border-transparent');
         e.target.classList.add('border-white');
-        currentThemeColor = e.target.getAttribute('data-color');
-        currentThemeBorder = e.target.getAttribute('data-border');
+        
+        const color = e.target.getAttribute('data-color');
+        currentThemeBg = color;
+        
+        if (color === 'bg-blue-600') {
+            currentThemeBorder = 'border-blue-500';
+            currentThemeText = 'text-blue-400';
+        } else if (color === 'bg-green-600') {
+            currentThemeBorder = 'border-emerald-500';
+            currentThemeText = 'text-emerald-400';
+        } else if (color === 'bg-purple-700') {
+            currentThemeBorder = 'border-purple-500';
+            currentThemeText = 'text-purple-400';
+        } else if (color === 'bg-red-600') {
+            currentThemeBorder = 'border-red-500';
+            currentThemeText = 'text-red-400';
+        } else if (color === 'bg-orange-600') {
+            currentThemeBorder = 'border-orange-500';
+            currentThemeText = 'text-orange-400';
+        }
+
         if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles(currentNewsData, false);
     });
 });
@@ -926,7 +946,6 @@ function updateFontSize() {
     localStorage.setItem('metro_font_size', currentFontSizePercent);
 }
 document.getElementById('btn-font-minus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
-document.getElementById('btn-font-[#plus]')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
 document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
 document.getElementById('btn-font-reset')?.addEventListener('click', () => { currentFontSizePercent = 110; updateFontSize(); });
 
