@@ -16,14 +16,12 @@
 </head>
 <body class="h-screen w-screen flex flex-col pt-4 relative bg-black select-none">
 
-    <!-- 暗黑香港全境地圖背景容器 (Fixed Background Layer) -->
+    <!-- ✨ 暗黑香港全境地圖背景容器：調亮地圖並調輕遮罩，確保清晰可見 -->
     <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <!-- 香港地圖向量暗黑底圖 -->
         <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1600&q=80" 
-             class="w-full h-full object-cover opacity-20 filter grayscale contrast-150 brightness-40 scale-105" 
+             class="w-full h-full object-cover opacity-45 filter grayscale-[60%] brightness-90 scale-105" 
              alt="HK Dark Map Background">
-        <!-- 暗黑漸變遮罩：確保地圖紋理不干擾文字可讀性 -->
-        <div class="absolute inset-0 bg-gradient-to-b from-black/70 via-black/85 to-black"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/90"></div>
     </div>
 
     <!-- 圖片全螢幕燈箱 (Lightbox) -->
@@ -52,7 +50,7 @@
             <div class="loader"></div>
         </div>
         
-        <div id="news-grid" class="grid grid-cols-1 gap-[3px] auto-rows-auto"></div>
+        <div id="news-grid" class="grid grid-cols-1 auto-rows-auto"></div>
 
         <div id="scroll-loading" class="w-full h-16 flex items-center justify-center hidden">
             <div class="loader-small"></div>
@@ -83,11 +81,11 @@
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">accent color</p>
                 <div class="flex space-x-3">
-                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-white" data-color="bg-blue-600" data-border="border-blue-500"></button>
-                    <button class="color-btn w-10 h-10 bg-green-600 border-2 border-transparent" data-color="bg-green-600" data-border="border-green-500"></button>
-                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent" data-color="bg-purple-700" data-border="border-purple-500"></button>
-                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent" data-color="bg-red-600" data-border="border-red-500"></button>
-                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent" data-color="bg-orange-600" data-border="border-orange-500"></button>
+                    <button class="color-btn w-10 h-10 bg-emerald-600 border-2 border-white" data-color="bg-emerald-600" data-border="border-emerald-500" data-text="text-emerald-400"></button>
+                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-transparent" data-color="bg-blue-600" data-border="border-blue-500" data-text="text-blue-400"></button>
+                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent" data-color="bg-purple-700" data-border="border-purple-500" data-text="text-purple-400"></button>
+                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent" data-color="bg-red-600" data-border="border-red-500" data-text="text-red-400"></button>
+                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent" data-color="bg-orange-600" data-border="border-orange-500" data-text="text-orange-400"></button>
                 </div>
             </div>
 
