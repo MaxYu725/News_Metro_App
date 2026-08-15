@@ -14,9 +14,19 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
 </head>
-<body class="h-screen w-screen flex flex-col pt-4 relative bg-black">
+<body class="h-screen w-screen flex flex-col pt-4 relative bg-black select-none">
 
-    <!-- 🚀 移除 backdrop-blur 效能殺手，改用純色高半透明 bg-black/95 -->
+    <!-- 暗黑香港全境地圖背景容器 (Fixed Background Layer) -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <!-- 香港地圖向量暗黑底圖 -->
+        <img src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&w=1600&q=80" 
+             class="w-full h-full object-cover opacity-20 filter grayscale contrast-150 brightness-40 scale-105" 
+             alt="HK Dark Map Background">
+        <!-- 暗黑漸變遮罩：確保地圖紋理不干擾文字可讀性 -->
+        <div class="absolute inset-0 bg-gradient-to-b from-black/70 via-black/85 to-black"></div>
+    </div>
+
+    <!-- 圖片全螢幕燈箱 (Lightbox) -->
     <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-200">
         <button id="lightbox-close" class="absolute top-6 right-6 text-white text-4xl font-light hover:text-gray-400 z-10 px-4 py-2">&times;</button>
         <div class="relative w-full h-full flex justify-center items-center overflow-hidden">
@@ -25,32 +35,34 @@
         <p class="absolute bottom-6 text-gray-400 text-xs tracking-widest uppercase">雙指縮放 · 雙擊還原</p>
     </div>
 
-    <header class="flex-shrink-0 px-5">
+    <!-- 頂部導覽列 (Header Pivot) -->
+    <header class="flex-shrink-0 px-5 relative z-10">
         <nav class="flex space-x-6 text-2xl mb-4 text-gray-500 overflow-x-auto hide-scrollbar justify-start" id="nav-menu"></nav>
     </header>
 
-    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative scroll-smooth" id="main-container">
+    <!-- 主內容滾動區域 -->
+    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative z-10 scroll-smooth" id="main-container">
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-150" style="height: 0px;"></div>
         
         <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20">
-            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-white/10 border border-white/30 px-4 py-3 text-white focus:outline-none focus:border-white text-lg rounded-none">
+            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-black/80 border border-white/30 px-4 py-3 text-white focus:outline-none focus:border-white text-lg rounded-none">
         </div>
 
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
             <div class="loader"></div>
         </div>
         
-        <div id="news-grid" class="grid grid-cols-1 gap-[2px] auto-rows-auto"></div>
+        <div id="news-grid" class="grid grid-cols-1 gap-[3px] auto-rows-auto"></div>
 
         <div id="scroll-loading" class="w-full h-16 flex items-center justify-center hidden">
             <div class="loader-small"></div>
         </div>
 
-        <!-- 🚀 移除 backdrop-blur-md，改用 bg-black/80 提升滾動幀率 -->
         <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-black/80 border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/30 active:scale-95">
             ↑
         </button>
 
+        <!-- 設定視圖 (Settings View) -->
         <div id="settings-view" class="hidden flex-col space-y-8 pb-10 px-5 mt-4">
             <h2 class="text-3xl font-light mb-2">settings</h2>
             
@@ -71,11 +83,11 @@
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">accent color</p>
                 <div class="flex space-x-3">
-                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-white" data-color="bg-blue-600"></button>
-                    <button class="color-btn w-10 h-10 bg-green-600 border-2 border-transparent" data-color="bg-green-600"></button>
-                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent" data-color="bg-purple-700"></button>
-                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent" data-color="bg-red-600"></button>
-                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent" data-color="bg-orange-600"></button>
+                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-white" data-color="bg-blue-600" data-border="border-blue-500"></button>
+                    <button class="color-btn w-10 h-10 bg-green-600 border-2 border-transparent" data-color="bg-green-600" data-border="border-green-500"></button>
+                    <button class="color-btn w-10 h-10 bg-purple-700 border-2 border-transparent" data-color="bg-purple-700" data-border="border-purple-500"></button>
+                    <button class="color-btn w-10 h-10 bg-red-600 border-2 border-transparent" data-color="bg-red-600" data-border="border-red-500"></button>
+                    <button class="color-btn w-10 h-10 bg-orange-600 border-2 border-transparent" data-color="bg-orange-600" data-border="border-orange-500"></button>
                 </div>
             </div>
 
