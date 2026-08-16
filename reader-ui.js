@@ -1,13 +1,25 @@
 import { openLightbox } from './lightbox.js';
+import { timeAgo } from './utils.js';
+import {
+    getReaderArticle,
+    getReaderArticleState,
+    markReaderArticleRead,
+    setArticleReaderActive,
+    loadReaderArticle,
+    summarizeReaderArticle,
+    toggleReaderBookmark,
+    syncReaderSourceTile,
+    refreshReaderViewAfterClose
+} from './app.js';
 
 let overlay = null;
 let sourceTile = null;
-let sourceObserver = null;
+let currentArticle = null;
 let savedScrollTop = 0;
-let pendingOpen = null;
 let historyPushed = false;
-let closingProgrammatically = false;
 let restoreFocusTarget = null;
+let openSequence = 0;
+let bookmarkChanged = false;
 
 const DOM = {};
 
@@ -66,34 +78,23 @@ function ensureOverlay() {
     DOM.aiText = overlay.querySelector('.reader-ai-text');
     DOM.aiTrigger = overlay.querySelector('[data-reader-action="ai"]');
     DOM.content = overlay.querySelector('.reader-content');
-    DOM.bookmarkButtons = [...overlay.querySelectorAll('[data-reader-action="bookmark"]')];
+    DOM.bookmark = overlay.querySelector('[data-reader-action="bookmark"]');
 
     DOM.close.addEventListener('click', () => closeReader());
 
-    overlay.addEventListener('click', event => {
+    overlay.addEventListener('click', async event => {
         const action = event.target.closest('[data-reader-action]')?.dataset.readerAction;
-        if (!action || !sourceTile) return;
+        if (!action || !currentArticle) return;
 
         if (action === 'ai') {
-            sourceTile.querySelector('.ai-btn')?.click();
-            showReaderAILoading();
-            queueSync();
+            await handleAIAction();
         } else if (action === 'bookmark') {
-            const sourceButton = sourceTile.querySelector('.bookmark-btn');
-            const bookmarksActive = document.querySelector('.bottom-nav-btn[data-section="bookmarks"]')?.classList.contains('active');
-            const removingFromBookmarks = !!bookmarksActive && !!sourceButton?.classList.contains('saved');
-
-            if (removingFromBookmarks) {
-                collapseSourceTile();
-                sourceButton?.click();
-                closeReader();
-                return;
-            }
-
-            sourceButton?.click();
-            queueSync();
+            const saved = toggleReaderBookmark(currentArticle);
+            bookmarkChanged = true;
+            syncBookmarkState(saved);
+            syncReaderSourceTile(sourceTile, currentArticle);
         } else if (action === 'share') {
-            sourceTile.querySelector('.share-btn')?.click();
+            await shareCurrentArticle();
         }
     });
 
@@ -109,67 +110,110 @@ function ensureOverlay() {
 
 function isReaderTrigger(target, tile) {
     if (!tile?.querySelector('.tile-preview')) return false;
-    if (target.closest('button, input, a, .lightbox-img, .gallery-img, .img-scroll-box')) return false;
+    if (target.closest('button, input, a, .gallery-img')) return false;
     return true;
 }
 
-function visibleCategoryText(tile) {
+function readerCategory(tile, article, state) {
     const fresh = tile.querySelector('.fresh-label')?.textContent?.trim();
-    if (fresh) return fresh;
-
-    const category = tile.querySelector('.tile-preview > div:first-child > div:first-child span');
-    return category?.textContent?.trim() || '新聞';
+    if (fresh) return `${fresh.replace(/^●\s*/, '')} · ${state.category}`;
+    return state.category || article.category || '新聞';
 }
 
-function timeText(tile) {
-    const spans = tile.querySelectorAll('.tile-preview span');
-    for (const span of spans) {
-        const text = span.textContent?.trim() || '';
-        if (/^(\d+\s*(分鐘|小時|天)前)$/.test(text)) return text;
-    }
-
-    return tile.querySelector('.tile-details p.text-xs')?.textContent?.trim() || '';
-}
-
-function buildReaderMedia(tile) {
-    const fullImages = [...tile.querySelectorAll('.img-scroll-box img')];
-    const images = fullImages.length > 0
-        ? fullImages
-        : [...tile.querySelectorAll('.tile-preview img')].slice(0, 1);
+function buildReaderMedia(article) {
+    const imageUrls = Array.isArray(article?.images) && article.images.length > 0
+        ? article.images.filter(Boolean)
+        : (article?.imageUrl ? [article.imageUrl] : []);
 
     DOM.media.innerHTML = '';
-    DOM.media.classList.toggle('hidden', images.length === 0);
-    if (images.length === 0) return;
+    DOM.media.classList.toggle('hidden', imageUrls.length === 0);
+    if (imageUrls.length === 0) return;
 
     const track = document.createElement('div');
     track.className = 'reader-media-track hide-scrollbar';
 
-    images.forEach(source => {
+    imageUrls.forEach(src => {
         const img = document.createElement('img');
         img.className = 'reader-image';
-        img.src = source.currentSrc || source.src;
-        img.alt = source.alt || '新聞圖片';
+        img.src = src;
+        img.alt = '新聞圖片';
         img.loading = 'eager';
         img.referrerPolicy = 'no-referrer';
         img.dataset.readerLightbox = '1';
-        img.dataset.full = source.getAttribute('data-full') || source.currentSrc || source.src;
+        img.dataset.full = src;
         track.appendChild(img);
     });
 
     DOM.media.appendChild(track);
 
-    if (images.length > 1) {
+    if (imageUrls.length > 1) {
         const count = document.createElement('div');
         count.className = 'reader-media-count';
-        count.textContent = `${images.length} 圖 · 左右滑動`;
+        count.textContent = `${imageUrls.length} 圖 · 左右滑動`;
         DOM.media.appendChild(count);
     }
 }
 
-function normalizeAIText(text) {
-    if (!text) return '';
-    if (text.includes('Llama 3') || text.includes('引擎運算')) return '正在整理新聞重點…';
-    return text;
+function appendParagraphs(container, text) {
+    const paragraphs = String(text || '')
+        .split('\n')
+        .map(part => part.trim())
+        .filter(Boolean);
+
+    if (paragraphs.length === 0) {
+        const p = document.createElement('p');
+        p.textContent = '暫無詳細內文。';
+        container.appendChild(p);
+        return;
+    }
+
+    paragraphs.forEach(textPart => {
+        const p = document.createElement('p');
+        p.textContent = textPart;
+        container.appendChild(p);
+    });
+}
+
+function renderReaderContent(text, { loading = false, error = '' } = {}) {
+    DOM.content.innerHTML = '';
+    appendParagraphs(DOM.content, text);
+
+    if (loading) {
+        const skeleton = document.createElement('div');
+        skeleton.className = 'article-skeleton-container';
+        skeleton.innerHTML = `
+            <div class="reader-content-status">
+                <span class="loader-small"></span>
+                <span>正在載入完整文章...</span>
+            </div>
+            <div class="space-y-3 opacity-50">
+                <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                <div class="w-11/12 h-4 skeleton-pulse rounded-xs"></div>
+                <div class="w-4/5 h-4 skeleton-pulse rounded-xs"></div>
+                <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+            </div>
+        `;
+        DOM.content.appendChild(skeleton);
+    } else if (error) {
+        const status = document.createElement('p');
+        status.className = 'reader-content-status reader-content-error';
+        status.textContent = '完整文章暫時未能載入，現顯示已有內容。';
+        DOM.content.appendChild(status);
+    }
+}
+
+function syncBookmarkState(saved) {
+    DOM.bookmark.textContent = saved ? '★' : '☆';
+    DOM.bookmark.setAttribute('aria-label', saved ? '取消收藏' : '收藏新聞');
+    DOM.bookmark.classList.toggle('saved', saved);
+}
+
+function syncAIState(summary = '') {
+    const visible = !!summary;
+    DOM.ai.classList.toggle('hidden', !visible);
+    DOM.ai.classList.remove('loading');
+    DOM.aiTrigger?.classList.toggle('active', visible);
+    if (visible) DOM.aiText.textContent = summary;
 }
 
 function showReaderAILoading() {
@@ -179,145 +223,134 @@ function showReaderAILoading() {
     DOM.aiTrigger?.classList.add('active');
 }
 
-function syncReaderAI() {
-    if (!sourceTile) return;
+async function handleAIAction() {
+    if (!currentArticle) return;
+    const articleAtStart = currentArticle;
+    showReaderAILoading();
 
-    const aiBox = sourceTile.querySelector('.ai-box');
-    const aiText = sourceTile.querySelector('.ai-summary-text');
-    const text = normalizeAIText(aiText?.textContent?.trim() || '');
-    const visible = !!aiBox && !aiBox.classList.contains('hidden') && !!text;
+    const result = await summarizeReaderArticle(articleAtStart);
+    if (currentArticle !== articleAtStart || !overlay?.classList.contains('open')) return;
 
-    DOM.ai.classList.toggle('hidden', !visible);
-    DOM.ai.classList.toggle('loading', text === '正在整理新聞重點…');
-    DOM.aiTrigger?.classList.toggle('active', visible);
-    if (visible) DOM.aiText.textContent = text;
+    if (result.success && result.summary) {
+        syncAIState(result.summary);
+        syncReaderSourceTile(sourceTile, articleAtStart);
+    } else {
+        DOM.ai.classList.remove('hidden', 'loading');
+        DOM.aiText.textContent = '⚠️ 總結失敗，請稍後再試。';
+        DOM.aiTrigger?.classList.remove('active');
+    }
 }
 
-function syncReaderBookmark() {
-    if (!sourceTile) return;
+async function shareCurrentArticle() {
+    if (!currentArticle) return;
 
-    const sourceButton = sourceTile.querySelector('.bookmark-btn');
-    const saved = !!sourceButton?.classList.contains('saved') || sourceButton?.textContent?.includes('已收藏');
-
-    DOM.bookmarkButtons.forEach(button => {
-        button.textContent = saved ? '★' : '☆';
-        button.setAttribute('aria-label', saved ? '取消收藏' : '收藏新聞');
-        button.classList.toggle('saved', saved);
-    });
-}
-
-function syncReaderContent() {
-    if (!sourceTile) return;
-
-    const sourceContent = sourceTile.querySelector('.article-content-body');
-    if (!sourceContent) return;
-
-    DOM.content.innerHTML = sourceContent.innerHTML;
-    DOM.content.querySelectorAll('.lightbox-img').forEach(image => {
-        image.dataset.readerLightbox = '1';
-    });
-}
-
-function syncReader() {
-    if (!sourceTile || !overlay?.classList.contains('open')) return;
-    syncReaderAI();
-    syncReaderBookmark();
-    syncReaderContent();
-}
-
-function queueSync() {
-    queueMicrotask(syncReader);
-    setTimeout(syncReader, 80);
-}
-
-function observeSourceTile() {
-    sourceObserver?.disconnect();
-    if (!sourceTile) return;
-
-    sourceObserver = new MutationObserver(() => queueSync());
-    sourceObserver.observe(sourceTile, {
-        subtree: true,
-        childList: true,
-        characterData: true,
-        attributes: true,
-        attributeFilter: ['class']
-    });
-}
-
-function fillReaderHeader(tile) {
-    DOM.category.textContent = visibleCategoryText(tile);
-    DOM.time.textContent = timeText(tile);
-    DOM.title.textContent = tile.querySelector('.news-title')?.textContent?.trim()
-        || tile.querySelector('.tile-details h3')?.textContent?.trim()
-        || '新聞';
-}
-
-function openReader(tile, scrollTop) {
-    if (!tile || overlay?.classList.contains('open')) {
-        document.body.classList.remove('reader-preparing');
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: currentArticle.title,
+                text: '看看這則新聞！',
+                url: currentArticle.link
+            });
+        } catch (err) {}
         return;
     }
 
+    try {
+        await navigator.clipboard.writeText(currentArticle.link);
+        alert('已複製新聞連結！');
+    } catch (err) {
+        alert('未能複製新聞連結。');
+    }
+}
+
+function fillReader(article, tile) {
+    const state = getReaderArticleState(article);
+    DOM.category.textContent = readerCategory(tile, article, state);
+    DOM.time.textContent = article.pubDate ? timeAgo(article.pubDate) : '';
+    DOM.title.textContent = article.title || '新聞';
+    buildReaderMedia(article);
+    syncBookmarkState(state.saved);
+    syncAIState(state.aiSummary);
+    renderReaderContent(article.description || '暫無詳細內文。', {
+        loading: !article.isFullContentLoaded
+    });
+}
+
+async function hydrateFullArticle(article, sequence) {
+    if (article.isFullContentLoaded) return;
+
+    const result = await loadReaderArticle(article);
+    if (
+        sequence !== openSequence
+        || currentArticle !== article
+        || !overlay?.classList.contains('open')
+    ) return;
+
+    renderReaderContent(result.content || article.description || '', {
+        loading: false,
+        error: result.success ? '' : result.error
+    });
+}
+
+function openReader(tile, scrollTop) {
+    if (!tile || overlay?.classList.contains('open')) return;
+
+    const article = getReaderArticle(tile);
+    if (!article) return;
+
     ensureOverlay();
     sourceTile = tile;
+    currentArticle = article;
     savedScrollTop = scrollTop;
     restoreFocusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const sequence = ++openSequence;
+    bookmarkChanged = false;
 
-    fillReaderHeader(tile);
-    buildReaderMedia(tile);
-    syncReaderAI();
-    syncReaderBookmark();
-    syncReaderContent();
-    observeSourceTile();
+    markReaderArticleRead(article, tile);
+    fillReader(article, tile);
 
     DOM.scroll.scrollTop = 0;
     document.body.classList.add('reader-open');
     overlay.classList.add('open');
-    document.body.classList.remove('reader-preparing');
+    setArticleReaderActive(true);
 
     if (!historyPushed) {
         history.pushState({ metroReader: true }, '', location.href);
         historyPushed = true;
     }
 
+    hydrateFullArticle(article, sequence);
     requestAnimationFrame(() => DOM.close.focus({ preventScroll: true }));
-}
-
-function collapseSourceTile() {
-    if (!sourceTile?.classList.contains('expanded')) return;
-
-    closingProgrammatically = true;
-    sourceTile.dispatchEvent(new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-    }));
-    closingProgrammatically = false;
 }
 
 function finalizeClose() {
     if (!overlay?.classList.contains('open')) return;
 
-    sourceObserver?.disconnect();
-    sourceObserver = null;
+    const closingTile = sourceTile;
+    const closingArticle = currentArticle;
+    ++openSequence;
 
-    // Keep the Reader covering the feed while the original tile collapses.
-    // The original app handler remains authoritative for expanded/wake-lock state.
-    collapseSourceTile();
+    if (closingTile && closingArticle) {
+        refreshReaderViewAfterClose(closingTile, closingArticle, { bookmarkChanged });
+    }
 
     overlay.classList.remove('open');
-    document.body.classList.remove('reader-open', 'reader-preparing');
+    document.body.classList.remove('reader-open');
+    setArticleReaderActive(false);
 
     const main = document.getElementById('main-container');
     requestAnimationFrame(() => {
         if (main) main.scrollTop = savedScrollTop;
-        restoreFocusTarget?.focus?.({ preventScroll: true });
+        if (restoreFocusTarget?.isConnected) {
+            restoreFocusTarget.focus?.({ preventScroll: true });
+        }
     });
 
     sourceTile = null;
-    pendingOpen = null;
+    currentArticle = null;
     restoreFocusTarget = null;
     historyPushed = false;
+    bookmarkChanged = false;
 }
 
 function closeReader({ fromPopState = false } = {}) {
@@ -339,47 +372,17 @@ function initReader() {
     ensureOverlay();
 
     grid.addEventListener('click', event => {
-        if (closingProgrammatically) return;
-
-        const tile = event.target.closest('.metro-tile');
-        if (!isReaderTrigger(event.target, tile)) {
-            pendingOpen = null;
-            document.body.classList.remove('reader-preparing');
-            return;
-        }
-
-        // Hide the legacy inline detail expansion before app.js handles the click.
-        document.body.classList.add('reader-preparing');
-        pendingOpen = {
-            tile,
-            scrollTop: main.scrollTop
-        };
-    }, true);
-
-    grid.addEventListener('click', event => {
-        if (closingProgrammatically) return;
-
         const tile = event.target.closest('.metro-tile');
         if (!isReaderTrigger(event.target, tile)) return;
-
-        if (!tile.classList.contains('expanded')) {
-            pendingOpen = null;
-            document.body.classList.remove('reader-preparing');
-            return;
-        }
-
-        const scrollTop = pendingOpen?.tile === tile ? pendingOpen.scrollTop : main.scrollTop;
-        pendingOpen = null;
-        openReader(tile, scrollTop);
+        openReader(tile, main.scrollTop);
     });
 
     window.addEventListener('popstate', event => {
         if (!overlay?.classList.contains('open')) return;
 
-        // Closing the image Lightbox returns history to the Reader state.
-        // Stay in Reader in that case; only close when navigation leaves Reader state.
+        // Lightbox close/back returns to the Reader history state. Only a pop
+        // beyond that state exits the article Reader itself.
         if (event.state?.metroReader === true) return;
-
         closeReader({ fromPopState: true });
     });
 
