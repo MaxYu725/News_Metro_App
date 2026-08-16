@@ -1,6 +1,6 @@
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    background-color: #0a0d18;
+    background-color: #0a0d1a;
     color: #FFFFFF;
     overflow: hidden;
     transition: font-size 0.3s ease;
@@ -19,7 +19,7 @@ body {
     font-weight: 600;
 }
 
-/* 🚀 毛玻璃半透明卡片：50% 透明底 + 10px 模糊，完美平衡地圖透明度與內文可讀性 */
+/* 🚀 毛玻璃半透明卡片：52% 透明底 + 10px 模糊，完美透出背景靜態地圖與線條 */
 .metro-tile {
     position: relative;
     cursor: pointer;
