@@ -1,4 +1,4 @@
-const CACHE_NAME = 'metro-news-cache-v2';
+const CACHE_NAME = 'metro-news-cache-v3-mui1';
 
 const URLS_TO_CACHE = [
     './',
@@ -7,6 +7,9 @@ const URLS_TO_CACHE = [
     './app.js',
     './api.js',
     './utils.js',
+    './gestures.js',
+    './settings.js',
+    './lightbox.js',
     './manifest.json',
     './ic_launcher.png',
     'https://cdn.tailwindcss.com'
@@ -15,10 +18,7 @@ const URLS_TO_CACHE = [
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(cache => {
-                console.log('Opened cache v2');
-                return cache.addAll(URLS_TO_CACHE);
-            })
+            .then(cache => cache.addAll(URLS_TO_CACHE))
     );
     self.skipWaiting();
 });
@@ -39,17 +39,12 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-    // 修正：所有 API 請求（含 /api/news, /api/summarize, /api/article-full 等）及非 GET 請求均跳過 Service Worker
     if (event.request.url.includes('/api/') || event.request.method !== 'GET') {
-        return; 
+        return;
     }
+
     event.respondWith(
         caches.match(event.request)
-            .then(response => {
-                if (response) {
-                    return response;
-                }
-                return fetch(event.request);
-            })
+            .then(response => response || fetch(event.request))
     );
 });
