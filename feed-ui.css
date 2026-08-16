@@ -183,6 +183,16 @@ body[data-feed-density="compact"] .metro-tile.feed-card:not(.hero-tile) .tile-pr
     line-height: 1.3;
 }
 
+/* MUI-6C1 — keep the selected theme accent after Skeleton → feed-card enhancement. */
+.metro-tile.feed-card {
+    border-left-color: var(--metro-accent-color, #22d3ee) !important;
+}
+
+.density-btn.active {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.72);
+    background: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10);
+}
+
 @media (prefers-reduced-motion: reduce) {
     .metro-tile,
     .nav-link,
