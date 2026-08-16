@@ -10,6 +10,7 @@ import {
 let currentThemeBorder = 'border-l-cyan-400';
 let currentThemeText = 'text-cyan-400';
 let currentThemeBg = 'bg-cyan-500';
+let trackingStatusTimer = 0;
 
 export function getThemeClasses() {
     return { currentThemeBorder, currentThemeText, currentThemeBg };
@@ -25,30 +26,47 @@ function installTrackingSettingChrome() {
     const heading = section.querySelector(':scope > p');
     if (heading) heading.textContent = '追蹤主題';
 
-    if (!section.querySelector('[data-tracking-help]')) {
-        const help = document.createElement('p');
+    let help = section.querySelector('[data-tracking-help]');
+    if (!help) {
+        help = document.createElement('p');
         help.dataset.trackingHelp = '1';
         help.className = 'text-xs text-white/35 leading-relaxed -mt-1';
-        help.textContent = '追蹤後會直接加入新聞分類；亦可在搜尋結果一鍵追蹤或取消。';
         heading?.insertAdjacentElement('afterend', help);
     }
+    help.textContent = '追蹤後會加入新聞分類，也可在搜尋結果直接管理。';
 
     input.placeholder = '輸入主題，例如：天氣';
     input.setAttribute('aria-label', '輸入要追蹤的新聞主題');
+    input.classList.add('min-h-11');
     button.textContent = '追蹤';
+    button.classList.add('min-h-11');
 
-    if (!section.querySelector('[data-tracking-status]')) {
-        const status = document.createElement('p');
+    let status = section.querySelector('[data-tracking-status]');
+    if (!status) {
+        status = document.createElement('p');
         status.dataset.trackingStatus = '1';
-        status.className = 'text-xs text-cyan-300/70 min-h-[1rem]';
+        status.className = 'text-xs text-cyan-300/70';
         status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        status.setAttribute('aria-atomic', 'true');
         section.appendChild(status);
     }
 }
 
 function setTrackingStatus(message = '') {
     const status = document.querySelector('[data-tracking-status]');
-    if (status) status.textContent = message;
+    if (!status) return;
+
+    status.textContent = message;
+    if (trackingStatusTimer) window.clearTimeout(trackingStatusTimer);
+    trackingStatusTimer = 0;
+
+    if (!message) return;
+    trackingStatusTimer = window.setTimeout(() => {
+        const current = document.querySelector('[data-tracking-status]');
+        if (current) current.textContent = '';
+        trackingStatusTimer = 0;
+    }, 2200);
 }
 
 export function renderCategoryManager(allBaseCats, getCategories, saveVisibleCategories, saveCustomCategories, onCategoryUpdated) {
@@ -94,7 +112,7 @@ export function renderCategoryManager(allBaseCats, getCategories, saveVisibleCat
     const tracked = getTrackedCategories();
     if (tracked.length === 0) {
         const empty = document.createElement('div');
-        empty.className = 'border border-white/10 bg-[#13182a]/55 px-4 py-4';
+        empty.className = 'border border-white/10 bg-[#13182a]/55 px-3 py-3';
         empty.innerHTML = `
             <p class="text-sm text-gray-300">未有追蹤主題</p>
             <p class="text-xs text-white/35 mt-1 leading-relaxed">可在下方輸入，或在搜尋結果直接按「追蹤」。</p>
@@ -106,31 +124,22 @@ export function renderCategoryManager(allBaseCats, getCategories, saveVisibleCat
     tracked.forEach((cat) => {
         const keyword = normalizeTrackedKeyword(cat.query || cat.name);
         const row = document.createElement('div');
-        row.className = 'flex justify-between items-center gap-3 bg-[#161a2e]/70 backdrop-blur-md px-4 py-3 mb-2 border border-white/10';
-
-        const copy = document.createElement('div');
-        copy.className = 'min-w-0';
+        row.className = 'flex justify-between items-center gap-3 bg-[#161a2e]/70 backdrop-blur-md px-3 py-2.5 mb-1.5 border border-white/10';
 
         const title = document.createElement('span');
-        title.className = 'block text-base font-light text-gray-100 truncate';
+        title.className = 'min-w-0 block text-base font-light text-gray-100 truncate';
         title.textContent = keyword;
-
-        const meta = document.createElement('span');
-        meta.className = 'block text-[10px] uppercase tracking-widest text-cyan-300/60 mt-1';
-        meta.textContent = '已加入新聞分類';
-
-        copy.append(title, meta);
 
         const remove = document.createElement('button');
         remove.type = 'button';
-        remove.className = 'shrink-0 text-xs tracking-wider text-red-300/80 hover:text-red-200 px-3 min-h-9 border border-red-400/25';
+        remove.className = 'shrink-0 text-xs tracking-wider text-red-300/80 hover:text-red-200 px-3 min-h-10 border border-red-400/25';
         remove.textContent = '取消';
         remove.setAttribute('aria-label', `取消追蹤 ${keyword}`);
         remove.addEventListener('click', () => {
             untrackKeyword(cat.id);
         });
 
-        row.append(copy, remove);
+        row.append(title, remove);
         list.appendChild(row);
     });
 }
