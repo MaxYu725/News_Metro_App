@@ -20,12 +20,12 @@
 
     <div id="app-bg-container" class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#0a0d1a]"></div>
 
-    <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-200">
-        <button id="lightbox-close" class="absolute top-6 right-6 text-white text-4xl font-light hover:text-gray-400 z-10 px-4 py-2">&times;</button>
-        <div class="relative w-full h-full flex justify-center items-center overflow-hidden">
+    <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-200" role="dialog" aria-modal="true" aria-label="圖片檢視器" aria-hidden="true">
+        <button id="lightbox-close" type="button" class="absolute text-white text-4xl font-light hover:text-gray-400 z-10" aria-label="關閉圖片">&times;</button>
+        <div id="lightbox-stage" class="relative w-full h-full flex justify-center items-center overflow-hidden">
             <img id="lightbox-img" src="" class="max-w-full max-h-full object-contain transition-transform duration-100 ease-out origin-center" alt="全螢幕圖片">
         </div>
-        <p class="absolute bottom-6 text-gray-400 text-xs tracking-widest uppercase">雙指縮放 · 雙擊還原</p>
+        <p id="lightbox-hint" class="absolute text-gray-400 text-xs tracking-widest uppercase">雙指縮放 · 雙擊還原</p>
     </div>
 
     <header id="app-header" class="app-header flex-shrink-0 relative z-30">
@@ -77,7 +77,7 @@
             </div>
             <form id="gallery-search-form" class="search-form" role="search">
                 <input
-                    type="search"
+                    type="text"
                     id="gallery-search-input"
                     placeholder="搜尋圖片，例如：健身、楓葉"
                     autocomplete="off"

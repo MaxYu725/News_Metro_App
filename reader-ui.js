@@ -1,4 +1,4 @@
-import { openLightbox } from './lightbox.js';
+import { openLightbox, isLightboxOpen } from './lightbox.js';
 import { timeAgo } from './utils.js';
 import {
     getReaderArticle,
@@ -20,8 +20,17 @@ let historyPushed = false;
 let restoreFocusTarget = null;
 let openSequence = 0;
 let bookmarkChanged = false;
+let feedbackTimer = 0;
 
 const DOM = {};
+const APP_SHELL_IDS = ['app-header', 'main-container', 'bottom-nav'];
+
+function setAppShellInert(inert) {
+    APP_SHELL_IDS.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.inert = !!inert;
+    });
+}
 
 function ensureOverlay() {
     if (overlay) return overlay;
@@ -45,6 +54,8 @@ function ensureOverlay() {
                     <button type="button" class="reader-toolbar-btn" data-reader-action="share" aria-label="分享新聞">↗</button>
                 </div>
             </header>
+
+            <div class="reader-feedback" data-reader-feedback hidden role="status" aria-live="polite" aria-atomic="true"></div>
 
             <main class="reader-scroll" id="reader-scroll">
                 <article class="reader-article">
@@ -79,6 +90,7 @@ function ensureOverlay() {
     DOM.aiTrigger = overlay.querySelector('[data-reader-action="ai"]');
     DOM.content = overlay.querySelector('.reader-content');
     DOM.bookmark = overlay.querySelector('[data-reader-action="bookmark"]');
+    DOM.feedback = overlay.querySelector('[data-reader-feedback]');
 
     DOM.close.addEventListener('click', () => closeReader());
 
@@ -93,6 +105,7 @@ function ensureOverlay() {
             bookmarkChanged = true;
             syncBookmarkState(saved);
             syncReaderSourceTile(sourceTile, currentArticle);
+            showReaderFeedback(saved ? '已收藏' : '已取消收藏');
         } else if (action === 'share') {
             await shareCurrentArticle();
         }
@@ -106,6 +119,24 @@ function ensureOverlay() {
     });
 
     return overlay;
+}
+
+function showReaderFeedback(message = '') {
+    if (!DOM.feedback) return;
+    if (feedbackTimer) window.clearTimeout(feedbackTimer);
+    feedbackTimer = 0;
+
+    DOM.feedback.textContent = message;
+    DOM.feedback.hidden = !message;
+    if (!message) return;
+
+    feedbackTimer = window.setTimeout(() => {
+        if (DOM.feedback) {
+            DOM.feedback.textContent = '';
+            DOM.feedback.hidden = true;
+        }
+        feedbackTimer = 0;
+    }, 2200);
 }
 
 function isReaderTrigger(target, tile) {
@@ -132,11 +163,11 @@ function buildReaderMedia(article) {
     const track = document.createElement('div');
     track.className = 'reader-media-track hide-scrollbar';
 
-    imageUrls.forEach(src => {
+    imageUrls.forEach((src, index) => {
         const img = document.createElement('img');
         img.className = 'reader-image';
         img.src = src;
-        img.alt = '新聞圖片';
+        img.alt = imageUrls.length > 1 ? `新聞圖片 ${index + 1}` : '新聞圖片';
         img.loading = 'eager';
         img.referrerPolicy = 'no-referrer';
         img.dataset.readerLightbox = '1';
@@ -236,7 +267,7 @@ async function handleAIAction() {
         syncReaderSourceTile(sourceTile, articleAtStart);
     } else {
         DOM.ai.classList.remove('hidden', 'loading');
-        DOM.aiText.textContent = '⚠️ 總結失敗，請稍後再試。';
+        DOM.aiText.textContent = '總結失敗，請稍後再試。';
         DOM.aiTrigger?.classList.remove('active');
     }
 }
@@ -257,9 +288,9 @@ async function shareCurrentArticle() {
 
     try {
         await navigator.clipboard.writeText(currentArticle.link);
-        alert('已複製新聞連結！');
+        showReaderFeedback('已複製新聞連結');
     } catch (err) {
-        alert('未能複製新聞連結。');
+        showReaderFeedback('未能複製新聞連結');
     }
 }
 
@@ -271,6 +302,7 @@ function fillReader(article, tile) {
     buildReaderMedia(article);
     syncBookmarkState(state.saved);
     syncAIState(state.aiSummary);
+    showReaderFeedback('');
     renderReaderContent(article.description || '暫無詳細內文。', {
         loading: !article.isFullContentLoaded
     });
@@ -310,6 +342,7 @@ function openReader(tile, scrollTop) {
     fillReader(article, tile);
 
     DOM.scroll.scrollTop = 0;
+    setAppShellInert(true);
     document.body.classList.add('reader-open');
     overlay.classList.add('open');
     setArticleReaderActive(true);
@@ -336,7 +369,9 @@ function finalizeClose() {
 
     overlay.classList.remove('open');
     document.body.classList.remove('reader-open');
+    setAppShellInert(false);
     setArticleReaderActive(false);
+    showReaderFeedback('');
 
     const main = document.getElementById('main-container');
     requestAnimationFrame(() => {
@@ -364,6 +399,24 @@ function closeReader({ fromPopState = false } = {}) {
     finalizeClose();
 }
 
+function trapReaderFocus(event) {
+    if (event.key !== 'Tab' || !overlay?.classList.contains('open') || isLightboxOpen) return;
+
+    const focusables = [...overlay.querySelectorAll('button:not([disabled]):not([hidden])')]
+        .filter(element => element.offsetParent !== null);
+    if (focusables.length === 0) return;
+
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
 function initReader() {
     const grid = document.getElementById('news-grid');
     const main = document.getElementById('main-container');
@@ -387,9 +440,13 @@ function initReader() {
     });
 
     document.addEventListener('keydown', event => {
-        if (event.key === 'Escape' && overlay?.classList.contains('open')) {
+        if (!overlay?.classList.contains('open') || event.defaultPrevented || isLightboxOpen) return;
+        if (event.key === 'Escape') {
+            event.preventDefault();
             closeReader();
+            return;
         }
+        trapReaderFocus(event);
     });
 }
 
