@@ -13,6 +13,7 @@
     <link rel="apple-touch-icon" href="./ic_launcher.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
+    <link rel="stylesheet" href="./feed-ui.css">
 </head>
 <body class="h-screen w-screen flex flex-col relative bg-[#0a0d1a] text-white select-none overflow-hidden app-shell">
 
@@ -176,6 +177,7 @@
     </nav>
 
     <script type="module" src="./app.js"></script>
+    <script type="module" src="./feed-ui.js"></script>
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(()=>{}); }); }</script>
 </body>
 </html>
