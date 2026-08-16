@@ -1,0 +1,388 @@
+const RECENT_SEARCH_KEY = 'metro_news_recent_searches_v1';
+const SEARCH_SCROLL_KEY = 'metro_news_search_scroll_v1';
+const MAX_RECENT_SEARCHES = 6;
+
+const CSS = `
+#search-view {
+    padding-top: 10px;
+}
+
+#search-view .view-title-row {
+    margin-bottom: 10px;
+}
+
+#search-view .search-form {
+    position: relative;
+    min-height: 44px;
+    align-items: stretch;
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(14, 18, 32, 0.9);
+}
+
+#search-view .search-leading-icon {
+    width: 40px;
+    flex: 0 0 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.46);
+    font-size: 1.1rem;
+    pointer-events: none;
+}
+
+#search-view .search-input {
+    min-height: 44px;
+    padding: 0 8px 0 0;
+    font-size: 0.92rem;
+}
+
+#search-view .search-clear {
+    width: 40px;
+    flex: 0 0 40px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 1.15rem;
+}
+
+#search-view .search-form.has-value .search-clear {
+    display: inline-flex;
+}
+
+#search-view .search-submit {
+    min-width: 58px;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 0.72rem;
+}
+
+#search-view .search-hint {
+    margin-top: 7px;
+}
+
+.search-shortcuts {
+    margin: 6px -2px 2px;
+}
+
+.search-shortcut-group {
+    margin-top: 12px;
+}
+
+.search-shortcut-group[hidden] {
+    display: none;
+}
+
+.search-shortcut-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 2px 7px;
+}
+
+.search-shortcut-label {
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.search-shortcut-clear {
+    min-height: 30px;
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.42);
+    font-size: 0.64rem;
+}
+
+.search-chip-row {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    padding: 0 2px 3px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.search-chip-row::-webkit-scrollbar {
+    display: none;
+}
+
+.search-chip {
+    flex: 0 0 auto;
+    min-height: 34px;
+    max-width: min(72vw, 260px);
+    padding: 0 11px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 2px;
+    background: rgba(19, 24, 42, 0.68);
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.72rem;
+    line-height: 32px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-chip:active {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(56, 189, 248, 0.46);
+}
+
+.search-chip.search-chip-tracked {
+    border-color: rgba(56, 189, 248, 0.25);
+    color: rgba(125, 211, 252, 0.92);
+}
+
+@media (max-width: 420px) {
+    #search-view .view-subtitle {
+        display: none;
+    }
+
+    #search-view .view-title {
+        font-size: 1.55rem;
+    }
+}
+`;
+
+function readJSON(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+    } catch (error) {
+        return fallback;
+    }
+}
+
+function normalizeQuery(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function getRecentSearches() {
+    const values = readJSON(RECENT_SEARCH_KEY, []);
+    if (!Array.isArray(values)) return [];
+    return values.map(normalizeQuery).filter(Boolean).slice(0, MAX_RECENT_SEARCHES);
+}
+
+function saveRecentSearch(query) {
+    const clean = normalizeQuery(query);
+    if (!clean) return;
+
+    const next = [
+        clean,
+        ...getRecentSearches().filter(item => item.toLocaleLowerCase() !== clean.toLocaleLowerCase())
+    ].slice(0, MAX_RECENT_SEARCHES);
+
+    try {
+        localStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(next));
+    } catch (error) {}
+}
+
+function getTrackedKeywords() {
+    const custom = readJSON('metro_news_custom_cats', []);
+    if (!Array.isArray(custom)) return [];
+
+    const seen = new Set();
+    const result = [];
+    for (const item of custom) {
+        const query = normalizeQuery(item?.query || item?.name);
+        const key = query.toLocaleLowerCase();
+        if (!query || seen.has(key)) continue;
+        seen.add(key);
+        result.push(query);
+    }
+    return result.slice(0, 8);
+}
+
+function installStyles() {
+    if (document.getElementById('search-ui-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'search-ui-styles';
+    style.textContent = CSS;
+    document.head.appendChild(style);
+}
+
+function makeChip(query, tracked = false) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `search-chip${tracked ? ' search-chip-tracked' : ''}`;
+    button.dataset.searchShortcut = query;
+    button.textContent = query;
+    button.setAttribute('aria-label', `搜尋 ${query}`);
+    return button;
+}
+
+function installSearchChrome() {
+    const form = document.getElementById('news-search-form');
+    const input = document.getElementById('news-search-input');
+    const hint = document.getElementById('search-hint');
+    if (!form || !input || !hint || form.dataset.mui4aReady === '1') return;
+
+    form.dataset.mui4aReady = '1';
+    input.placeholder = '搜尋 HK01 新聞';
+
+    const icon = document.createElement('span');
+    icon.className = 'search-leading-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '⌕';
+    form.prepend(icon);
+
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'search-clear';
+    clear.setAttribute('aria-label', '清除搜尋');
+    clear.textContent = '×';
+    const submit = form.querySelector('.search-submit');
+    if (submit) form.insertBefore(clear, submit);
+    else form.appendChild(clear);
+
+    const shortcuts = document.createElement('div');
+    shortcuts.id = 'search-shortcuts';
+    shortcuts.className = 'search-shortcuts';
+    shortcuts.innerHTML = `
+        <section class="search-shortcut-group" data-search-recent hidden>
+            <div class="search-shortcut-heading">
+                <span class="search-shortcut-label">最近搜尋</span>
+                <button type="button" class="search-shortcut-clear" data-clear-recent>清除</button>
+            </div>
+            <div class="search-chip-row" data-search-recent-row></div>
+        </section>
+        <section class="search-shortcut-group" data-search-tracked hidden>
+            <div class="search-shortcut-heading">
+                <span class="search-shortcut-label">追蹤關鍵字</span>
+            </div>
+            <div class="search-chip-row" data-search-tracked-row></div>
+        </section>
+    `;
+    hint.insertAdjacentElement('afterend', shortcuts);
+
+    const syncValueState = () => form.classList.toggle('has-value', !!normalizeQuery(input.value));
+    input.addEventListener('input', syncValueState);
+    syncValueState();
+
+    clear.addEventListener('click', () => {
+        input.value = '';
+        syncValueState();
+        form.requestSubmit();
+        requestAnimationFrame(() => input.focus({ preventScroll: true }));
+    });
+
+    form.addEventListener('submit', () => {
+        const query = normalizeQuery(input.value);
+        if (query) {
+            input.value = query;
+            saveRecentSearch(query);
+            renderShortcuts();
+        }
+        syncValueState();
+    }, true);
+
+    shortcuts.addEventListener('click', event => {
+        const clearRecent = event.target.closest('[data-clear-recent]');
+        if (clearRecent) {
+            try { localStorage.removeItem(RECENT_SEARCH_KEY); } catch (error) {}
+            renderShortcuts();
+            return;
+        }
+
+        const chip = event.target.closest('[data-search-shortcut]');
+        if (!chip) return;
+        input.value = chip.dataset.searchShortcut || '';
+        syncValueState();
+        form.requestSubmit();
+    });
+}
+
+function renderShortcuts() {
+    const root = document.getElementById('search-shortcuts');
+    if (!root) return;
+
+    const recentGroup = root.querySelector('[data-search-recent]');
+    const recentRow = root.querySelector('[data-search-recent-row]');
+    const trackedGroup = root.querySelector('[data-search-tracked]');
+    const trackedRow = root.querySelector('[data-search-tracked-row]');
+
+    const recent = getRecentSearches();
+    if (recentRow && recentGroup) {
+        recentRow.replaceChildren(...recent.map(query => makeChip(query, false)));
+        recentGroup.hidden = recent.length === 0;
+    }
+
+    const tracked = getTrackedKeywords();
+    if (trackedRow && trackedGroup) {
+        trackedRow.replaceChildren(...tracked.map(query => makeChip(query, true)));
+        trackedGroup.hidden = tracked.length === 0;
+    }
+}
+
+function isSearchActive() {
+    return !!document.querySelector('.bottom-nav-btn[data-section="search"].active');
+}
+
+function readSavedScroll() {
+    const value = Number(sessionStorage.getItem(SEARCH_SCROLL_KEY));
+    return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function saveSearchScroll(main) {
+    if (!main) return;
+    try { sessionStorage.setItem(SEARCH_SCROLL_KEY, String(main.scrollTop || 0)); } catch (error) {}
+}
+
+function installScrollRestore() {
+    const bottomNav = document.getElementById('bottom-nav');
+    const main = document.getElementById('main-container');
+    if (!bottomNav || !main) return;
+
+    bottomNav.addEventListener('click', event => {
+        const button = event.target.closest('.bottom-nav-btn');
+        if (!button) return;
+
+        const targetSection = button.dataset.section;
+        const searchWasActive = isSearchActive();
+
+        if (searchWasActive && targetSection !== 'search') {
+            saveSearchScroll(main);
+            return;
+        }
+
+        if (!searchWasActive && targetSection === 'search') {
+            const restoreTop = readSavedScroll();
+            if (restoreTop <= 0) return;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (isSearchActive()) main.scrollTop = restoreTop;
+                });
+            });
+        }
+    }, true);
+}
+
+function observeTrackedKeywords() {
+    window.addEventListener('storage', event => {
+        if (event.key === 'metro_news_custom_cats') renderShortcuts();
+    });
+
+    const settingsView = document.getElementById('settings-view');
+    if (!settingsView) return;
+    new MutationObserver(() => renderShortcuts())
+        .observe(settingsView, { childList: true, subtree: true });
+}
+
+function initSearchUI() {
+    installStyles();
+    installSearchChrome();
+    renderShortcuts();
+    installScrollRestore();
+    observeTrackedKeywords();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSearchUI, { once: true });
+} else {
+    initSearchUI();
+}
