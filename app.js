@@ -66,10 +66,10 @@ const DOM = {
     appBgContainer: document.getElementById('app-bg-container')
 };
 
-// 🚀 隨機生成全 App 幾何背景
+// 🚀 高透光幾何背景初始化
 function initRandomBackground() {
     if (DOM.appBgContainer) {
-        DOM.appBgContainer.innerHTML = generateGeometricBackground() + '<div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/40 via-transparent to-[#0a0d1a]/85"></div>';
+        DOM.appBgContainer.innerHTML = generateGeometricBackground() + '<div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/20 via-transparent to-[#0a0d1a]/70"></div>';
     }
 }
 
@@ -516,7 +516,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     else DOM.newsGrid.innerHTML = htmlContent;
 }
 
-// 🚀 全站事件委派監聽
 DOM.newsGrid?.addEventListener('click', async (e) => {
     const target = e.target;
 
