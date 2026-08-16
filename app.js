@@ -389,7 +389,7 @@ function renderGalleryTiles(isAppendMode = false) {
     dataToRender.forEach((imgItem, relativeIndex) => {
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
         htmlContent += `
-            <article class="metro-tile relative group cursor-pointer overflow-hidden bg-[#12131c]/90 h-48 md:h-64 border border-white/10" ${animationDelay}>
+            <article class="metro-tile relative group cursor-pointer overflow-hidden h-48 md:h-64 border border-white/10" ${animationDelay}>
                 <img src="${imgItem.thumbUrl}" data-full="${imgItem.imageUrl}" class="gallery-img w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="Gallery Image" loading="lazy" referrerpolicy="no-referrer" />
                 <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                     <span class="text-[10px] text-white/80 uppercase tracking-widest leading-tight block truncate">${imgItem.tags}</span>
@@ -478,7 +478,7 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
-/* ✨ 核心重構：精緻左側條 + 清爽半透明底卡片 */
+/* ✨ 渲染卡片：完全移除黑底覆蓋，達成極致半透明穿透感 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -501,7 +501,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const catName = categoryMap[news.category] || news.category || '即時';
 
         let thumbHtml = news.imageUrl 
-            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/10 shadow-sm bg-black/40" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
+            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/15 shadow-sm bg-black/30" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
             : '';
 
         let imagesHtml = '';
@@ -509,13 +509,13 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
             let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-full object-cover block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
             
             let navButtons = news.images.length > 1 ? `
-                <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❮</button>
-                <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/70 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❯</button>
-                <div class="absolute bottom-1 right-1 bg-black/80 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10">${news.images.length} 圖</div>
+                <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❮</button>
+                <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❯</button>
+                <div class="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10">${news.images.length} 圖</div>
             ` : '';
             
             imagesHtml = `
-                <div class="img-container relative w-full h-52 md:h-64 flex-shrink-0 overflow-hidden bg-black/40 border border-white/10 rounded-xs shadow-md transition-all duration-200">
+                <div class="img-container relative w-full h-52 md:h-64 flex-shrink-0 overflow-hidden bg-black/30 border border-white/10 rounded-xs shadow-md transition-all duration-200">
                     <div class="img-scroll-box flex items-center h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>
                     ${navButtons}
                 </div>
@@ -529,10 +529,10 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center space-x-2">
                             <span class="text-xs font-bold tracking-wider uppercase ${currentThemeText}">${catName}</span>
-                            ${hasCachedAI ? '<span class="text-[10px] bg-fuchsia-950/80 text-fuchsia-300 border border-fuchsia-500/30 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
+                            ${hasCachedAI ? '<span class="text-[10px] bg-fuchsia-950/70 text-fuchsia-300 border border-fuchsia-500/30 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
                         </div>
                         <div class="flex items-center space-x-2">
-                            <span class="text-xs text-white/40 tracking-wider font-medium">${timeAgo(news.pubDate)}</span>
+                            <span class="text-xs text-white/50 tracking-wider font-medium">${timeAgo(news.pubDate)}</span>
                             ${isSaved ? '<span class="text-xs text-yellow-300">★</span>' : ''}
                         </div>
                     </div>
@@ -545,7 +545,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     </div>
                 </div>
 
-                <!-- 展開時的詳情卡片 -->
+                <!-- 展開時的詳情卡片：去除黑底，完全呈現半透明毛玻璃質感 -->
                 <div class="tile-details bg-transparent border-t border-white/10">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
@@ -562,7 +562,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             
                             <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-start">
                                 ${imagesHtml}
-                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-200 bg-fuchsia-950/60 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
+                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-200 bg-fuchsia-950/50 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
                                     <div class="flex items-center space-x-1.5 mb-2 flex-shrink-0">
                                         <span class="text-fuchsia-400 text-xs">✨</span>
                                         <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Workers AI 摘要</span>
@@ -571,7 +571,8 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/40 px-5 py-6 border-t border-white/10">
+                            <!-- 內文區塊：改用輕量半透明底 bg-black/20 確保兼顧清晰度與地圖透出 -->
+                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/20 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
                         </div>
@@ -837,7 +838,7 @@ function renderCategoryManager() {
         allBaseCats.forEach((cat) => {
             const isVisible = visibleCatIds.includes(cat.id);
             const label = document.createElement('label');
-            label.className = 'flex items-center justify-between bg-[#12131c]/90 hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/10';
+            label.className = 'flex items-center justify-between bg-[#161a2e]/70 backdrop-blur-md hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/10';
             label.innerHTML = `
                 <span class="text-base font-light text-gray-200">${cat.name}</span>
                 <input type="checkbox" class="w-5 h-5 accent-cyan-500 cursor-pointer" ${isVisible ? 'checked' : ''} data-id="${cat.id}">
@@ -874,7 +875,7 @@ function renderCategoryManager() {
     customCategoriesOnly.forEach((cat) => {
         const realIndex = categories.findIndex(c => c.id === cat.id);
         const row = document.createElement('div');
-        row.className = 'flex justify-between items-center bg-[#12131c]/90 px-4 py-3 mb-2 rounded border border-white/10';
+        row.className = 'flex justify-between items-center bg-[#161a2e]/70 backdrop-blur-md px-4 py-3 mb-2 rounded border border-white/10';
         row.innerHTML = `
             <span class="text-base font-light text-gray-200">${cat.name} <span class="text-[10px] text-cyan-300 ml-1">(關鍵字)</span></span>
             <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30 rounded" onclick="deleteCategory(${realIndex})">刪除</button>
