@@ -1,4 +1,4 @@
-/* MUI-3 — full-screen mobile reader */
+/* MUI-3R1 — full-screen mobile Reader navigation hotfix */
 .reader-overlay {
     position: fixed;
     inset: 0;
@@ -36,9 +36,9 @@
     grid-template-columns: 52px 1fr auto;
     align-items: center;
     gap: 4px;
-    padding: 0 10px;
+    padding: 0 8px 0 10px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(8, 11, 18, 0.94);
+    background: rgba(8, 11, 18, 0.96);
     -webkit-backdrop-filter: blur(14px);
     backdrop-filter: blur(14px);
 }
@@ -78,6 +78,22 @@
 
 .reader-toolbar-btn {
     font-size: 1.18rem;
+}
+
+.reader-ai-trigger {
+    min-width: 50px;
+    gap: 3px;
+    color: rgba(232, 121, 249, 0.82);
+}
+
+.reader-ai-trigger.active {
+    color: #f0abfc;
+}
+
+.reader-ai-caption {
+    font-size: 0.58rem;
+    font-weight: 750;
+    letter-spacing: 0.04em;
 }
 
 .reader-toolbar-btn.saved {
@@ -181,37 +197,13 @@
     letter-spacing: 0.04em;
 }
 
-.reader-command-row {
-    display: grid;
-    grid-template-columns: 1.25fr 1fr 1fr;
-    gap: 7px;
-    margin-top: 18px;
-}
-
-.reader-command {
-    min-height: 42px;
-    padding: 8px 9px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.035);
-    color: rgba(255, 255, 255, 0.72);
-    font-size: 0.7rem;
-    font-weight: 650;
-    letter-spacing: 0.04em;
-}
-
-.reader-command.saved {
-    color: #facc15;
-    border-color: rgba(250, 204, 21, 0.28);
-}
-
-.reader-command:active,
 .reader-close:active,
 .reader-toolbar-btn:active {
     background: rgba(255, 255, 255, 0.09);
 }
 
 .reader-ai {
-    margin-top: 14px;
+    margin-top: 18px;
     padding: 14px 15px;
     border-left: 3px solid rgba(217, 70, 239, 0.72);
     background: rgba(88, 28, 135, 0.18);
@@ -260,6 +252,18 @@
 
 body.reader-open {
     overscroll-behavior: none;
+}
+
+/* app.js still owns article loading and wake-lock state, but its legacy inline
+   expansion must never be visible while the full-screen Reader is entering/open. */
+body.reader-preparing #news-grid .metro-tile .tile-details,
+body.reader-open #news-grid .metro-tile.expanded .tile-details {
+    display: none !important;
+}
+
+body.reader-preparing #news-grid .metro-tile,
+body.reader-open #news-grid .metro-tile.expanded {
+    transition: none !important;
 }
 
 @media (min-width: 700px) {
