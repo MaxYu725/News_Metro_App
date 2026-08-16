@@ -1,3 +1,11 @@
+import {
+    TRACKING_CHANGED_EVENT,
+    getTrackedKeywords,
+    isTrackedKeyword,
+    toggleTrackedKeyword,
+    normalizeTrackedKeyword
+} from './tracking.js';
+
 const RECENT_SEARCH_KEY = 'metro_news_recent_searches_v1';
 const MAX_RECENT_SEARCHES = 6;
 const SCROLL_KEY_PREFIX = 'metro_news_section_scroll_v2:';
@@ -65,6 +73,38 @@ const CSS = `
 
 #search-view .search-hint {
     margin-top: 7px;
+}
+
+.search-follow-row {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 0;
+    margin-top: 7px;
+}
+
+.search-follow-row[hidden] {
+    display: none !important;
+}
+
+.search-follow-btn {
+    min-height: 34px;
+    max-width: 100%;
+    padding: 0 11px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 2px;
+    background: rgba(14, 24, 39, 0.72);
+    color: rgba(125, 211, 252, 0.95);
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.search-follow-btn.is-tracked {
+    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.055);
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .search-shortcuts {
@@ -187,22 +227,6 @@ function saveRecentSearch(query) {
     } catch (error) {}
 }
 
-function getTrackedKeywords() {
-    const custom = readJSON('metro_news_custom_cats', []);
-    if (!Array.isArray(custom)) return [];
-
-    const seen = new Set();
-    const result = [];
-    for (const item of custom) {
-        const query = normalizeQuery(item?.query || item?.name);
-        const key = query.toLocaleLowerCase();
-        if (!query || seen.has(key)) continue;
-        seen.add(key);
-        result.push(query);
-    }
-    return result.slice(0, 8);
-}
-
 function installStyles() {
     if (document.getElementById('search-ui-styles')) return;
     const style = document.createElement('style');
@@ -236,7 +260,7 @@ function renderShortcuts() {
         recentGroup.toggleAttribute('hidden', recent.length === 0);
     }
 
-    const tracked = getTrackedKeywords();
+    const tracked = getTrackedKeywords().slice(0, 8);
     if (trackedRow && trackedGroup) {
         trackedRow.replaceChildren(...tracked.map(query => makeChip(query, true)));
         trackedGroup.toggleAttribute('hidden', tracked.length === 0);
@@ -320,6 +344,33 @@ function scheduleSectionRestore(section) {
     });
 }
 
+function currentSearchedQuery() {
+    const input = document.getElementById('news-search-input');
+    const hint = document.getElementById('search-hint');
+    const query = normalizeTrackedKeyword(input?.value);
+    const hintText = String(hint?.textContent || '');
+    if (!query) return '';
+
+    const isCurrentSearch = hintText.includes(`「${query}」`) || hintText.includes('正在搜尋');
+    return isCurrentSearch ? query : '';
+}
+
+function syncFollowAction() {
+    const row = document.querySelector('[data-search-follow-row]');
+    const button = document.querySelector('[data-search-follow]');
+    if (!row || !button) return;
+
+    const query = currentSearchedQuery();
+    row.hidden = !query;
+    if (!query) return;
+
+    const tracked = isTrackedKeyword(query);
+    button.classList.toggle('is-tracked', tracked);
+    button.textContent = tracked ? `✓ 已追蹤「${query}」` : `＋ 追蹤「${query}」`;
+    button.setAttribute('aria-label', tracked ? `取消追蹤 ${query}` : `追蹤 ${query}`);
+    button.dataset.keyword = query;
+}
+
 function syncSearchStateFromVisibleUI() {
     if (!isSearchActive()) return;
 
@@ -333,6 +384,7 @@ function syncSearchStateFromVisibleUI() {
     }
 
     renderShortcuts();
+    syncFollowAction();
 }
 
 function installSearchChrome() {
@@ -372,14 +424,24 @@ function installSearchChrome() {
         </section>
         <section class="search-shortcut-group" data-search-tracked hidden>
             <div class="search-shortcut-heading">
-                <span class="search-shortcut-label">追蹤關鍵字</span>
+                <span class="search-shortcut-label">追蹤主題</span>
             </div>
             <div class="search-chip-row" data-search-tracked-row></div>
         </section>
     `;
     hint.insertAdjacentElement('afterend', shortcuts);
 
-    const syncValueState = () => form.classList.toggle('has-value', !!normalizeQuery(input.value));
+    const followRow = document.createElement('div');
+    followRow.className = 'search-follow-row';
+    followRow.dataset.searchFollowRow = '1';
+    followRow.hidden = true;
+    followRow.innerHTML = '<button type="button" class="search-follow-btn" data-search-follow></button>';
+    shortcuts.before(followRow);
+
+    const syncValueState = () => {
+        form.classList.toggle('has-value', !!normalizeQuery(input.value));
+        syncFollowAction();
+    };
     input.addEventListener('input', syncValueState);
     syncValueState();
 
@@ -399,6 +461,16 @@ function installSearchChrome() {
         }
         syncValueState();
     }, true);
+
+    followRow.addEventListener('click', event => {
+        const button = event.target.closest('[data-search-follow]');
+        if (!button) return;
+        const keyword = normalizeTrackedKeyword(button.dataset.keyword);
+        if (!keyword) return;
+        toggleTrackedKeyword(keyword);
+        syncFollowAction();
+        renderShortcuts();
+    });
 
     shortcuts.addEventListener('click', event => {
         const clearRecent = event.target.closest('[data-clear-recent]');
@@ -461,17 +533,26 @@ function installSectionStateController() {
     }
 }
 
-function observeTrackedKeywords() {
+function observeTrackingState() {
+    window.addEventListener(TRACKING_CHANGED_EVENT, () => {
+        renderShortcuts();
+        syncFollowAction();
+    });
+
     window.addEventListener('storage', event => {
         if (event.key === 'metro_news_custom_cats' || event.key === RECENT_SEARCH_KEY) {
             renderShortcuts();
+            syncFollowAction();
         }
     });
 
     const settingsView = document.getElementById('settings-view');
     if (!settingsView) return;
     new MutationObserver(() => {
-        if (isSearchActive()) renderShortcuts();
+        if (isSearchActive()) {
+            renderShortcuts();
+            syncFollowAction();
+        }
     }).observe(settingsView, { childList: true, subtree: true });
 }
 
@@ -480,7 +561,7 @@ function initSearchUI() {
     installSearchChrome();
     renderShortcuts();
     installSectionStateController();
-    observeTrackedKeywords();
+    observeTrackingState();
     syncSearchStateFromVisibleUI();
 }
 

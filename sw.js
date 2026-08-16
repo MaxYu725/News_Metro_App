@@ -1,4 +1,4 @@
-const CACHE_NAME = 'metro-news-cache-v10-mui4ar1';
+const CACHE_NAME = 'metro-news-cache-v11-mui4b';
 
 const URLS_TO_CACHE = [
     './',
@@ -12,6 +12,7 @@ const URLS_TO_CACHE = [
     './reader-ui.js',
     './api.js',
     './utils.js',
+    './tracking.js',
     './gestures.js',
     './settings.js',
     './lightbox.js',
