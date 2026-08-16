@@ -1,5 +1,8 @@
 import { timeAgo, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
+import { initLightbox, openLightbox } from './lightbox.js';
+import { initGestures } from './gestures.js';
+import { initSettings, renderCategoryManager, getThemeClasses } from './settings.js';
 
 const allBaseCats = [
     { id: 'latest', name: '即時' },
@@ -16,17 +19,9 @@ const allBaseCats = [
 ];
 
 const categoryMap = {
-    'latest': '即時',
-    'local': '港聞',
-    'global': '國際',
-    'ent': '娛樂',
-    'sports': '體育',
-    'china': '中國',
-    'hot': '熱話',
-    'life': '生活',
-    'community': '社區',
-    'tech': '科技',
-    'video': '影像'
+    'latest': '即時', 'local': '港聞', 'global': '國際', 'ent': '娛樂',
+    'sports': '體育', 'china': '中國', 'hot': '熱話', 'life': '生活',
+    'community': '社區', 'tech': '科技', 'video': '影像'
 };
 
 const systemCats = [
@@ -38,18 +33,15 @@ const systemCats = [
 let visibleCatIds = LocalDB.getVisibleCategories();
 let customCats = LocalDB.getCustomCategories();
 
-function getActiveBaseCats() {
-    return allBaseCats.filter(cat => visibleCatIds.includes(cat.id));
+function getCategories() {
+    const activeBase = allBaseCats.filter(cat => visibleCatIds.includes(cat.id));
+    return [...activeBase, ...customCats, ...systemCats];
 }
 
-let categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
-
+let categories = getCategories();
 let currentIndex = 0;
 let currentNewsData = [];      
 let newsCache = {}; 
-let currentThemeBorder = 'border-l-cyan-400';
-let currentThemeText = 'text-cyan-400';
-let currentThemeBg = 'bg-cyan-500';
 
 let currentPage = 0;
 let isLoadingMore = false;
@@ -68,9 +60,6 @@ const DOM = {
     navMenu: document.getElementById('nav-menu'),
     mainContainer: document.getElementById('main-container'),
     ptrIndicator: document.getElementById('ptr-indicator'),
-    lightboxOverlay: document.getElementById('lightbox-overlay'),
-    lightboxImg: document.getElementById('lightbox-img'),
-    lightboxClose: document.getElementById('lightbox-close'),
     backToTopBtn: document.getElementById('back-to-top'),
     gallerySearchContainer: document.getElementById('gallery-search-container'),
     gallerySearchInput: document.getElementById('gallery-search-input')
@@ -99,6 +88,7 @@ async function releaseWakeLock() {
         wakeLock = null; 
     } 
 }
+
 document.addEventListener('visibilitychange', async () => { 
     if (document.visibilityState === 'visible' && isTileExpandedState) { 
         await requestWakeLock(); 
@@ -107,83 +97,8 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
-let currentScale = 1, posX = 0, posY = 0, startX = 0, startY = 0;
-let isPanning = false, isPinching = false, initialDistance = 0, initialScale = 1, lastTapTime = 0, isLightboxOpen = false;
-
-function updateLightboxTransform() {
-    if (DOM.lightboxImg) {
-        DOM.lightboxImg.style.transform = `translate(${posX}px, ${posY}px) scale(${currentScale})`;
-    }
-}
-
-function openLightbox(src) {
-    if(!DOM.lightboxImg || !DOM.lightboxOverlay) return;
-    DOM.lightboxImg.src = src;
-    currentScale = 1; posX = 0; posY = 0;
-    updateLightboxTransform();
-    DOM.lightboxOverlay.classList.remove('hidden');
-    setTimeout(() => DOM.lightboxOverlay.classList.remove('opacity-0'), 10);
-    isLightboxOpen = true;
-    history.pushState({ lightbox: true }, '');
-}
-
-function closeLightbox(fromHardwareBackBtn = false) {
-    if(!DOM.lightboxOverlay || DOM.lightboxOverlay.classList.contains('hidden')) return;
-    DOM.lightboxOverlay.classList.add('opacity-0');
-    setTimeout(() => {
-        DOM.lightboxOverlay.classList.add('hidden');
-        if(DOM.lightboxImg) DOM.lightboxImg.src = '';
-    }, 200);
-    isLightboxOpen = false;
-    if (!fromHardwareBackBtn) history.back(); 
-}
-
-window.addEventListener('popstate', () => { if (isLightboxOpen) closeLightbox(true); });
-DOM.lightboxClose?.addEventListener('click', () => closeLightbox(false));
-DOM.lightboxOverlay?.addEventListener('click', (e) => { if (e.target === DOM.lightboxOverlay) closeLightbox(false); });
-
-DOM.lightboxImg?.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-        isPanning = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
-    } else if (e.touches.length === 2) {
-        isPanning = false; isPinching = true;
-        initialDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-        initialScale = currentScale;
-    }
-}, { passive: false });
-
-DOM.lightboxImg?.addEventListener('touchmove', (e) => {
-    e.preventDefault(); 
-    if (isPinching && e.touches.length === 2) {
-        const currentDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-        const newScale = Math.min(Math.max(1, initialScale * (currentDistance / initialDistance)), 5);
-        const clientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const clientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const rect = DOM.lightboxImg.getBoundingClientRect();
-        const dx = clientX - (rect.left + rect.width / 2);
-        const dy = clientY - (rect.top + rect.height / 2);
-        const scaleRatio = newScale / currentScale;
-        posX -= dx * (scaleRatio - 1); posY -= dy * (scaleRatio - 1);
-        currentScale = newScale;
-        updateLightboxTransform();
-    } else if (isPanning && e.touches.length === 1 && currentScale > 1) {
-        posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY;
-        updateLightboxTransform();
-    }
-}, { passive: false });
-
-DOM.lightboxImg?.addEventListener('touchend', (e) => {
-    isPanning = false; isPinching = false;
-    const currentTime = new Date().getTime();
-    if (currentTime - lastTapTime < 300 && currentTime - lastTapTime > 0 && e.touches.length === 0) {
-        currentScale = 1; posX = 0; posY = 0;
-        updateLightboxTransform();
-    }
-    lastTapTime = currentTime;
-});
-
 function renderPivot() {
-    if(!DOM.navMenu) return;
+    if (!DOM.navMenu) return;
     DOM.navMenu.innerHTML = '';
     categories.forEach((cat, index) => {
         const a = document.createElement('a');
@@ -202,7 +117,7 @@ function renderPivot() {
 function handlePageChange() {
     renderPivot();
     const currentCat = categories[currentIndex];
-    if(DOM.mainContainer) DOM.mainContainer.scrollTop = 0; 
+    if (DOM.mainContainer) DOM.mainContainer.scrollTop = 0; 
     currentPage = 0; 
     hasMoreNews = true;
     isLoadingMore = false;
@@ -213,13 +128,13 @@ function handlePageChange() {
     releaseWakeLock();
     
     DOM.gallerySearchContainer?.classList.add('hidden');
-    if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 auto-rows-auto';
+    if (DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 auto-rows-auto';
 
     if (currentCat.id === 'settings') {
         DOM.newsGrid?.classList.add('hidden');
         DOM.settingsView?.classList.remove('hidden');
         DOM.settingsView?.classList.add('flex');
-        renderCategoryManager();
+        renderCategoryManager(allBaseCats, getCategories, LocalDB.saveVisibleCategories, LocalDB.saveCustomCategories, onCategoryUpdated);
     } else if (currentCat.id === 'bookmarks') {
         DOM.settingsView?.classList.add('hidden');
         DOM.settingsView?.classList.remove('flex');
@@ -230,7 +145,7 @@ function handlePageChange() {
         DOM.settingsView?.classList.remove('flex');
         DOM.newsGrid?.classList.remove('hidden');
         DOM.gallerySearchContainer?.classList.remove('hidden');
-        if(DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4'; 
+        if (DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4'; 
         
         currentSearchQuery = DOM.gallerySearchInput?.value.trim() || 'Japan travel';
         loadGalleryUI(false);
@@ -246,6 +161,14 @@ function handlePageChange() {
         DOM.newsGrid?.classList.remove('hidden');
         loadNewsUI(currentCat.id, false, false); 
     }
+}
+
+function onCategoryUpdated() {
+    visibleCatIds = LocalDB.getVisibleCategories();
+    customCats = LocalDB.getCustomCategories();
+    categories = getCategories();
+    if (currentIndex >= categories.length) currentIndex = 0;
+    renderPivot();
 }
 
 function renderBookmarksUI() {
@@ -290,6 +213,7 @@ function markAsRead(link, titleElement) {
 
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
+    const { currentThemeBorder } = getThemeClasses();
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
@@ -313,6 +237,7 @@ function renderSkeletonTiles(count = 6) {
 
 function appendBottomSkeletons(count = 3) {
     if (!DOM.newsGrid) return;
+    const { currentThemeBorder } = getThemeClasses();
     let skeletonHtml = '';
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
@@ -478,7 +403,6 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
-/* ✨ 渲染卡片：完全移除黑底覆蓋，達成極致半透明穿透感 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -487,6 +411,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         return;
     }
 
+    const { currentThemeBorder, currentThemeText, currentThemeBg } = getThemeClasses();
     let htmlContent = '';
 
     articlesToRender.forEach((news, relativeIndex) => {
@@ -524,7 +449,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
 
         htmlContent += `
             <article class="metro-tile ${currentThemeBorder}" data-index="${index}" ${animationDelay}>
-                <!-- 收起時的預覽卡片 -->
                 <div class="tile-preview flex flex-col w-full p-4 bg-transparent">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center space-x-2">
@@ -545,7 +469,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     </div>
                 </div>
 
-                <!-- 展開時的詳情卡片：去除黑底，完全呈現半透明毛玻璃質感 -->
                 <div class="tile-details bg-transparent border-t border-white/10">
                     <div class="tile-details-inner flex flex-col justify-between">
                         <div>
@@ -571,7 +494,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <!-- 內文區塊：改用輕量半透明底 bg-black/20 確保兼顧清晰度與地圖透出 -->
                             <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/20 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
@@ -586,7 +508,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     else DOM.newsGrid.innerHTML = htmlContent;
 }
 
-// 🚀 事件委派 (Event Delegation) 系統
+// 🚀 全站事件委派監聽
 DOM.newsGrid?.addEventListener('click', async (e) => {
     const target = e.target;
 
@@ -744,6 +666,7 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
     }
 });
 
+// 無限滾動觸發
 DOM.mainContainer?.addEventListener('scroll', () => {
     if (DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
         DOM.backToTopBtn?.classList.remove('hidden-fab');
@@ -771,169 +694,46 @@ DOM.mainContainer?.addEventListener('scroll', () => {
 
 DOM.backToTopBtn?.addEventListener('click', () => { DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' }); });
 
-let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
-document.addEventListener('touchstart', e => { 
-    touchStartX = e.changedTouches[0].screenX; 
-    touchStartY = e.changedTouches[0].screenY; 
-}, { passive: true });
-
-document.addEventListener('touchend', e => { 
-    if (e.target.closest('#nav-menu, .img-scroll-box, #lightbox-overlay, input, #category-visibility-list')) return;
+// 初始化次要模組
+window.addEventListener('DOMContentLoaded', () => { 
+    initLightbox();
     
-    touchEndX = e.changedTouches[0].screenX; 
-    touchEndY = e.changedTouches[0].screenY; 
-    handleSwipe(); 
-}, { passive: true });
-
-function handleSwipe() {
-    const deltaX = touchEndX - touchStartX;
-    const deltaY = touchEndY - touchStartY;
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 60) {
-        if (deltaX > 0) currentIndex = (currentIndex - 1 + categories.length) % categories.length;
-        else currentIndex = (currentIndex + 1) % categories.length;
-        handlePageChange();
-    }
-}
-
-let ptrStartY = 0, ptrCurrentY = 0, isPulling = false;
-DOM.mainContainer?.addEventListener('touchstart', e => {
-    if (DOM.mainContainer.scrollTop === 0) { ptrStartY = e.touches[0].clientY; isPulling = true; }
-}, { passive: true });
-
-DOM.mainContainer?.addEventListener('touchmove', e => {
-    if (!isPulling) return;
-    ptrCurrentY = e.touches[0].clientY;
-    const pullDist = ptrCurrentY - ptrStartY;
-    if (pullDist > 0 && pullDist < 120 && DOM.ptrIndicator) {
-        DOM.ptrIndicator.style.height = `${pullDist}px`;
-        DOM.ptrIndicator.innerHTML = `<div class="loader-small" style="opacity: ${pullDist / 80};"></div>`;
-    }
-}, { passive: true });
-
-DOM.mainContainer?.addEventListener('touchend', async () => {
-    if (!isPulling) return;
-    isPulling = false;
-    if (ptrCurrentY - ptrStartY > 65) {
-        if(DOM.ptrIndicator) DOM.ptrIndicator.style.height = '45px';
-        const currentCat = categories[currentIndex];
-        if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
-            currentPage = 0;
-            if (currentCat.id === 'gallery') {
-                await loadGalleryUI(false);
-            } else if (currentCat.isCustom) {
-                await loadNewsUI('search', false, false);
-            } else {
-                await loadNewsUI(currentCat.id, true, false); 
+    initGestures({
+        mainContainer: DOM.mainContainer,
+        ptrIndicator: DOM.ptrIndicator,
+        onSwipe: (dir) => {
+            if (dir === 'prev') currentIndex = (currentIndex - 1 + categories.length) % categories.length;
+            else currentIndex = (currentIndex + 1) % categories.length;
+            handlePageChange();
+        },
+        onRefresh: async () => {
+            const currentCat = categories[currentIndex];
+            if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
+                currentPage = 0;
+                if (currentCat.id === 'gallery') {
+                    await loadGalleryUI(false);
+                } else if (currentCat.isCustom) {
+                    await loadNewsUI('search', false, false);
+                } else {
+                    await loadNewsUI(currentCat.id, true, false); 
+                }
             }
         }
-    }
-    if(DOM.ptrIndicator) { DOM.ptrIndicator.style.height = '0px'; DOM.ptrIndicator.innerHTML = ''; }
-    ptrStartY = 0; ptrCurrentY = 0;
-}, { passive: true });
-
-function renderCategoryManager() {
-    const visibilityList = document.getElementById('category-visibility-list');
-    if (visibilityList) {
-        visibilityList.innerHTML = '';
-        allBaseCats.forEach((cat) => {
-            const isVisible = visibleCatIds.includes(cat.id);
-            const label = document.createElement('label');
-            label.className = 'flex items-center justify-between bg-[#161a2e]/70 backdrop-blur-md hover:bg-white/10 px-4 py-3 rounded cursor-pointer transition-colors border border-white/10';
-            label.innerHTML = `
-                <span class="text-base font-light text-gray-200">${cat.name}</span>
-                <input type="checkbox" class="w-5 h-5 accent-cyan-500 cursor-pointer" ${isVisible ? 'checked' : ''} data-id="${cat.id}">
-            `;
-            label.querySelector('input').addEventListener('change', (e) => {
-                const targetId = e.target.getAttribute('data-id');
-                if (e.target.checked) {
-                    if (!visibleCatIds.includes(targetId)) visibleCatIds.push(targetId);
-                } else {
-                    if (visibleCatIds.length <= 1) {
-                        alert('至少需保留一個板塊顯示！');
-                        e.target.checked = true;
-                        return;
-                    }
-                    visibleCatIds = visibleCatIds.filter(id => id !== targetId);
-                }
-                LocalDB.saveVisibleCategories(visibleCatIds);
-                categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
-                if (currentIndex >= categories.length) currentIndex = 0;
-                renderPivot();
-            });
-            visibilityList.appendChild(label);
-        });
-    }
-
-    const list = document.getElementById('category-manager-list');
-    if(!list) return;
-    list.innerHTML = '';
-    const customCategoriesOnly = categories.filter(cat => cat.isCustom);
-    if (customCategoriesOnly.length === 0) {
-        list.innerHTML = '<p class="text-gray-400 text-sm py-2">目前沒有自訂追蹤關鍵字。</p>';
-        return;
-    }
-    customCategoriesOnly.forEach((cat) => {
-        const realIndex = categories.findIndex(c => c.id === cat.id);
-        const row = document.createElement('div');
-        row.className = 'flex justify-between items-center bg-[#161a2e]/70 backdrop-blur-md px-4 py-3 mb-2 rounded border border-white/10';
-        row.innerHTML = `
-            <span class="text-base font-light text-gray-200">${cat.name} <span class="text-[10px] text-cyan-300 ml-1">(關鍵字)</span></span>
-            <button class="text-xs uppercase tracking-widest text-red-400 hover:text-red-300 px-3 py-1 border border-red-400/30 rounded" onclick="deleteCategory(${realIndex})">刪除</button>
-        `;
-        list.appendChild(row);
     });
-}
 
-window.deleteCategory = function(index) {
-    const target = categories[index];
-    if (!target.isCustom) return alert('系統預設板塊無法刪除！');
-    if (target.isCustom) { customCats = customCats.filter(c => c.id !== target.id); LocalDB.saveCustomCategories(customCats); }
-    categories.splice(index, 1);
-    if (currentIndex >= categories.length) currentIndex = 0;
-    handlePageChange();
-}
-
-document.getElementById('btn-add-cat')?.addEventListener('click', () => {
-    const input = document.getElementById('new-cat-input');
-    const val = input ? input.value.trim() : '';
-    if (val) {
-        const newCat = { id: 'custom_' + Date.now(), name: val, isCustom: true, query: val };
-        customCats.push(newCat); LocalDB.saveCustomCategories(customCats);
-        categories = [...getActiveBaseCats(), ...customCats, ...systemCats];
-        if (input) input.value = ''; 
-        renderPivot(); 
-        renderCategoryManager();
-    }
-});
-
-const colorButtons = document.querySelectorAll('.color-btn');
-colorButtons.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        colorButtons.forEach(b => { b.classList.remove('border-white'); b.classList.add('border-transparent'); });
-        e.target.classList.remove('border-transparent');
-        e.target.classList.add('border-white');
-        
-        currentThemeBg = e.target.getAttribute('data-color');
-        currentThemeBorder = e.target.getAttribute('data-border');
-        currentThemeText = e.target.getAttribute('data-text');
-
-        if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') renderTiles(currentNewsData, false);
+    initSettings({
+        allBaseCats,
+        getCategories,
+        saveVisibleCategories: LocalDB.saveVisibleCategories,
+        saveCustomCategories: LocalDB.saveCustomCategories,
+        onCategoryUpdated,
+        onThemeChange: () => {
+            if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') {
+                renderTiles(currentNewsData, false);
+            }
+        }
     });
-});
 
-let currentFontSizePercent = parseInt(localStorage.getItem('metro_font_size')) || 110; 
-function updateFontSize() {
-    const display = document.getElementById('font-size-display');
-    if(display) display.innerText = currentFontSizePercent + '%';
-    document.documentElement.style.fontSize = (16 * (currentFontSizePercent / 100)) + 'px';
-    localStorage.setItem('metro_font_size', currentFontSizePercent);
-}
-document.getElementById('btn-font-minus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
-document.getElementById('btn-font-plus')?.addEventListener('click', () => { if (currentFontSizePercent < 150) { currentFontSizePercent += 10; updateFontSize(); } });
-document.getElementById('btn-font-reset')?.addEventListener('click', () => { currentFontSizePercent = 110; updateFontSize(); });
-
-window.addEventListener('DOMContentLoaded', () => { 
-    updateFontSize(); 
     renderPivot(); 
     handlePageChange(); 
 });
