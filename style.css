@@ -112,55 +112,13 @@ body {
     background-color: rgba(28, 36, 60, 0.65);
 }
 
-.metro-tile.expanded {
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75);
-    border-color: rgba(255, 255, 255, 0.25);
-    background-color: rgba(16, 20, 36, 0.72);
-    z-index: 20;
-}
-
-.tile-preview, .tile-details {
+.tile-preview {
     position: relative;
     z-index: 10;
-}
-
-.tile-preview {
     transition: opacity 0.15s ease;
     width: 100%;
     display: flex;
     flex-direction: column;
-}
-
-.metro-tile.expanded .tile-preview {
-    opacity: 0;
-    pointer-events: none;
-    position: absolute;
-    height: 0;
-    overflow: hidden;
-}
-
-.tile-details {
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition: max-height 0.28s cubic-bezier(0, 1, 0, 1), opacity 0.2s ease-in-out;
-    will-change: max-height, opacity;
-}
-
-.metro-tile.expanded .tile-details {
-    max-height: 3500px;
-    opacity: 1;
-    transition: max-height 0.32s ease-in-out, opacity 0.22s ease-in-out;
-}
-
-.tile-details-inner {
-    padding: 16px 0px 24px 0px;
-}
-
-.article-content-body {
-    transition: opacity 0.18s ease-in-out;
-    user-select: text;
-    -webkit-user-select: text;
 }
 
 .metro-btn {
