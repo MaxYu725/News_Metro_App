@@ -1,4 +1,4 @@
-const CACHE_NAME = 'metro-news-cache-v7-mui3r2';
+const CACHE_NAME = 'metro-news-cache-v8-mui3c';
 
 const URLS_TO_CACHE = [
     './',

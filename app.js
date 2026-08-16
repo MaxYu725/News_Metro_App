@@ -70,6 +70,9 @@ let savedBookmarks = LocalDB.getBookmarks();
 let readHistory = LocalDB.getHistory();
 let aiSummaryCache = LocalDB.getAISummaries();
 
+const fullArticleRequests = new Map();
+const aiSummaryRequests = new Map();
+
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
     settingsView: document.getElementById('settings-view'),
@@ -102,7 +105,7 @@ function initRandomBackground() {
 }
 
 let wakeLock = null;
-let isTileExpandedState = false;
+let isArticleReaderActive = false;
 
 async function requestWakeLock() {
     if ('wakeLock' in navigator && !wakeLock) {
@@ -122,7 +125,7 @@ async function releaseWakeLock() {
 }
 
 document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible' && isTileExpandedState) {
+    if (document.visibilityState === 'visible' && isArticleReaderActive) {
         await requestWakeLock();
     } else if (document.visibilityState === 'hidden') {
         wakeLock = null;
@@ -182,7 +185,7 @@ function resetViewState() {
     isLoadingMore = false;
     currentSearchQuery = '';
     DOM.backToTopBtn?.classList.add('hidden-fab');
-    isTileExpandedState = false;
+    isArticleReaderActive = false;
     releaseWakeLock();
 }
 
@@ -477,7 +480,7 @@ function showAppSection(section) {
     setBottomNavState();
     DOM.categoryStrip?.classList.toggle('hidden', section !== 'news');
 
-    isTileExpandedState = false;
+    isArticleReaderActive = false;
     releaseWakeLock();
     DOM.backToTopBtn?.classList.add('hidden-fab');
     if (DOM.mainContainer) DOM.mainContainer.scrollTop = 0;
@@ -530,7 +533,7 @@ function onCategoryUpdated() {
     }
 }
 
-function toggleBookmark(newsItem, btnElement) {
+function toggleBookmark(newsItem, btnElement, { deferRender = false } = {}) {
     if (savedBookmarks[newsItem.link]) {
         delete savedBookmarks[newsItem.link];
         if (btnElement) {
@@ -538,7 +541,7 @@ function toggleBookmark(newsItem, btnElement) {
             btnElement.innerHTML = '☆ 收藏';
         }
     } else {
-        savedBookmarks[newsItem.link] = newsItem;
+        savedBookmarks[newsItem.link] = { ...newsItem };
         if (btnElement) {
             btnElement.classList.add('saved');
             btnElement.innerHTML = '★ 已收藏';
@@ -547,9 +550,11 @@ function toggleBookmark(newsItem, btnElement) {
 
     LocalDB.saveBookmarks(savedBookmarks);
 
-    if (activeAppSection === 'bookmarks') {
+    if (!deferRender && activeAppSection === 'bookmarks') {
         renderBookmarksUI();
     }
+
+    return !!savedBookmarks[newsItem.link];
 }
 
 function markAsRead(link, titleElement) {
@@ -561,6 +566,152 @@ function markAsRead(link, titleElement) {
             titleElement.classList.add('text-gray-400');
         }
     }
+}
+
+function stripHtml(text) {
+    return String(text || '')
+        .replace(/<[^>]*>?/gm, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function escapeHtml(text) {
+    return String(text || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function deckText(newsItem) {
+    const title = stripHtml(newsItem?.title);
+    let text = stripHtml(newsItem?.description || '暫無詳細內文。');
+    if (title && text.startsWith(title)) text = text.slice(title.length).trim();
+    if (text.length > 110) text = `${text.slice(0, 110).trim()}…`;
+    return escapeHtml(text);
+}
+
+export function getReaderArticle(tile) {
+    const index = Number.parseInt(tile?.dataset?.index || '', 10);
+    if (!Number.isInteger(index) || index < 0) return null;
+    return currentNewsData[index] || null;
+}
+
+export function getReaderArticleState(newsItem) {
+    if (!newsItem?.link) {
+        return { saved: false, aiSummary: '', category: '新聞', section: activeAppSection };
+    }
+
+    return {
+        saved: !!savedBookmarks[newsItem.link],
+        aiSummary: aiSummaryCache[newsItem.link] || '',
+        category: categoryMap[newsItem.category] || newsItem.category || '新聞',
+        section: activeAppSection
+    };
+}
+
+export function markReaderArticleRead(newsItem, tile) {
+    if (!newsItem?.link) return;
+    markAsRead(newsItem.link, tile?.querySelector('.news-title'));
+}
+
+export async function setArticleReaderActive(active) {
+    isArticleReaderActive = !!active;
+    if (isArticleReaderActive) await requestWakeLock();
+    else await releaseWakeLock();
+}
+
+export async function loadReaderArticle(newsItem) {
+    if (!newsItem?.link) {
+        return { success: false, content: newsItem?.description || '', error: '缺少新聞連結' };
+    }
+
+    if (newsItem.isFullContentLoaded) {
+        return { success: true, content: newsItem.description || '', cached: true };
+    }
+
+    if (fullArticleRequests.has(newsItem.link)) {
+        return fullArticleRequests.get(newsItem.link);
+    }
+
+    const request = (async () => {
+        const originalSummary = newsItem.description || '';
+        const result = await fetchFullArticleContent(newsItem.link);
+
+        if (result.success) {
+            if (result.content && result.content.length > originalSummary.length) {
+                newsItem.description = result.content;
+            }
+            newsItem.isFullContentLoaded = true;
+
+            if (savedBookmarks[newsItem.link]) {
+                savedBookmarks[newsItem.link] = { ...savedBookmarks[newsItem.link], ...newsItem };
+                LocalDB.saveBookmarks(savedBookmarks);
+            }
+
+            return { success: true, content: newsItem.description || originalSummary };
+        }
+
+        return {
+            success: false,
+            content: originalSummary,
+            error: result.error || '擷取全文失敗'
+        };
+    })().finally(() => fullArticleRequests.delete(newsItem.link));
+
+    fullArticleRequests.set(newsItem.link, request);
+    return request;
+}
+
+export async function summarizeReaderArticle(newsItem) {
+    if (!newsItem?.link) return { success: false, error: '缺少新聞資料' };
+
+    if (aiSummaryCache[newsItem.link]) {
+        return { success: true, summary: aiSummaryCache[newsItem.link], cached: true };
+    }
+
+    if (aiSummaryRequests.has(newsItem.link)) {
+        return aiSummaryRequests.get(newsItem.link);
+    }
+
+    const request = (async () => {
+        await loadReaderArticle(newsItem);
+        const cleanTextForAI = stripHtml(newsItem.description);
+        if (!cleanTextForAI) return { success: false, error: '沒有可供摘要的內容' };
+
+        const result = await fetchAISummary(cleanTextForAI);
+        if (result.success) {
+            aiSummaryCache[newsItem.link] = result.summary;
+            LocalDB.saveAISummary(newsItem.link, result.summary);
+        }
+        return result;
+    })().finally(() => aiSummaryRequests.delete(newsItem.link));
+
+    aiSummaryRequests.set(newsItem.link, request);
+    return request;
+}
+
+export function toggleReaderBookmark(newsItem) {
+    if (!newsItem?.link) return false;
+    return toggleBookmark(newsItem, null, { deferRender: true });
+}
+
+export function syncReaderSourceTile(tile, newsItem) {
+    if (!tile || !newsItem?.link) return;
+    const saved = !!savedBookmarks[newsItem.link];
+    const hasAI = !!aiSummaryCache[newsItem.link];
+    tile.querySelector('.feed-bookmark-indicator')?.classList.toggle('hidden', !saved);
+    tile.querySelector('.feed-ai-indicator')?.classList.toggle('hidden', !hasAI);
+}
+
+export function refreshReaderViewAfterClose(tile, newsItem, { bookmarkChanged = false } = {}) {
+    if (activeAppSection === 'bookmarks' && bookmarkChanged) {
+        renderBookmarksUI();
+        return;
+    }
+    syncReaderSourceTile(tile, newsItem);
 }
 
 function renderSkeletonTiles(count = 6) {
@@ -745,38 +896,6 @@ async function loadSearchUI(isAppendMode = false) {
     isLoadingMore = false;
 }
 
-function formatParagraphs(text) {
-    if (!text) return '';
-
-    return text
-        .split('\n')
-        .map(p => p.trim())
-        .filter(p => p.length > 0)
-        .map(p => `<p class="mb-4 leading-relaxed">${p}</p>`)
-        .join('');
-}
-
-function showAISummaryInTile(tile, summaryText) {
-    const aiBox = tile.querySelector('.ai-box');
-    const aiText = tile.querySelector('.ai-summary-text');
-    const imgContainer = tile.querySelector('.img-container');
-
-    if (!aiBox || !aiText) return;
-
-    if (imgContainer) {
-        imgContainer.classList.remove('w-full', 'h-52', 'md:h-64');
-        imgContainer.classList.add('w-1/2', 'h-48', 'md:h-56');
-        aiBox.classList.remove('w-full');
-        aiBox.classList.add('w-1/2', 'h-48', 'md:h-56');
-    } else {
-        aiBox.classList.remove('w-1/2');
-        aiBox.classList.add('w-full', 'h-auto');
-    }
-
-    aiBox.classList.remove('hidden');
-    aiText.innerText = summaryText;
-}
-
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -785,42 +904,22 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         return;
     }
 
-    const { currentThemeBorder, currentThemeText, currentThemeBg } = getThemeClasses();
+    const { currentThemeBorder, currentThemeText } = getThemeClasses();
     let htmlContent = '';
 
     articlesToRender.forEach((news, relativeIndex) => {
         const index = startIndex + relativeIndex;
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
-        const cleanDescription = formatParagraphs(news.description || '暫無詳細內文。');
         const isSaved = !!savedBookmarks[news.link];
         const isRead = !!readHistory[news.link];
         const hasCachedAI = !!aiSummaryCache[news.link];
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
         const catName = categoryMap[news.category] || news.category || '即時';
+        const deck = deckText(news);
 
         const thumbHtml = news.imageUrl
             ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/15 shadow-sm bg-black/30" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>`
             : '';
-
-        let imagesHtml = '';
-        if (news.images && news.images.length > 0) {
-            const slidesHtml = news.images
-                .map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-full object-cover block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`)
-                .join('');
-
-            const navButtons = news.images.length > 1 ? `
-                <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❮</button>
-                <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❯</button>
-                <div class="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10">${news.images.length} 圖</div>
-            ` : '';
-
-            imagesHtml = `
-                <div class="img-container relative w-full h-52 md:h-64 flex-shrink-0 overflow-hidden bg-black/30 border border-white/10 rounded-xs shadow-md transition-all duration-200">
-                    <div class="img-scroll-box flex items-center h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>
-                    ${navButtons}
-                </div>
-            `;
-        }
 
         htmlContent += `
             <article class="metro-tile ${currentThemeBorder}" data-index="${index}" ${animationDelay}>
@@ -828,51 +927,20 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center space-x-2">
                             <span class="text-xs font-bold tracking-wider uppercase ${currentThemeText}">${catName}</span>
-                            ${hasCachedAI ? '<span class="text-[10px] bg-fuchsia-950/70 text-fuchsia-300 border border-fuchsia-500/30 px-1.5 py-0.5 rounded font-bold">✨ AI 摘要</span>' : ''}
+                            <span class="feed-ai-indicator text-[10px] bg-fuchsia-950/70 text-fuchsia-300 border border-fuchsia-500/30 px-1.5 py-0.5 rounded font-bold ${hasCachedAI ? '' : 'hidden'}">✨ AI 摘要</span>
                         </div>
                         <div class="flex items-center space-x-2">
                             <span class="text-xs text-white/50 tracking-wider font-medium">${timeAgo(news.pubDate)}</span>
-                            ${isSaved ? '<span class="text-xs text-yellow-300">★</span>' : ''}
+                            <span class="feed-bookmark-indicator text-xs text-yellow-300 ${isSaved ? '' : 'hidden'}">★</span>
                         </div>
                     </div>
 
                     <div class="flex flex-row items-center justify-between min-h-[75px]">
                         <div class="flex-grow pr-2 flex flex-col justify-center">
                             <h3 class="news-title text-base md:text-lg font-bold leading-snug line-clamp-3 ${titleColorClass}">${news.title}</h3>
+                            <p class="feed-deck">${deck}</p>
                         </div>
                         ${thumbHtml}
-                    </div>
-                </div>
-
-                <div class="tile-details bg-transparent border-t border-white/10">
-                    <div class="tile-details-inner flex flex-col justify-between">
-                        <div>
-                            <div class="flex justify-between items-center mb-2 mt-2 px-5">
-                                <span class="${currentThemeBg} text-white text-[10px] px-2.5 py-1 rounded-xs font-bold tracking-wider uppercase border border-white/10">${catName}</span>
-                                <div class="flex space-x-4">
-                                    <button class="ai-btn text-xs uppercase tracking-widest font-bold text-fuchsia-400 hover:text-fuchsia-300 transition-colors">✨ AI 總結</button>
-                                    <button class="share-btn text-xs uppercase tracking-widest font-bold opacity-70 hover:opacity-100 transition-colors">分享 ↗</button>
-                                    <button class="bookmark-btn text-xs uppercase tracking-widest font-bold ${isSaved ? 'saved' : 'opacity-70'}">${isSaved ? '★ 已收藏' : '☆ 收藏'}</button>
-                                </div>
-                            </div>
-                            <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2 text-white">${news.title}</h3>
-                            <p class="text-xs opacity-60 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
-
-                            <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-start">
-                                ${imagesHtml}
-                                <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-200 bg-fuchsia-950/50 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
-                                    <div class="flex items-center space-x-1.5 mb-2 flex-shrink-0">
-                                        <span class="text-fuchsia-400 text-xs">✨</span>
-                                        <span class="text-[10px] uppercase tracking-widest text-fuchsia-400 font-bold">Workers AI 摘要</span>
-                                    </div>
-                                    <p class="ai-summary-text text-xs md:text-sm font-light text-gray-200 leading-relaxed tracking-wide min-h-0 flex-1 overflow-y-auto hide-scrollbar pr-1 pb-2"></p>
-                                </div>
-                            </div>
-
-                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/25 px-5 py-6 border-t border-white/10">
-                                ${cleanDescription}
-                            </div>
-                        </div>
                     </div>
                 </div>
             </article>
@@ -883,182 +951,13 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     else DOM.newsGrid.innerHTML = htmlContent;
 }
 
-DOM.newsGrid?.addEventListener('click', async e => {
+DOM.newsGrid?.addEventListener('click', e => {
     const target = e.target;
 
-    if (target.classList.contains('lightbox-img') || target.classList.contains('gallery-img')) {
+    if (target.classList.contains('gallery-img')) {
         e.stopPropagation();
         const fullSrc = target.getAttribute('data-full') || target.src;
         if (fullSrc) openLightbox(fullSrc);
-        return;
-    }
-
-    if (target.classList.contains('btn-prev-img')) {
-        e.stopPropagation();
-        const scrollBox = target.closest('.img-container')?.querySelector('.img-scroll-box');
-        if (scrollBox) scrollBox.scrollBy({ left: -scrollBox.clientWidth, behavior: 'smooth' });
-        return;
-    }
-
-    if (target.classList.contains('btn-next-img')) {
-        e.stopPropagation();
-        const scrollBox = target.closest('.img-container')?.querySelector('.img-scroll-box');
-        if (scrollBox) scrollBox.scrollBy({ left: scrollBox.clientWidth, behavior: 'smooth' });
-        return;
-    }
-
-    if (activeAppSection === 'gallery') return;
-
-    const aiBtn = target.closest('.ai-btn');
-    if (aiBtn) {
-        e.stopPropagation();
-        const tile = aiBtn.closest('.metro-tile');
-        const index = parseInt(tile.getAttribute('data-index'));
-        const news = currentNewsData[index];
-        if (!news) return;
-
-        if (aiSummaryCache[news.link]) {
-            showAISummaryInTile(tile, aiSummaryCache[news.link]);
-            return;
-        }
-
-        const aiBox = tile.querySelector('.ai-box');
-        const aiText = tile.querySelector('.ai-summary-text');
-        if (
-            aiBox
-            && aiText
-            && !aiBox.classList.contains('hidden')
-            && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。'
-        ) return;
-
-        showAISummaryInTile(tile, '');
-        if (aiText) aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
-
-        const cleanTextForAI = news.description.replace(/<[^>]*>?/gm, '').trim();
-        const res = await fetchAISummary(cleanTextForAI);
-
-        if (res.success) {
-            if (aiText) aiText.innerText = res.summary;
-            aiSummaryCache[news.link] = res.summary;
-            LocalDB.saveAISummary(news.link, res.summary);
-        } else if (aiText) {
-            aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
-        }
-        return;
-    }
-
-    const bookmarkBtn = target.closest('.bookmark-btn');
-    if (bookmarkBtn) {
-        e.stopPropagation();
-        const tile = bookmarkBtn.closest('.metro-tile');
-        const index = parseInt(tile.getAttribute('data-index'));
-        if (currentNewsData[index]) {
-            toggleBookmark(currentNewsData[index], bookmarkBtn);
-        }
-        return;
-    }
-
-    const shareBtn = target.closest('.share-btn');
-    if (shareBtn) {
-        e.stopPropagation();
-        const tile = shareBtn.closest('.metro-tile');
-        const index = parseInt(tile.getAttribute('data-index'));
-        const news = currentNewsData[index];
-
-        if (news) {
-            if (navigator.share) {
-                try {
-                    await navigator.share({
-                        title: news.title,
-                        text: '看看這則新聞！',
-                        url: news.link
-                    });
-                } catch (err) {}
-            } else {
-                navigator.clipboard.writeText(news.link)
-                    .then(() => alert('已複製新聞連結！'));
-            }
-        }
-        return;
-    }
-
-    const tile = target.closest('.metro-tile');
-    if (tile && !target.closest('button')) {
-        const index = parseInt(tile.getAttribute('data-index'));
-        const news = currentNewsData[index];
-        const isCurrentlyExpanded = tile.classList.contains('expanded');
-
-        releaseWakeLock();
-
-        if (isCurrentlyExpanded) {
-            tile.classList.remove('expanded');
-            isTileExpandedState = false;
-            return;
-        }
-
-        DOM.newsGrid.querySelectorAll('.metro-tile.expanded')
-            .forEach(t => t.classList.remove('expanded'));
-
-        const titleElement = tile.querySelector('.news-title');
-        if (news) markAsRead(news.link, titleElement);
-
-        tile.classList.add('expanded');
-        isTileExpandedState = true;
-        requestWakeLock();
-
-        if (news && aiSummaryCache[news.link]) {
-            showAISummaryInTile(tile, aiSummaryCache[news.link]);
-        }
-
-        const contentBody = tile.querySelector('.article-content-body');
-
-        if (news && !news.isFullContentLoaded && contentBody) {
-            const originalSummary = news.description;
-
-            const articleSkeletonHtml = `
-                <div class="article-skeleton-container border-t border-white/10 pt-4 mt-4">
-                    <div class="flex items-center space-x-2 text-cyan-400 text-xs mb-4">
-                        <span class="loader-small"></span>
-                        <span class="animate-pulse font-bold tracking-wider">正在載入完整文章...</span>
-                    </div>
-                    <div class="space-y-3 opacity-60">
-                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
-                        <div class="w-11/12 h-4 skeleton-pulse rounded-xs"></div>
-                        <div class="w-4/5 h-4 skeleton-pulse rounded-xs"></div>
-                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
-                        <div class="w-3/4 h-4 skeleton-pulse rounded-xs mb-2"></div>
-                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
-                        <div class="w-5/6 h-4 skeleton-pulse rounded-xs"></div>
-                    </div>
-                </div>
-            `;
-
-            contentBody.innerHTML = `
-                ${formatParagraphs(originalSummary)}
-                ${articleSkeletonHtml}
-            `;
-
-            fetchFullArticleContent(news.link).then(res => {
-                if (res.success && res.content && res.content.length > originalSummary.length) {
-                    news.description = res.content;
-                    news.isFullContentLoaded = true;
-
-                    contentBody.style.opacity = '0.3';
-                    setTimeout(() => {
-                        contentBody.innerHTML = formatParagraphs(res.content);
-                        contentBody.style.opacity = '1';
-                    }, 120);
-                } else {
-                    const skeleton = contentBody.querySelector('.article-skeleton-container');
-                    if (skeleton) skeleton.remove();
-                    news.isFullContentLoaded = true;
-                }
-            });
-        }
-
-        setTimeout(() => {
-            tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 80);
     }
 });
 
@@ -1147,8 +1046,8 @@ window.addEventListener('DOMContentLoaded', () => {
     initGestures({
         mainContainer: DOM.mainContainer,
         ptrIndicator: DOM.ptrIndicator,
-        canSwipe: () => activeAppSection === 'news' && !isTileExpandedState,
-        canRefresh: () => activeAppSection === 'news' && !isTileExpandedState,
+        canSwipe: () => activeAppSection === 'news' && !isArticleReaderActive,
+        canRefresh: () => activeAppSection === 'news' && !isArticleReaderActive,
         onSwipe: dir => {
             const nextIndex = dir === 'prev' ? currentIndex - 1 : currentIndex + 1;
             if (nextIndex < 0 || nextIndex >= categories.length) return;
