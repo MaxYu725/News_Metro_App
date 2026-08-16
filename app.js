@@ -378,7 +378,7 @@ function formatParagraphs(text) {
         .split('\n')
         .map(p => p.trim())
         .filter(p => p.length > 0)
-        .map(p => `<p class="mb-4">${p}</p>`)
+        .map(p => `<p class="mb-4 leading-relaxed">${p}</p>`)
         .join('');
 }
 
@@ -403,6 +403,7 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
+/* 渲染卡片：完全透出背景向量地圖 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -494,7 +495,8 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/20 px-5 py-6 border-t border-white/10">
+                            <!-- 內文區塊：25% 透明黑，透出背景同時兼顧極致文字可讀性 -->
+                            <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/25 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
                         </div>
@@ -666,7 +668,6 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
     }
 });
 
-// 無限滾動觸發
 DOM.mainContainer?.addEventListener('scroll', () => {
     if (DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
         DOM.backToTopBtn?.classList.remove('hidden-fab');
@@ -694,7 +695,6 @@ DOM.mainContainer?.addEventListener('scroll', () => {
 
 DOM.backToTopBtn?.addEventListener('click', () => { DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' }); });
 
-// 初始化次要模組
 window.addEventListener('DOMContentLoaded', () => { 
     initLightbox();
     
