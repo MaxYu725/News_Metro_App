@@ -71,11 +71,11 @@ export function closeLightbox(fromHardwareBackBtn = false) {
     overlayEl.setAttribute('aria-hidden', 'true');
     isLightboxOpen = false;
     setUnderlyingInert(false);
+    restoreFocus();
 
     window.setTimeout(() => {
         overlayEl.classList.add('hidden');
         if (imgEl) imgEl.src = '';
-        restoreFocus();
     }, 200);
 
     if (!fromHardwareBackBtn) history.back();
