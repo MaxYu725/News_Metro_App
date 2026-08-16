@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0a0d18">
+    <meta name="theme-color" content="#0a0d1a">
     <link rel="manifest" href="./manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,56 +14,27 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
 </head>
-<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#0a0d18] text-white select-none overflow-hidden">
+<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#0a0d1a] text-white select-none overflow-hidden">
 
-    <!-- 🚀 方案 1：香港全境暗黑向量地圖背景 (Pure SVG - 0 耗能高對比) -->
-    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#0a0d18]">
-        <svg class="absolute inset-0 w-full h-full opacity-35" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <!-- 🚀 方案 2：暗黑香港靜態地圖 API 底圖 + 科技地理網格遮罩 -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#0a0d1a]">
+        <!-- 高解析度香港暗黑地理地圖 -->
+        <img src="https://a.basemaps.cartocdn.com/rastertiles/dark_all/11/1673/894.png" 
+             class="w-full h-full object-cover opacity-50 filter contrast-125 brightness-90 scale-110" 
+             alt="Hong Kong Static Dark Map">
+
+        <!-- 科技感經緯度方格網陣Overlay -->
+        <svg class="absolute inset-0 w-full h-full opacity-25" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
             <defs>
-                <!-- 科技地理網格 (Grid) -->
-                <pattern id="hk-grid" width="50" height="50" patternUnits="userSpaceOnUse">
-                    <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#ffffff" stroke-width="0.6" stroke-opacity="0.12"/>
+                <pattern id="geo-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#38bdf8" stroke-width="0.5" stroke-opacity="0.3"/>
                 </pattern>
-                <!-- 暗黑夜藍背景漸變 -->
-                <radialGradient id="bg-radial" cx="50%" cy="40%" r="70%">
-                    <stop offset="0%" stop-color="#182238" stop-opacity="0.9"/>
-                    <stop offset="100%" stop-color="#0a0d18" stop-opacity="0.98"/>
-                </radialGradient>
             </defs>
-
-            <!-- 1. 背景漸變與網格 -->
-            <rect width="100%" height="100%" fill="url(#bg-radial)" />
-            <rect width="100%" height="100%" fill="url(#hk-grid)" />
-
-            <!-- 2. 香港全境地圖向量輪廓 (新界、九龍、港島、大嶼山) -->
-            <g fill="rgba(255, 255, 255, 0.04)" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.35" stroke-linejoin="round">
-                <!-- 大嶼山 (Lantau Island) -->
-                <path d="M 120,420 Q 180,380 260,410 T 320,480 T 240,540 T 140,500 Z"/>
-                <!-- 赤鱲角機場 -->
-                <path d="M 180,370 L 230,360 L 240,390 L 190,400 Z" fill="rgba(56, 189, 248, 0.1)" stroke="#38bdf8" stroke-opacity="0.5"/>
-                <!-- 九龍及新界大陸 (NT & Kowloon) -->
-                <path d="M 280,120 Q 450,100 620,130 T 780,180 T 820,280 T 720,380 T 580,390 T 480,380 T 380,330 T 260,260 Z"/>
-                <!-- 西貢半島與離島群 -->
-                <path d="M 720,200 Q 850,220 880,310 T 760,370 Z"/>
-                <!-- 香港島 (HK Island) -->
-                <path d="M 480,440 Q 580,430 680,450 T 660,520 T 540,530 T 460,480 Z"/>
-                <!-- 南丫島 (Lamma Island) -->
-                <path d="M 440,550 Q 470,540 480,590 T 450,630 Z"/>
-            </g>
-
-            <!-- 3. 維多利亞港航道與重要地理線條 -->
-            <path d="M 450,400 Q 550,415 650,425" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.6" stroke-dasharray="4,4"/>
-
-            <!-- 4. 城市節點標記 (中環、尖沙咀、旺角、荃灣) -->
-            <g fill="#38bdf8" fill-opacity="0.8">
-                <circle cx="530" cy="445" r="3"/><text x="540" y="450" fill="#ffffff" fill-opacity="0.5" font-size="10">CENTRAL</text>
-                <circle cx="535" cy="390" r="3"/><text x="545" y="395" fill="#ffffff" fill-opacity="0.5" font-size="10">TST</text>
-                <circle cx="525" cy="350" r="2.5"/><text x="535" y="355" fill="#ffffff" fill-opacity="0.4" font-size="9">MONG KOK</text>
-            </g>
+            <rect width="100%" height="100%" fill="url(#geo-grid)" />
         </svg>
 
-        <!-- 暗化暗角遮罩，突出中央內容可讀性 -->
-        <div class="absolute inset-0 bg-radial from-transparent via-[#0a0d18]/40 to-[#0a0d18]/80"></div>
+        <!-- 周邊暗角漸變遮罩 (Vignette Effect) -->
+        <div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/50 via-transparent to-[#0a0d1a]/85"></div>
     </div>
 
     <!-- 圖片全螢幕燈箱 (Lightbox) -->
