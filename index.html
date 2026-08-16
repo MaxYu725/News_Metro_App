@@ -52,7 +52,7 @@
             </div>
             <form id="news-search-form" class="search-form" role="search">
                 <input
-                    type="search"
+                    type="text"
                     id="news-search-input"
                     placeholder="輸入關鍵字，例如：天文台、港鐵、iPhone"
                     autocomplete="off"
@@ -116,11 +116,11 @@
             </div>
 
             <div class="flex flex-col space-y-3">
-                <p class="text-xs text-gray-400 uppercase tracking-widest">自訂追蹤關鍵字</p>
+                <p class="text-xs text-gray-400 uppercase tracking-widest">追蹤主題</p>
                 <div class="flex flex-col space-y-2" id="category-manager-list"></div>
                 <div class="flex space-x-2 mt-2">
-                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字，例如：iPhone" class="bg-[#13182a]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow min-w-0">
-                    <button id="btn-add-cat" class="metro-btn">新增</button>
+                    <input type="text" id="new-cat-input" placeholder="輸入主題，例如：天氣" class="bg-[#13182a]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow min-w-0">
+                    <button id="btn-add-cat" class="metro-btn">追蹤</button>
                 </div>
             </div>
 
@@ -180,7 +180,6 @@
     <script type="module" src="./app.js"></script>
     <script type="module" src="./feed-ui.js"></script>
     <script type="module" src="./reader-ui.js"></script>
-    <script type="module" src="./mui4c-polish.js"></script>
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(()=>{}); }); }</script>
 </body>
 </html>
