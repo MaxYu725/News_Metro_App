@@ -1,4 +1,4 @@
-/* MUI-3R1 — full-screen mobile Reader navigation hotfix */
+/* MUI-3C — independent full-screen Reader */
 .reader-overlay {
     position: fixed;
     inset: 0;
@@ -250,32 +250,24 @@
     border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.reader-content-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px !important;
+    color: rgba(56, 189, 248, 0.78);
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+}
+
+.reader-content-error {
+    margin-top: 18px !important;
+    color: rgba(255, 255, 255, 0.42);
+}
+
 body.reader-open {
     overscroll-behavior: none;
-}
-
-/* app.js still owns article loading and wake-lock state, but its legacy inline
-   expansion must never be visible while the full-screen Reader is entering/open. */
-body.reader-preparing #news-grid .metro-tile .tile-details,
-body.reader-open #news-grid .metro-tile.expanded .tile-details {
-    display: none !important;
-}
-
-body.reader-preparing #news-grid .metro-tile,
-body.reader-open #news-grid .metro-tile.expanded {
-    transition: none !important;
-}
-
-/* MUI-3R2 — preserve the feed footprint while app.js keeps the source tile in
-   expanded state for article loading. R1 hid details but the legacy expanded
-   rule also collapsed the preview to height:0, which made the card disappear. */
-body.reader-preparing #news-grid .metro-tile.expanded .tile-preview,
-body.reader-open #news-grid .metro-tile.expanded .tile-preview {
-    position: relative !important;
-    height: auto !important;
-    overflow: visible !important;
-    opacity: 1 !important;
-    pointer-events: none !important;
 }
 
 @media (min-width: 700px) {
