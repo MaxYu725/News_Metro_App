@@ -10,9 +10,11 @@ const RECENT_SEARCH_KEY = 'metro_news_recent_searches_v1';
 const MAX_RECENT_SEARCHES = 6;
 const SCROLL_KEY_PREFIX = 'metro_news_section_scroll_v2:';
 const RESTORE_TIMEOUT_MS = 1600;
+const TRACKING_STATUS_MS = 2200;
 
 let pendingRestore = null;
 let restoreTimer = 0;
+let trackingStatusTimer = 0;
 
 const CSS = `
 #search-view {
@@ -48,6 +50,12 @@ const CSS = `
     font-size: 0.92rem;
 }
 
+#search-view .search-input::-webkit-search-cancel-button,
+#search-view .search-input::-webkit-search-decoration {
+    display: none;
+    -webkit-appearance: none;
+}
+
 #search-view .search-clear {
     width: 40px;
     flex: 0 0 40px;
@@ -71,15 +79,29 @@ const CSS = `
     font-size: 0.72rem;
 }
 
+#search-view .search-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 32px;
+    margin-top: 5px;
+}
+
 #search-view .search-hint {
-    margin-top: 7px;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .search-follow-row {
     display: flex;
-    justify-content: flex-end;
+    flex: 0 0 auto;
     min-height: 0;
-    margin-top: 7px;
+    margin: 0;
 }
 
 .search-follow-row[hidden] {
@@ -87,14 +109,14 @@ const CSS = `
 }
 
 .search-follow-btn {
-    min-height: 34px;
+    min-height: 32px;
     max-width: 100%;
-    padding: 0 11px;
+    padding: 0 10px;
     border: 1px solid rgba(56, 189, 248, 0.3);
     border-radius: 2px;
     background: rgba(14, 24, 39, 0.72);
     color: rgba(125, 211, 252, 0.95);
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     letter-spacing: 0.02em;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -104,15 +126,26 @@ const CSS = `
 .search-follow-btn.is-tracked {
     border-color: rgba(255, 255, 255, 0.16);
     background: rgba(255, 255, 255, 0.055);
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.search-tracking-status {
+    margin: 4px 2px 0;
+    color: rgba(103, 232, 249, 0.78);
+    font-size: 0.66rem;
+    line-height: 1.4;
+}
+
+.search-tracking-status:empty {
+    display: none;
 }
 
 .search-shortcuts {
-    margin: 6px -2px 2px;
+    margin: 2px -2px 2px;
 }
 
 .search-shortcut-group {
-    margin-top: 12px;
+    margin-top: 8px;
 }
 
 .search-shortcut-group[hidden] {
@@ -124,7 +157,7 @@ const CSS = `
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin: 0 2px 7px;
+    margin: 0 2px 5px;
 }
 
 .search-shortcut-label {
@@ -135,7 +168,7 @@ const CSS = `
 }
 
 .search-shortcut-clear {
-    min-height: 30px;
+    min-height: 32px;
     padding: 0 4px;
     border: 0;
     background: transparent;
@@ -158,16 +191,16 @@ const CSS = `
 
 .search-chip {
     flex: 0 0 auto;
-    min-height: 34px;
+    min-height: 32px;
     max-width: min(72vw, 260px);
-    padding: 0 11px;
+    padding: 0 10px;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.13);
     border-radius: 2px;
     background: rgba(19, 24, 42, 0.68);
     color: rgba(255, 255, 255, 0.78);
     font-size: 0.72rem;
-    line-height: 32px;
+    line-height: 30px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -182,6 +215,15 @@ const CSS = `
     color: rgba(125, 211, 252, 0.92);
 }
 
+#search-view .search-follow-btn:focus-visible,
+#search-view .search-chip:focus-visible,
+#search-view .search-shortcut-clear:focus-visible,
+#search-view .search-clear:focus-visible,
+#search-view .search-submit:focus-visible {
+    outline: 2px solid rgba(56, 189, 248, 0.78);
+    outline-offset: 2px;
+}
+
 @media (max-width: 420px) {
     #search-view .view-subtitle {
         display: none;
@@ -189,6 +231,12 @@ const CSS = `
 
     #search-view .view-title {
         font-size: 1.55rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #search-view * {
+        scroll-behavior: auto !important;
     }
 }
 `;
@@ -355,6 +403,22 @@ function currentSearchedQuery() {
     return isCurrentSearch ? query : '';
 }
 
+function setSearchTrackingStatus(message = '') {
+    const status = document.querySelector('[data-search-tracking-status]');
+    if (!status) return;
+
+    status.textContent = message;
+    if (trackingStatusTimer) window.clearTimeout(trackingStatusTimer);
+    trackingStatusTimer = 0;
+
+    if (!message) return;
+    trackingStatusTimer = window.setTimeout(() => {
+        const current = document.querySelector('[data-search-tracking-status]');
+        if (current) current.textContent = '';
+        trackingStatusTimer = 0;
+    }, TRACKING_STATUS_MS);
+}
+
 function syncFollowAction() {
     const row = document.querySelector('[data-search-follow-row]');
     const button = document.querySelector('[data-search-follow]');
@@ -366,7 +430,7 @@ function syncFollowAction() {
 
     const tracked = isTrackedKeyword(query);
     button.classList.toggle('is-tracked', tracked);
-    button.textContent = tracked ? `✓ 已追蹤「${query}」` : `＋ 追蹤「${query}」`;
+    button.textContent = tracked ? '✓ 已追蹤' : '＋ 追蹤';
     button.setAttribute('aria-label', tracked ? `取消追蹤 ${query}` : `追蹤 ${query}`);
     button.dataset.keyword = query;
 }
@@ -394,6 +458,7 @@ function installSearchChrome() {
     if (!form || !input || !hint || form.dataset.mui4aReady === '1') return;
 
     form.dataset.mui4aReady = '1';
+    input.type = 'text';
     input.placeholder = '搜尋 HK01 新聞';
 
     const icon = document.createElement('span');
@@ -410,6 +475,26 @@ function installSearchChrome() {
     const submit = form.querySelector('.search-submit');
     if (submit) form.insertBefore(clear, submit);
     else form.appendChild(clear);
+
+    const metaRow = document.createElement('div');
+    metaRow.className = 'search-meta-row';
+    hint.insertAdjacentElement('beforebegin', metaRow);
+    metaRow.appendChild(hint);
+
+    const followRow = document.createElement('div');
+    followRow.className = 'search-follow-row';
+    followRow.dataset.searchFollowRow = '1';
+    followRow.hidden = true;
+    followRow.innerHTML = '<button type="button" class="search-follow-btn" data-search-follow></button>';
+    metaRow.appendChild(followRow);
+
+    const trackingStatus = document.createElement('p');
+    trackingStatus.className = 'search-tracking-status';
+    trackingStatus.dataset.searchTrackingStatus = '1';
+    trackingStatus.setAttribute('role', 'status');
+    trackingStatus.setAttribute('aria-live', 'polite');
+    trackingStatus.setAttribute('aria-atomic', 'true');
+    metaRow.insertAdjacentElement('afterend', trackingStatus);
 
     const shortcuts = document.createElement('div');
     shortcuts.id = 'search-shortcuts';
@@ -429,14 +514,7 @@ function installSearchChrome() {
             <div class="search-chip-row" data-search-tracked-row></div>
         </section>
     `;
-    hint.insertAdjacentElement('afterend', shortcuts);
-
-    const followRow = document.createElement('div');
-    followRow.className = 'search-follow-row';
-    followRow.dataset.searchFollowRow = '1';
-    followRow.hidden = true;
-    followRow.innerHTML = '<button type="button" class="search-follow-btn" data-search-follow></button>';
-    shortcuts.before(followRow);
+    trackingStatus.insertAdjacentElement('afterend', shortcuts);
 
     const syncValueState = () => {
         form.classList.toggle('has-value', !!normalizeQuery(input.value));
@@ -447,6 +525,7 @@ function installSearchChrome() {
 
     clear.addEventListener('click', () => {
         input.value = '';
+        setSearchTrackingStatus('');
         syncValueState();
         form.requestSubmit();
         requestAnimationFrame(() => input.focus({ preventScroll: true }));
@@ -454,6 +533,7 @@ function installSearchChrome() {
 
     form.addEventListener('submit', () => {
         const query = normalizeQuery(input.value);
+        setSearchTrackingStatus('');
         if (query) {
             input.value = query;
             saveRecentSearch(query);
@@ -468,8 +548,6 @@ function installSearchChrome() {
         const keyword = normalizeTrackedKeyword(button.dataset.keyword);
         if (!keyword) return;
         toggleTrackedKeyword(keyword);
-        syncFollowAction();
-        renderShortcuts();
     });
 
     shortcuts.addEventListener('click', event => {
@@ -521,10 +599,7 @@ function installSectionStateController() {
         attributeFilter: ['class']
     });
 
-    if (grid) {
-        observer.observe(grid, { childList: true, subtree: false });
-    }
-
+    if (grid) observer.observe(grid, { childList: true, subtree: false });
     if (searchView) {
         observer.observe(searchView, {
             attributes: true,
@@ -534,9 +609,20 @@ function installSectionStateController() {
 }
 
 function observeTrackingState() {
-    window.addEventListener(TRACKING_CHANGED_EVENT, () => {
+    window.addEventListener(TRACKING_CHANGED_EVENT, event => {
         renderShortcuts();
         syncFollowAction();
+
+        if (!isSearchActive()) return;
+        const keyword = normalizeTrackedKeyword(event.detail?.keyword);
+        const current = currentSearchedQuery();
+        if (!keyword || !current || keyword.toLocaleLowerCase() !== current.toLocaleLowerCase()) return;
+
+        if (event.detail?.action === 'track') {
+            setSearchTrackingStatus(`已追蹤「${keyword}」。`);
+        } else if (event.detail?.action === 'untrack') {
+            setSearchTrackingStatus(`已取消追蹤「${keyword}」。`);
+        }
     });
 
     window.addEventListener('storage', event => {
@@ -545,15 +631,6 @@ function observeTrackingState() {
             syncFollowAction();
         }
     });
-
-    const settingsView = document.getElementById('settings-view');
-    if (!settingsView) return;
-    new MutationObserver(() => {
-        if (isSearchActive()) {
-            renderShortcuts();
-            syncFollowAction();
-        }
-    }).observe(settingsView, { childList: true, subtree: true });
 }
 
 function initSearchUI() {
