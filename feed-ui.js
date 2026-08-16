@@ -1,3 +1,5 @@
+import './search-ui.js';
+
 const DENSITY_KEY = 'metro_feed_density';
 const DEFAULT_DENSITY = 'comfortable';
 
