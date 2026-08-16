@@ -19,34 +19,52 @@ const allBaseCats = [
 ];
 
 const categoryMap = {
-    'latest': '即時', 'local': '港聞', 'global': '國際', 'ent': '娛樂',
-    'sports': '體育', 'china': '中國', 'hot': '熱話', 'life': '生活',
-    'community': '社區', 'tech': '科技', 'video': '影像'
+    latest: '即時',
+    local: '港聞',
+    global: '國際',
+    ent: '娛樂',
+    sports: '體育',
+    china: '中國',
+    hot: '熱話',
+    life: '生活',
+    community: '社區',
+    tech: '科技',
+    video: '影像'
 };
-
-const systemCats = [
-    { id: 'gallery', name: '圖庫' }, 
-    { id: 'bookmarks', name: '收藏' },
-    { id: 'settings', name: '設定' }
-];
 
 let visibleCatIds = LocalDB.getVisibleCategories();
 let customCats = LocalDB.getCustomCategories();
 
 function getCategories() {
     const activeBase = allBaseCats.filter(cat => visibleCatIds.includes(cat.id));
-    return [...activeBase, ...customCats, ...systemCats];
+    return [...activeBase, ...customCats];
 }
 
 let categories = getCategories();
 let currentIndex = 0;
-let currentNewsData = [];      
-let newsCache = {}; 
+let activeAppSection = 'news';
+
+let currentNewsData = [];
+let newsCache = {};
 
 let currentPage = 0;
 let isLoadingMore = false;
 let hasMoreNews = true;
-let currentSearchQuery = ''; 
+let currentSearchQuery = '';
+
+const searchState = {
+    query: '',
+    data: [],
+    page: 0,
+    hasMore: false
+};
+
+const galleryState = {
+    query: '',
+    data: [],
+    page: 0,
+    hasMore: false
+};
 
 let savedBookmarks = LocalDB.getBookmarks();
 let readHistory = LocalDB.getHistory();
@@ -55,138 +73,460 @@ let aiSummaryCache = LocalDB.getAISummaries();
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
     settingsView: document.getElementById('settings-view'),
+    searchView: document.getElementById('search-view'),
+    searchForm: document.getElementById('news-search-form'),
+    searchInput: document.getElementById('news-search-input'),
+    searchHint: document.getElementById('search-hint'),
+    galleryView: document.getElementById('gallery-view'),
+    gallerySearchForm: document.getElementById('gallery-search-form'),
+    gallerySearchInput: document.getElementById('gallery-search-input'),
+    galleryHint: document.getElementById('gallery-hint'),
+    galleryBack: document.getElementById('gallery-back'),
+    openGalleryBtn: document.getElementById('btn-open-gallery'),
     loadingIndicator: document.getElementById('loading-indicator'),
     scrollLoading: document.getElementById('scroll-loading'),
     navMenu: document.getElementById('nav-menu'),
+    categoryStrip: document.getElementById('category-strip'),
     mainContainer: document.getElementById('main-container'),
     ptrIndicator: document.getElementById('ptr-indicator'),
     backToTopBtn: document.getElementById('back-to-top'),
-    gallerySearchContainer: document.getElementById('gallery-search-container'),
-    gallerySearchInput: document.getElementById('gallery-search-input'),
+    bottomNav: document.getElementById('bottom-nav'),
     appBgContainer: document.getElementById('app-bg-container')
 };
 
-// 🚀 高透光幾何背景初始化
 function initRandomBackground() {
     if (DOM.appBgContainer) {
-        DOM.appBgContainer.innerHTML = generateGeometricBackground() + '<div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/20 via-transparent to-[#0a0d1a]/70"></div>';
+        DOM.appBgContainer.innerHTML = generateGeometricBackground()
+            + '<div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/20 via-transparent to-[#0a0d1a]/70"></div>';
     }
 }
-
-DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        DOM.gallerySearchInput.blur();
-        currentSearchQuery = DOM.gallerySearchInput.value.trim() || 'Japan travel';
-        currentPage = 0;
-        loadGalleryUI(false);
-    }
-});
 
 let wakeLock = null;
 let isTileExpandedState = false;
 
-async function requestWakeLock() { 
-    if ('wakeLock' in navigator && !wakeLock) { 
-        try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} 
-    } 
-}
-async function releaseWakeLock() { 
-    if (wakeLock !== null) { 
-        try { await wakeLock.release(); } catch(e){}
-        wakeLock = null; 
-    } 
+async function requestWakeLock() {
+    if ('wakeLock' in navigator && !wakeLock) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {}
+    }
 }
 
-document.addEventListener('visibilitychange', async () => { 
-    if (document.visibilityState === 'visible' && isTileExpandedState) { 
-        await requestWakeLock(); 
+async function releaseWakeLock() {
+    if (wakeLock !== null) {
+        try {
+            await wakeLock.release();
+        } catch (e) {}
+        wakeLock = null;
+    }
+}
+
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && isTileExpandedState) {
+        await requestWakeLock();
     } else if (document.visibilityState === 'hidden') {
         wakeLock = null;
     }
 });
 
+function setBottomNavState() {
+    DOM.bottomNav?.querySelectorAll('.bottom-nav-btn').forEach(btn => {
+        const visualSection = activeAppSection === 'gallery' ? 'settings' : activeAppSection;
+        const isActive = btn.dataset.section === visualSection;
+        btn.classList.toggle('active', isActive);
+        if (isActive) btn.setAttribute('aria-current', 'page');
+        else btn.removeAttribute('aria-current');
+    });
+}
+
 function renderPivot() {
     if (!DOM.navMenu) return;
+
     DOM.navMenu.innerHTML = '';
     categories.forEach((cat, index) => {
         const a = document.createElement('a');
         a.className = `nav-link ${index === currentIndex ? 'active' : ''}`;
         a.innerText = cat.name;
-        a.addEventListener('click', () => {
+        a.dataset.categoryId = cat.id;
+        a.setAttribute('role', 'button');
+        a.setAttribute('tabindex', '0');
+
+        const activate = () => {
+            if (activeAppSection !== 'news') return;
             currentIndex = index;
             handlePageChange();
+        };
+
+        a.addEventListener('click', activate);
+        a.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                activate();
+            }
         });
         DOM.navMenu.appendChild(a);
     });
+
     const activeLink = DOM.navMenu.children[currentIndex];
-    if (activeLink) DOM.navMenu.scrollTo({ left: activeLink.offsetLeft - 16, behavior: 'smooth' });
+    if (activeLink) {
+        DOM.navMenu.scrollTo({
+            left: Math.max(activeLink.offsetLeft - 20, 0),
+            behavior: 'smooth'
+        });
+    }
+}
+
+function resetViewState() {
+    currentPage = 0;
+    hasMoreNews = true;
+    isLoadingMore = false;
+    currentSearchQuery = '';
+    DOM.backToTopBtn?.classList.add('hidden-fab');
+    isTileExpandedState = false;
+    releaseWakeLock();
+}
+
+function showNewsGrid() {
+    DOM.settingsView?.classList.add('hidden');
+    DOM.settingsView?.classList.remove('flex');
+    DOM.searchView?.classList.add('hidden');
+    DOM.galleryView?.classList.add('hidden');
+    DOM.newsGrid?.classList.remove('hidden');
+    if (DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 auto-rows-auto';
+}
+
+function loadCurrentCategory(forceSync = false, isAppendMode = false) {
+    const currentCat = categories[currentIndex];
+    if (!currentCat) return Promise.resolve();
+
+    if (currentCat.isCustom) {
+        currentSearchQuery = currentCat.query;
+        return loadNewsUI('search', forceSync, isAppendMode, currentCat.query);
+    }
+
+    currentSearchQuery = '';
+    return loadNewsUI(currentCat.id, forceSync, isAppendMode);
 }
 
 function handlePageChange() {
+    if (activeAppSection !== 'news') return;
+
     renderPivot();
-    const currentCat = categories[currentIndex];
-    if (DOM.mainContainer) DOM.mainContainer.scrollTop = 0; 
-    currentPage = 0; 
-    hasMoreNews = true;
-    isLoadingMore = false;
-    currentSearchQuery = ''; 
-    DOM.backToTopBtn?.classList.add('hidden-fab'); 
-    
-    isTileExpandedState = false;
-    releaseWakeLock();
-    
-    DOM.gallerySearchContainer?.classList.add('hidden');
+    showNewsGrid();
+    resetViewState();
+
+    if (DOM.mainContainer) DOM.mainContainer.scrollTop = 0;
+    loadCurrentCategory(false, false);
+}
+
+function renderSearchLanding() {
+    currentNewsData = [];
+    currentPage = 0;
+    hasMoreNews = false;
+
+    if (DOM.newsGrid) {
+        DOM.newsGrid.innerHTML = `
+            <div class="px-5 py-10 text-center">
+                <p class="text-sm text-white/45 font-light">搜尋新聞標題與內容</p>
+                <p class="text-xs text-white/25 mt-2 tracking-wide">來源：HK01</p>
+            </div>
+        `;
+    }
+}
+
+function showSearchSection() {
+    DOM.settingsView?.classList.add('hidden');
+    DOM.settingsView?.classList.remove('flex');
+    DOM.galleryView?.classList.add('hidden');
+    DOM.searchView?.classList.remove('hidden');
+    DOM.newsGrid?.classList.remove('hidden');
     if (DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 auto-rows-auto';
 
-    if (currentCat.id === 'settings') {
-        DOM.newsGrid?.classList.add('hidden');
-        DOM.settingsView?.classList.remove('hidden');
-        DOM.settingsView?.classList.add('flex');
-        renderCategoryManager(allBaseCats, getCategories, LocalDB.saveVisibleCategories, LocalDB.saveCustomCategories, onCategoryUpdated);
-    } else if (currentCat.id === 'bookmarks') {
-        DOM.settingsView?.classList.add('hidden');
-        DOM.settingsView?.classList.remove('flex');
-        DOM.newsGrid?.classList.remove('hidden');
-        renderBookmarksUI();
-    } else if (currentCat.id === 'gallery') {
-        DOM.settingsView?.classList.add('hidden');
-        DOM.settingsView?.classList.remove('flex');
-        DOM.newsGrid?.classList.remove('hidden');
-        DOM.gallerySearchContainer?.classList.remove('hidden');
-        if (DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4'; 
-        
-        currentSearchQuery = DOM.gallerySearchInput?.value.trim() || 'Japan travel';
-        loadGalleryUI(false);
-    } else if (currentCat.isCustom) {
-        DOM.settingsView?.classList.add('hidden');
-        DOM.settingsView?.classList.remove('flex');
-        DOM.newsGrid?.classList.remove('hidden');
-        currentSearchQuery = currentCat.query; 
-        loadNewsUI('search', false, false); 
-    } else {
-        DOM.settingsView?.classList.add('hidden');
-        DOM.settingsView?.classList.remove('flex');
-        DOM.newsGrid?.classList.remove('hidden');
-        loadNewsUI(currentCat.id, false, false); 
+    if (DOM.searchInput && searchState.query && DOM.searchInput.value !== searchState.query) {
+        DOM.searchInput.value = searchState.query;
     }
+
+    if (searchState.data.length > 0) {
+        currentNewsData = searchState.data;
+        currentPage = searchState.page;
+        hasMoreNews = searchState.hasMore;
+        renderTiles(currentNewsData, false);
+        if (DOM.searchHint) DOM.searchHint.textContent = `「${searchState.query}」的搜尋結果`;
+    } else {
+        renderSearchLanding();
+        if (DOM.searchHint) DOM.searchHint.textContent = '輸入關鍵字後按搜尋。';
+    }
+}
+
+function renderGalleryLanding() {
+    currentNewsData = [];
+    currentPage = 0;
+    hasMoreNews = false;
+
+    if (DOM.newsGrid) {
+        DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4';
+        DOM.newsGrid.innerHTML = `
+            <div class="col-span-2 md:col-span-3 px-5 py-10 text-center">
+                <p class="text-sm text-white/45 font-light">搜尋圖片靈感</p>
+            </div>
+        `;
+    }
+}
+
+function showGallerySection() {
+    DOM.settingsView?.classList.add('hidden');
+    DOM.settingsView?.classList.remove('flex');
+    DOM.searchView?.classList.add('hidden');
+    DOM.galleryView?.classList.remove('hidden');
+    DOM.newsGrid?.classList.remove('hidden');
+
+    if (DOM.gallerySearchInput && galleryState.query && DOM.gallerySearchInput.value !== galleryState.query) {
+        DOM.gallerySearchInput.value = galleryState.query;
+    }
+
+    if (galleryState.data.length > 0) {
+        currentNewsData = galleryState.data;
+        currentPage = galleryState.page;
+        hasMoreNews = galleryState.hasMore;
+        if (DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4';
+        renderGalleryTiles(false);
+        if (DOM.galleryHint) DOM.galleryHint.textContent = `「${galleryState.query}」的圖片結果`;
+    } else {
+        renderGalleryLanding();
+        if (DOM.galleryHint) DOM.galleryHint.textContent = '輸入關鍵字後按搜尋。';
+    }
+}
+
+function renderGallerySkeletonTiles(count = 6) {
+    if (!DOM.newsGrid) return;
+
+    DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4';
+
+    let skeletonHtml = '';
+    for (let i = 0; i < count; i++) {
+        skeletonHtml += `
+            <div class="metro-tile relative overflow-hidden bg-white/5 h-48 md:h-64 pointer-events-none border border-white/5 opacity-100">
+                <div class="w-full h-full skeleton-pulse"></div>
+            </div>
+        `;
+    }
+
+    DOM.newsGrid.innerHTML = skeletonHtml;
+}
+
+async function loadGalleryUI(isAppendMode = false) {
+    const query = isAppendMode
+        ? galleryState.query
+        : (DOM.gallerySearchInput?.value.trim() || '');
+
+    if (!query) {
+        galleryState.query = '';
+        galleryState.data = [];
+        galleryState.page = 0;
+        galleryState.hasMore = false;
+        renderGalleryLanding();
+        if (DOM.galleryHint) DOM.galleryHint.textContent = '請先輸入搜尋關鍵字。';
+        return;
+    }
+
+    const page = isAppendMode ? galleryState.page + 1 : 0;
+
+    if (!isAppendMode) {
+        renderGallerySkeletonTiles(6);
+        if (DOM.galleryHint) DOM.galleryHint.textContent = `正在搜尋「${query}」…`;
+    } else {
+        isLoadingMore = true;
+        appendBottomSkeletons(2);
+    }
+
+    const result = await fetchImageData(query, page);
+
+    if (isAppendMode) removeBottomSkeletons();
+
+    if (result.success && result.data.length > 0) {
+        galleryState.query = query;
+        galleryState.page = page;
+        galleryState.hasMore = result.hasMore;
+
+        if (isAppendMode) {
+            galleryState.data = galleryState.data.concat(result.data);
+            currentNewsData = galleryState.data;
+            renderGalleryTiles(true, result.data);
+        } else {
+            galleryState.data = result.data;
+            currentNewsData = galleryState.data;
+            renderGalleryTiles(false);
+        }
+
+        currentPage = galleryState.page;
+        hasMoreNews = galleryState.hasMore;
+        if (DOM.galleryHint) DOM.galleryHint.textContent = `「${query}」的圖片結果`;
+    } else {
+        galleryState.query = query;
+        galleryState.page = page;
+        galleryState.hasMore = false;
+        hasMoreNews = false;
+
+        if (!isAppendMode) {
+            galleryState.data = [];
+            currentNewsData = [];
+            if (DOM.newsGrid) {
+                DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4';
+                DOM.newsGrid.innerHTML = `<p class="text-gray-400 text-center mt-10 col-span-2 md:col-span-3">找不到符合「${query}」的圖片。</p>`;
+            }
+            if (DOM.galleryHint) DOM.galleryHint.textContent = '沒有搜尋結果。';
+        }
+    }
+
+    isLoadingMore = false;
+}
+
+function renderGalleryTiles(isAppendMode = false, batch = null) {
+    if (!DOM.newsGrid) return;
+
+    DOM.newsGrid.className = 'grid grid-cols-2 md:grid-cols-3 gap-2 auto-rows-auto px-4';
+    const dataToRender = batch || galleryState.data;
+    let htmlContent = '';
+
+    dataToRender.forEach((imgItem, relativeIndex) => {
+        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
+        htmlContent += `
+            <article class="metro-tile relative group cursor-pointer overflow-hidden h-48 md:h-64 border border-white/10" ${animationDelay}>
+                <img
+                    src="${imgItem.thumbUrl}"
+                    data-full="${imgItem.imageUrl}"
+                    class="gallery-img w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    alt="Gallery Image"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                />
+                <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span class="text-[10px] text-white/80 uppercase tracking-widest leading-tight block truncate">${imgItem.tags}</span>
+                </div>
+            </article>
+        `;
+    });
+
+    if (isAppendMode) DOM.newsGrid.insertAdjacentHTML('beforeend', htmlContent);
+    else DOM.newsGrid.innerHTML = htmlContent;
+}
+
+function renderBookmarksUI() {
+    const bookmarksArray = Object.values(savedBookmarks);
+    bookmarksArray.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+    currentNewsData = bookmarksArray;
+    currentPage = 0;
+    hasMoreNews = false;
+    isLoadingMore = false;
+
+    if (!DOM.newsGrid) return;
+
+    if (currentNewsData.length === 0) {
+        DOM.newsGrid.innerHTML = `
+            <div class="section-heading">
+                <h2>收藏</h2>
+                <span>0 篇</span>
+            </div>
+            <div class="px-5 py-10 text-center">
+                <p class="text-gray-400 tracking-wider font-light">目前未有收藏新聞。</p>
+            </div>
+        `;
+        return;
+    }
+
+    renderTiles(currentNewsData, false);
+    DOM.newsGrid.insertAdjacentHTML('afterbegin', `
+        <div class="section-heading">
+            <h2>收藏</h2>
+            <span>${currentNewsData.length} 篇</span>
+        </div>
+    `);
+}
+
+function showSettingsSection() {
+    DOM.searchView?.classList.add('hidden');
+    DOM.galleryView?.classList.add('hidden');
+    DOM.newsGrid?.classList.add('hidden');
+    DOM.settingsView?.classList.remove('hidden');
+    DOM.settingsView?.classList.add('flex');
+    hasMoreNews = false;
+
+    renderCategoryManager(
+        allBaseCats,
+        getCategories,
+        LocalDB.saveVisibleCategories,
+        LocalDB.saveCustomCategories,
+        onCategoryUpdated
+    );
+}
+
+function showAppSection(section) {
+    if (!['news', 'search', 'bookmarks', 'settings', 'gallery'].includes(section)) return;
+
+    if (section === activeAppSection) {
+        if (section === 'search') {
+            DOM.searchInput?.focus();
+        } else {
+            DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return;
+    }
+
+    activeAppSection = section;
+    setBottomNavState();
+    DOM.categoryStrip?.classList.toggle('hidden', section !== 'news');
+
+    isTileExpandedState = false;
+    releaseWakeLock();
+    DOM.backToTopBtn?.classList.add('hidden-fab');
+    if (DOM.mainContainer) DOM.mainContainer.scrollTop = 0;
+
+    if (section === 'news') {
+        showNewsGrid();
+        renderPivot();
+        resetViewState();
+        loadCurrentCategory(false, false);
+        return;
+    }
+
+    if (section === 'search') {
+        resetViewState();
+        showSearchSection();
+        return;
+    }
+
+    if (section === 'gallery') {
+        resetViewState();
+        showGallerySection();
+        return;
+    }
+
+    if (section === 'bookmarks') {
+        DOM.settingsView?.classList.add('hidden');
+        DOM.settingsView?.classList.remove('flex');
+        DOM.searchView?.classList.add('hidden');
+        DOM.galleryView?.classList.add('hidden');
+        DOM.newsGrid?.classList.remove('hidden');
+        if (DOM.newsGrid) DOM.newsGrid.className = 'grid grid-cols-1 auto-rows-auto';
+        renderBookmarksUI();
+        return;
+    }
+
+    resetViewState();
+    showSettingsSection();
 }
 
 function onCategoryUpdated() {
     visibleCatIds = LocalDB.getVisibleCategories();
     customCats = LocalDB.getCustomCategories();
     categories = getCategories();
+
     if (currentIndex >= categories.length) currentIndex = 0;
     renderPivot();
-}
 
-function renderBookmarksUI() {
-    const bookmarksArray = Object.values(savedBookmarks);
-    bookmarksArray.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-    currentNewsData = bookmarksArray;
-    hasMoreNews = false; 
-    renderTiles(currentNewsData, false);
-    if (currentNewsData.length === 0 && DOM.newsGrid) {
-        DOM.newsGrid.innerHTML = '<p class="text-gray-400 text-center mt-12 tracking-wider font-light">你的收藏夾空空如也，快去收藏新聞吧！</p>';
+    if (activeAppSection === 'news' && categories.length > 0) {
+        handlePageChange();
     }
 }
 
@@ -204,8 +544,12 @@ function toggleBookmark(newsItem, btnElement) {
             btnElement.innerHTML = '★ 已收藏';
         }
     }
+
     LocalDB.saveBookmarks(savedBookmarks);
-    if (categories[currentIndex].id === 'bookmarks') renderBookmarksUI();
+
+    if (activeAppSection === 'bookmarks') {
+        renderBookmarksUI();
+    }
 }
 
 function markAsRead(link, titleElement) {
@@ -221,8 +565,10 @@ function markAsRead(link, titleElement) {
 
 function renderSkeletonTiles(count = 6) {
     if (!DOM.newsGrid) return;
+
     const { currentThemeBorder } = getThemeClasses();
     let skeletonHtml = '';
+
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
             <div class="metro-tile ${currentThemeBorder} flex flex-col pointer-events-none opacity-100 p-4">
@@ -240,13 +586,16 @@ function renderSkeletonTiles(count = 6) {
             </div>
         `;
     }
+
     DOM.newsGrid.innerHTML = skeletonHtml;
 }
 
 function appendBottomSkeletons(count = 3) {
     if (!DOM.newsGrid) return;
+
     const { currentThemeBorder } = getThemeClasses();
     let skeletonHtml = '';
+
     for (let i = 0; i < count; i++) {
         skeletonHtml += `
             <div class="bottom-skeleton-item metro-tile ${currentThemeBorder} flex flex-col pointer-events-none opacity-100 p-4">
@@ -264,92 +613,38 @@ function appendBottomSkeletons(count = 3) {
             </div>
         `;
     }
+
     DOM.newsGrid.insertAdjacentHTML('beforeend', skeletonHtml);
 }
 
 function removeBottomSkeletons() {
-    if (!DOM.newsGrid) return;
-    DOM.newsGrid.querySelectorAll('.bottom-skeleton-item').forEach(el => el.remove());
+    DOM.newsGrid?.querySelectorAll('.bottom-skeleton-item').forEach(el => el.remove());
 }
 
-function renderGallerySkeletonTiles(count = 6) {
-    if (!DOM.newsGrid) return;
-    let skeletonHtml = '';
-    for (let i = 0; i < count; i++) {
-        skeletonHtml += `
-            <div class="metro-tile relative overflow-hidden bg-white/5 h-48 md:h-64 pointer-events-none border border-white/5 opacity-100">
-                <div class="w-full h-full skeleton-pulse"></div>
-            </div>
-        `;
-    }
-    DOM.newsGrid.innerHTML = skeletonHtml;
-}
+async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false, searchQueryOverride = '') {
+    const cacheKey = categoryId === 'search' ? null : categoryId;
 
-async function loadGalleryUI(isAppendMode = false) {
-    if (!isAppendMode && DOM.newsGrid) {
-        renderGallerySkeletonTiles(6);
-    } else {
-        isLoadingMore = true;
-        appendBottomSkeletons(2);
-    }
-
-    const result = await fetchImageData(currentSearchQuery, currentPage);
-
-    if (isAppendMode) removeBottomSkeletons();
-
-    if (result.success && result.data.length > 0) {
-        hasMoreNews = result.hasMore;
-        currentNewsData = isAppendMode ? currentNewsData.concat(result.data) : result.data;
-        renderGalleryTiles(isAppendMode);
-    } else {
-        hasMoreNews = false;
-        if (!isAppendMode && DOM.newsGrid) {
-            const errorMsg = result.error ? `錯誤: ${result.error}` : '找不到相關圖片，換個關鍵字試試看吧！';
-            DOM.newsGrid.innerHTML = `<p class="text-gray-400 text-center mt-10 col-span-2">${errorMsg}</p>`;
-        }
-    }
-
-    DOM.loadingIndicator?.classList.add('hidden');
-    DOM.scrollLoading?.classList.add('hidden');
-    isLoadingMore = false;
-}
-
-function renderGalleryTiles(isAppendMode = false) {
-    if (!DOM.newsGrid) return;
-    let htmlContent = '';
-    const dataToRender = isAppendMode ? currentNewsData.slice(currentPage * 20) : currentNewsData;
-
-    dataToRender.forEach((imgItem, relativeIndex) => {
-        const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
-        htmlContent += `
-            <article class="metro-tile relative group cursor-pointer overflow-hidden h-48 md:h-64 border border-white/10" ${animationDelay}>
-                <img src="${imgItem.thumbUrl}" data-full="${imgItem.imageUrl}" class="gallery-img w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" alt="Gallery Image" loading="lazy" referrerpolicy="no-referrer" />
-                <div class="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span class="text-[10px] text-white/80 uppercase tracking-widest leading-tight block truncate">${imgItem.tags}</span>
-                </div>
-            </article>
-        `;
-    });
-
-    if (isAppendMode) DOM.newsGrid.insertAdjacentHTML('beforeend', htmlContent);
-    else DOM.newsGrid.innerHTML = htmlContent;
-}
-
-async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
-    if (categoryId !== 'search' && !isAppendMode && !forceSync && newsCache[categoryId] && currentPage === 0) {
-        currentNewsData = newsCache[categoryId];
+    if (
+        cacheKey
+        && !isAppendMode
+        && !forceSync
+        && newsCache[cacheKey]
+        && currentPage === 0
+    ) {
+        currentNewsData = newsCache[cacheKey];
         renderTiles(currentNewsData, false);
         return;
     }
 
-    if (!isAppendMode && DOM.newsGrid) {
+    if (!isAppendMode) {
         renderSkeletonTiles(6);
     } else {
         isLoadingMore = true;
         appendBottomSkeletons(3);
     }
 
-    const result = await fetchNewsData(categoryId, currentPage, forceSync, currentSearchQuery);
+    const query = searchQueryOverride || currentSearchQuery;
+    const result = await fetchNewsData(categoryId, currentPage, forceSync, query);
 
     if (isAppendMode) removeBottomSkeletons();
 
@@ -361,16 +656,17 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
             const startIndex = currentNewsData.length;
             currentNewsData = currentNewsData.concat(newBatch);
             renderTiles(newBatch, true, startIndex);
+            if (cacheKey) newsCache[cacheKey] = currentNewsData;
         } else {
             currentNewsData = newBatch;
-            if (currentPage === 0 && categoryId !== 'search') newsCache[categoryId] = currentNewsData;
+            if (currentPage === 0 && cacheKey) newsCache[cacheKey] = currentNewsData;
             renderTiles(currentNewsData, false);
         }
     } else {
         hasMoreNews = false;
         if (!isAppendMode && DOM.newsGrid) {
-            DOM.newsGrid.innerHTML = categoryId === 'search' 
-                ? `<p class="text-gray-400 text-center mt-10">資料庫中找不到符合「${currentSearchQuery}」的新聞，請嘗試其他關鍵字！</p>` 
+            DOM.newsGrid.innerHTML = categoryId === 'search'
+                ? `<p class="text-gray-400 text-center mt-10 px-5">資料庫中找不到符合「${query}」的新聞，請嘗試其他關鍵字。</p>`
                 : '<p class="text-gray-400 text-center mt-10">目前沒有新聞資料。</p>';
         }
     }
@@ -380,8 +676,78 @@ async function loadNewsUI(categoryId, forceSync = false, isAppendMode = false) {
     isLoadingMore = false;
 }
 
+async function loadSearchUI(isAppendMode = false) {
+    const query = isAppendMode
+        ? searchState.query
+        : (DOM.searchInput?.value.trim() || '');
+
+    if (!query) {
+        searchState.query = '';
+        searchState.data = [];
+        searchState.page = 0;
+        searchState.hasMore = false;
+        renderSearchLanding();
+        if (DOM.searchHint) DOM.searchHint.textContent = '請先輸入搜尋關鍵字。';
+        return;
+    }
+
+    const page = isAppendMode ? searchState.page + 1 : 0;
+
+    if (!isAppendMode) {
+        renderSkeletonTiles(6);
+        if (DOM.searchHint) DOM.searchHint.textContent = `正在搜尋「${query}」…`;
+    } else {
+        isLoadingMore = true;
+        appendBottomSkeletons(3);
+    }
+
+    const result = await fetchNewsData('search', page, false, query);
+
+    if (isAppendMode) removeBottomSkeletons();
+
+    if (result.success && result.data.length > 0) {
+        const newBatch = result.data;
+
+        searchState.query = query;
+        searchState.page = page;
+        searchState.hasMore = result.hasMore;
+
+        if (isAppendMode) {
+            const startIndex = searchState.data.length;
+            searchState.data = searchState.data.concat(newBatch);
+            currentNewsData = searchState.data;
+            renderTiles(newBatch, true, startIndex);
+        } else {
+            searchState.data = newBatch;
+            currentNewsData = searchState.data;
+            renderTiles(currentNewsData, false);
+        }
+
+        currentPage = searchState.page;
+        hasMoreNews = searchState.hasMore;
+        if (DOM.searchHint) DOM.searchHint.textContent = `「${query}」的搜尋結果`;
+    } else {
+        searchState.query = query;
+        searchState.page = page;
+        searchState.hasMore = false;
+        hasMoreNews = false;
+
+        if (!isAppendMode) {
+            searchState.data = [];
+            currentNewsData = [];
+            if (DOM.newsGrid) {
+                DOM.newsGrid.innerHTML = `<p class="text-gray-400 text-center mt-10 px-5">找不到符合「${query}」的新聞。</p>`;
+            }
+            if (DOM.searchHint) DOM.searchHint.textContent = '沒有搜尋結果。';
+        }
+    }
+
+    isLoadingMore = false;
+}
+
 function formatParagraphs(text) {
     if (!text) return '';
+
     return text
         .split('\n')
         .map(p => p.trim())
@@ -415,7 +781,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
     if (articlesToRender.length === 0 && !isAppendMode) {
-        DOM.newsGrid.innerHTML = '<p class="text-gray-400 text-center mt-10">目前沒有新聞！</p>';
+        DOM.newsGrid.innerHTML = '<p class="text-gray-400 text-center mt-10">目前沒有新聞。</p>';
         return;
     }
 
@@ -427,26 +793,27 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const animationDelay = `style="animation-delay: ${(relativeIndex % 20) * 0.03}s"`;
         const cleanDescription = formatParagraphs(news.description || '暫無詳細內文。');
         const isSaved = !!savedBookmarks[news.link];
-        const isRead = !!readHistory[news.link]; 
+        const isRead = !!readHistory[news.link];
         const hasCachedAI = !!aiSummaryCache[news.link];
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
-
         const catName = categoryMap[news.category] || news.category || '即時';
 
-        let thumbHtml = news.imageUrl 
-            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/15 shadow-sm bg-black/30" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>` 
+        const thumbHtml = news.imageUrl
+            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/15 shadow-sm bg-black/30" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>`
             : '';
 
         let imagesHtml = '';
         if (news.images && news.images.length > 0) {
-            let slidesHtml = news.images.map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-full object-cover block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`).join('');
-            
-            let navButtons = news.images.length > 1 ? `
+            const slidesHtml = news.images
+                .map(imgUrl => `<img src="${imgUrl}" class="lightbox-img snap-center flex-shrink-0 w-full h-full object-cover block cursor-pointer active:opacity-70 transition-opacity" alt="新聞圖片" loading="lazy" referrerpolicy="no-referrer" />`)
+                .join('');
+
+            const navButtons = news.images.length > 1 ? `
                 <button class="btn-prev-img absolute left-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❮</button>
                 <button class="btn-next-img absolute right-0 top-1/2 -translate-y-1/2 bg-black/60 text-white px-2 py-2 text-xs z-10 active:bg-white active:text-black">❯</button>
                 <div class="absolute bottom-1 right-1 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded tracking-widest z-10">${news.images.length} 圖</div>
             ` : '';
-            
+
             imagesHtml = `
                 <div class="img-container relative w-full h-52 md:h-64 flex-shrink-0 overflow-hidden bg-black/30 border border-white/10 rounded-xs shadow-md transition-all duration-200">
                     <div class="img-scroll-box flex items-center h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar" style="scroll-behavior: smooth;">${slidesHtml}</div>
@@ -468,7 +835,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             ${isSaved ? '<span class="text-xs text-yellow-300">★</span>' : ''}
                         </div>
                     </div>
-                    
+
                     <div class="flex flex-row items-center justify-between min-h-[75px]">
                         <div class="flex-grow pr-2 flex flex-col justify-center">
                             <h3 class="news-title text-base md:text-lg font-bold leading-snug line-clamp-3 ${titleColorClass}">${news.title}</h3>
@@ -490,7 +857,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                             </div>
                             <h3 class="text-2xl md:text-3xl font-light leading-tight mb-2 px-5 mt-2 text-white">${news.title}</h3>
                             <p class="text-xs opacity-60 mb-4 px-5">${new Date(news.pubDate).toLocaleString()} (${timeAgo(news.pubDate)})</p>
-                            
+
                             <div class="media-ai-wrapper px-5 mb-4 flex flex-row gap-3 items-start">
                                 ${imagesHtml}
                                 <div class="ai-box hidden w-full flex-shrink-0 transition-all duration-200 bg-fuchsia-950/50 border border-fuchsia-500/40 p-3 rounded-xs flex flex-col justify-start min-h-[192px] md:min-h-[224px]">
@@ -516,7 +883,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     else DOM.newsGrid.innerHTML = htmlContent;
 }
 
-DOM.newsGrid?.addEventListener('click', async (e) => {
+DOM.newsGrid?.addEventListener('click', async e => {
     const target = e.target;
 
     if (target.classList.contains('lightbox-img') || target.classList.contains('gallery-img')) {
@@ -532,12 +899,15 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         if (scrollBox) scrollBox.scrollBy({ left: -scrollBox.clientWidth, behavior: 'smooth' });
         return;
     }
+
     if (target.classList.contains('btn-next-img')) {
         e.stopPropagation();
         const scrollBox = target.closest('.img-container')?.querySelector('.img-scroll-box');
         if (scrollBox) scrollBox.scrollBy({ left: scrollBox.clientWidth, behavior: 'smooth' });
         return;
     }
+
+    if (activeAppSection === 'gallery') return;
 
     const aiBtn = target.closest('.ai-btn');
     if (aiBtn) {
@@ -554,7 +924,12 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
 
         const aiBox = tile.querySelector('.ai-box');
         const aiText = tile.querySelector('.ai-summary-text');
-        if (aiBox && aiText && !aiBox.classList.contains('hidden') && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。') return;
+        if (
+            aiBox
+            && aiText
+            && !aiBox.classList.contains('hidden')
+            && aiText.innerText !== '⚠️ 總結失敗，請稍後再試。'
+        ) return;
 
         showAISummaryInTile(tile, '');
         if (aiText) aiText.innerHTML = '<span class="animate-pulse">正在呼叫 Llama 3 引擎運算中...</span>';
@@ -566,8 +941,8 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
             if (aiText) aiText.innerText = res.summary;
             aiSummaryCache[news.link] = res.summary;
             LocalDB.saveAISummary(news.link, res.summary);
-        } else {
-            if (aiText) aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
+        } else if (aiText) {
+            aiText.innerText = '⚠️ 總結失敗，請稍後再試。';
         }
         return;
     }
@@ -577,7 +952,9 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         e.stopPropagation();
         const tile = bookmarkBtn.closest('.metro-tile');
         const index = parseInt(tile.getAttribute('data-index'));
-        if (currentNewsData[index]) toggleBookmark(currentNewsData[index], bookmarkBtn);
+        if (currentNewsData[index]) {
+            toggleBookmark(currentNewsData[index], bookmarkBtn);
+        }
         return;
     }
 
@@ -587,11 +964,19 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         const tile = shareBtn.closest('.metro-tile');
         const index = parseInt(tile.getAttribute('data-index'));
         const news = currentNewsData[index];
+
         if (news) {
             if (navigator.share) {
-                try { await navigator.share({ title: news.title, text: '看看這則新聞！', url: news.link }); } catch (err) {}
+                try {
+                    await navigator.share({
+                        title: news.title,
+                        text: '看看這則新聞！',
+                        url: news.link
+                    });
+                } catch (err) {}
             } else {
-                navigator.clipboard.writeText(news.link).then(() => { alert('已複製新聞連結！'); });
+                navigator.clipboard.writeText(news.link)
+                    .then(() => alert('已複製新聞連結！'));
             }
         }
         return;
@@ -602,128 +987,178 @@ DOM.newsGrid?.addEventListener('click', async (e) => {
         const index = parseInt(tile.getAttribute('data-index'));
         const news = currentNewsData[index];
         const isCurrentlyExpanded = tile.classList.contains('expanded');
-        
+
         releaseWakeLock();
 
         if (isCurrentlyExpanded) {
             tile.classList.remove('expanded');
             isTileExpandedState = false;
-        } else {
-            DOM.newsGrid.querySelectorAll('.metro-tile.expanded').forEach(t => t.classList.remove('expanded'));
-
-            const titleElement = tile.querySelector('.news-title');
-            if (news) markAsRead(news.link, titleElement);
-            
-            tile.classList.add('expanded');
-            isTileExpandedState = true;
-            requestWakeLock();
-
-            if (news && aiSummaryCache[news.link]) {
-                showAISummaryInTile(tile, aiSummaryCache[news.link]);
-            }
-
-            const contentBody = tile.querySelector('.article-content-body');
-
-            if (news && !news.isFullContentLoaded && contentBody) {
-                const originalSummary = news.description;
-                
-                const articleSkeletonHtml = `
-                    <div class="article-skeleton-container border-t border-white/10 pt-4 mt-4">
-                        <div class="flex items-center space-x-2 text-cyan-400 text-xs mb-4">
-                            <span class="loader-small"></span>
-                            <span class="animate-pulse font-bold tracking-wider">正在載入完整文章...</span>
-                        </div>
-                        <div class="space-y-3 opacity-60">
-                            <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
-                            <div class="w-11/12 h-4 skeleton-pulse rounded-xs"></div>
-                            <div class="w-4/5 h-4 skeleton-pulse rounded-xs"></div>
-                            <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
-                            <div class="w-3/4 h-4 skeleton-pulse rounded-xs mb-2"></div>
-                            <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
-                            <div class="w-5/6 h-4 skeleton-pulse rounded-xs"></div>
-                        </div>
-                    </div>
-                `;
-
-                contentBody.innerHTML = `
-                    ${formatParagraphs(originalSummary)}
-                    ${articleSkeletonHtml}
-                `;
-
-                fetchFullArticleContent(news.link).then(res => {
-                    if (res.success && res.content && res.content.length > originalSummary.length) {
-                        news.description = res.content;
-                        news.isFullContentLoaded = true;
-                        
-                        contentBody.style.opacity = '0.3';
-                        setTimeout(() => {
-                            contentBody.innerHTML = formatParagraphs(res.content);
-                            contentBody.style.opacity = '1';
-                        }, 120);
-                    } else {
-                        const skeleton = contentBody.querySelector('.article-skeleton-container');
-                        if (skeleton) skeleton.remove();
-                        news.isFullContentLoaded = true;
-                    }
-                });
-            }
-
-            setTimeout(() => { tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 80);
+            return;
         }
+
+        DOM.newsGrid.querySelectorAll('.metro-tile.expanded')
+            .forEach(t => t.classList.remove('expanded'));
+
+        const titleElement = tile.querySelector('.news-title');
+        if (news) markAsRead(news.link, titleElement);
+
+        tile.classList.add('expanded');
+        isTileExpandedState = true;
+        requestWakeLock();
+
+        if (news && aiSummaryCache[news.link]) {
+            showAISummaryInTile(tile, aiSummaryCache[news.link]);
+        }
+
+        const contentBody = tile.querySelector('.article-content-body');
+
+        if (news && !news.isFullContentLoaded && contentBody) {
+            const originalSummary = news.description;
+
+            const articleSkeletonHtml = `
+                <div class="article-skeleton-container border-t border-white/10 pt-4 mt-4">
+                    <div class="flex items-center space-x-2 text-cyan-400 text-xs mb-4">
+                        <span class="loader-small"></span>
+                        <span class="animate-pulse font-bold tracking-wider">正在載入完整文章...</span>
+                    </div>
+                    <div class="space-y-3 opacity-60">
+                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                        <div class="w-11/12 h-4 skeleton-pulse rounded-xs"></div>
+                        <div class="w-4/5 h-4 skeleton-pulse rounded-xs"></div>
+                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                        <div class="w-3/4 h-4 skeleton-pulse rounded-xs mb-2"></div>
+                        <div class="w-full h-4 skeleton-pulse rounded-xs"></div>
+                        <div class="w-5/6 h-4 skeleton-pulse rounded-xs"></div>
+                    </div>
+                </div>
+            `;
+
+            contentBody.innerHTML = `
+                ${formatParagraphs(originalSummary)}
+                ${articleSkeletonHtml}
+            `;
+
+            fetchFullArticleContent(news.link).then(res => {
+                if (res.success && res.content && res.content.length > originalSummary.length) {
+                    news.description = res.content;
+                    news.isFullContentLoaded = true;
+
+                    contentBody.style.opacity = '0.3';
+                    setTimeout(() => {
+                        contentBody.innerHTML = formatParagraphs(res.content);
+                        contentBody.style.opacity = '1';
+                    }, 120);
+                } else {
+                    const skeleton = contentBody.querySelector('.article-skeleton-container');
+                    if (skeleton) skeleton.remove();
+                    news.isFullContentLoaded = true;
+                }
+            });
+        }
+
+        setTimeout(() => {
+            tile.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 80);
     }
 });
 
+DOM.searchForm?.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (activeAppSection !== 'search') return;
+    await loadSearchUI(false);
+});
+
+DOM.gallerySearchForm?.addEventListener('submit', async e => {
+    e.preventDefault();
+    if (activeAppSection !== 'gallery') return;
+    await loadGalleryUI(false);
+});
+
+DOM.openGalleryBtn?.addEventListener('click', () => {
+    showAppSection('gallery');
+});
+
+DOM.galleryBack?.addEventListener('click', () => {
+    showAppSection('settings');
+});
+
+DOM.bottomNav?.addEventListener('click', e => {
+    const btn = e.target.closest('.bottom-nav-btn');
+    if (!btn) return;
+    showAppSection(btn.dataset.section);
+});
+
 DOM.mainContainer?.addEventListener('scroll', () => {
-    if (DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
+    if (activeAppSection !== 'settings' && DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
         DOM.backToTopBtn?.classList.remove('hidden-fab');
     } else {
         DOM.backToTopBtn?.classList.add('hidden-fab');
     }
 
-    if (categories[currentIndex].id !== 'settings' && categories[currentIndex].id !== 'bookmarks') {
-        if (categories[currentIndex].isCustom && !currentSearchQuery) return;
-        if (DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight >= DOM.mainContainer.scrollHeight - 180) {
-            if (!isLoadingMore && hasMoreNews) {
-                isLoadingMore = true;
-                currentPage++;
-                if (categories[currentIndex].id === 'gallery') {
-                    loadGalleryUI(true);
-                } else {
-                    const isCustom = categories[currentIndex].isCustom;
-                    const catId = isCustom ? 'search' : categories[currentIndex].id;
-                    loadNewsUI(catId, false, true);
-                }
-            }
+    if (activeAppSection === 'news') {
+        if (
+            DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight
+            >= DOM.mainContainer.scrollHeight - 180
+            && !isLoadingMore
+            && hasMoreNews
+        ) {
+            isLoadingMore = true;
+            currentPage++;
+            loadCurrentCategory(false, true);
+        }
+        return;
+    }
+
+    if (activeAppSection === 'search') {
+        if (
+            DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight
+            >= DOM.mainContainer.scrollHeight - 180
+            && !isLoadingMore
+            && searchState.hasMore
+            && searchState.query
+        ) {
+            isLoadingMore = true;
+            loadSearchUI(true);
+        }
+    }
+
+    if (activeAppSection === 'gallery') {
+        if (
+            DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight
+            >= DOM.mainContainer.scrollHeight - 180
+            && !isLoadingMore
+            && galleryState.hasMore
+            && galleryState.query
+        ) {
+            isLoadingMore = true;
+            loadGalleryUI(true);
         }
     }
 }, { passive: true });
 
-DOM.backToTopBtn?.addEventListener('click', () => { DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' }); });
+DOM.backToTopBtn?.addEventListener('click', () => {
+    DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
-window.addEventListener('DOMContentLoaded', () => { 
+window.addEventListener('DOMContentLoaded', () => {
     initRandomBackground();
     initLightbox();
-    
+
     initGestures({
         mainContainer: DOM.mainContainer,
         ptrIndicator: DOM.ptrIndicator,
-        onSwipe: (dir) => {
-            if (dir === 'prev') currentIndex = (currentIndex - 1 + categories.length) % categories.length;
-            else currentIndex = (currentIndex + 1) % categories.length;
+        canSwipe: () => activeAppSection === 'news' && !isTileExpandedState,
+        canRefresh: () => activeAppSection === 'news' && !isTileExpandedState,
+        onSwipe: dir => {
+            const nextIndex = dir === 'prev' ? currentIndex - 1 : currentIndex + 1;
+            if (nextIndex < 0 || nextIndex >= categories.length) return;
+            currentIndex = nextIndex;
             handlePageChange();
         },
         onRefresh: async () => {
-            const currentCat = categories[currentIndex];
-            if (currentCat.id !== 'settings' && currentCat.id !== 'bookmarks') {
-                currentPage = 0;
-                if (currentCat.id === 'gallery') {
-                    await loadGalleryUI(false);
-                } else if (currentCat.isCustom) {
-                    await loadNewsUI('search', false, false);
-                } else {
-                    await loadNewsUI(currentCat.id, true, false); 
-                }
-            }
+            if (activeAppSection !== 'news') return;
+            currentPage = 0;
+            await loadCurrentCategory(true, false);
         }
     });
 
@@ -734,12 +1169,25 @@ window.addEventListener('DOMContentLoaded', () => {
         saveCustomCategories: LocalDB.saveCustomCategories,
         onCategoryUpdated,
         onThemeChange: () => {
-            if (currentNewsData.length > 0 && categories[currentIndex].id !== 'gallery') {
+            if (activeAppSection === 'bookmarks') {
+                renderBookmarksUI();
+                return;
+            }
+
+            if (
+                currentNewsData.length > 0
+                && activeAppSection !== 'settings'
+                && activeAppSection !== 'gallery'
+            ) {
                 renderTiles(currentNewsData, false);
             }
         }
     });
 
-    renderPivot(); 
-    handlePageChange(); 
+    renderPivot();
+    setBottomNavState();
+    DOM.categoryStrip?.classList.remove('hidden');
+    showNewsGrid();
+    resetViewState();
+    loadCurrentCategory(false, false);
 });

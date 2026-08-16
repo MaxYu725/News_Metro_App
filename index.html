@@ -14,12 +14,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
 </head>
-<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#0a0d1a] text-white select-none overflow-hidden">
+<body class="h-screen w-screen flex flex-col relative bg-[#0a0d1a] text-white select-none overflow-hidden app-shell">
 
-    <!-- 🚀 全新動態幾何背景容器 (每次重新啟動隨機生成) -->
     <div id="app-bg-container" class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#0a0d1a]"></div>
 
-    <!-- 圖片全螢幕燈箱 (Lightbox) -->
     <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-200">
         <button id="lightbox-close" class="absolute top-6 right-6 text-white text-4xl font-light hover:text-gray-400 z-10 px-4 py-2">&times;</button>
         <div class="relative w-full h-full flex justify-center items-center overflow-hidden">
@@ -28,39 +26,90 @@
         <p class="absolute bottom-6 text-gray-400 text-xs tracking-widest uppercase">雙指縮放 · 雙擊還原</p>
     </div>
 
-    <!-- 頂部導覽列 (Header Pivot) -->
-    <header class="flex-shrink-0 px-5 relative z-10">
-        <nav class="flex space-x-6 text-2xl mb-4 text-gray-400 overflow-x-auto hide-scrollbar justify-start" id="nav-menu"></nav>
+    <header id="app-header" class="app-header flex-shrink-0 relative z-30">
+        <div class="app-brand-row px-5">
+            <div class="flex items-baseline gap-2 min-w-0">
+                <h1 class="app-title">Metro News</h1>
+                <span class="app-source">HK01</span>
+            </div>
+        </div>
+        <div id="category-strip" class="px-5">
+            <nav class="flex gap-6 text-2xl text-gray-400 overflow-x-auto hide-scrollbar justify-start" id="nav-menu" aria-label="新聞分類"></nav>
+        </div>
     </header>
 
-    <!-- 主內容滾動區域 -->
-    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar pb-12 relative z-10 scroll-smooth" id="main-container">
+    <main class="flex-grow overflow-y-auto overflow-x-hidden hide-scrollbar relative z-10 scroll-smooth app-main" id="main-container">
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-150" style="height: 0px;"></div>
-        
-        <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20">
-            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-[#13182a]/70 backdrop-blur-md border border-white/20 px-4 py-3 text-white focus:outline-none focus:border-cyan-400 text-lg rounded-none shadow-lg">
-        </div>
+
+        <section id="search-view" class="hidden px-4 pt-3 pb-2 relative z-20">
+            <div class="view-title-row">
+                <div>
+                    <h2 class="view-title">搜尋</h2>
+                    <p class="view-subtitle">搜尋 HK01 新聞資料庫</p>
+                </div>
+            </div>
+            <form id="news-search-form" class="search-form" role="search">
+                <input
+                    type="search"
+                    id="news-search-input"
+                    placeholder="輸入關鍵字，例如：天文台、港鐵、iPhone"
+                    autocomplete="off"
+                    enterkeyhint="search"
+                    class="search-input"
+                    aria-label="搜尋新聞"
+                >
+                <button id="news-search-submit" class="search-submit" type="submit">搜尋</button>
+            </form>
+            <p id="search-hint" class="search-hint">輸入關鍵字後按搜尋。</p>
+        </section>
+
+        <section id="gallery-view" class="hidden px-4 pt-3 pb-2 relative z-20">
+            <div class="view-title-row">
+                <div class="flex items-center gap-3">
+                    <button id="gallery-back" class="subview-back" type="button" aria-label="返回設定">←</button>
+                    <div>
+                        <h2 class="view-title">圖庫</h2>
+                        <p class="view-subtitle">圖片靈感搜尋</p>
+                    </div>
+                </div>
+            </div>
+            <form id="gallery-search-form" class="search-form" role="search">
+                <input
+                    type="search"
+                    id="gallery-search-input"
+                    placeholder="搜尋圖片，例如：健身、楓葉"
+                    autocomplete="off"
+                    enterkeyhint="search"
+                    class="search-input"
+                    aria-label="搜尋圖片"
+                >
+                <button class="search-submit" type="submit">搜尋</button>
+            </form>
+            <p id="gallery-hint" class="search-hint">輸入關鍵字後按搜尋。</p>
+        </section>
 
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
             <div class="loader"></div>
         </div>
-        
+
         <div id="news-grid" class="grid grid-cols-1 auto-rows-auto"></div>
 
         <div id="scroll-loading" class="w-full h-16 flex items-center justify-center hidden">
             <div class="loader-small"></div>
         </div>
 
-        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-[#13182a]/80 backdrop-blur-md border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/20 active:scale-95 shadow-2xl">
+        <button id="back-to-top" class="hidden-fab fixed w-12 h-12 bg-[#13182a]/90 backdrop-blur-md border border-white/25 text-white flex justify-center items-center text-xl z-40 active:scale-95" aria-label="返回頂部">
             ↑
         </button>
 
-        <!-- 設定視圖 (Settings View) -->
-        <div id="settings-view" class="hidden flex-col space-y-8 pb-10 px-5 mt-4">
-            <h2 class="text-3xl font-light mb-2 text-white">settings</h2>
-            
+        <div id="settings-view" class="hidden flex-col space-y-8 px-5 mt-4">
             <div>
-                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">導覽列板塊顯示設定</p>
+                <h2 class="view-title">設定</h2>
+                <p class="view-subtitle">新聞分類、追蹤與外觀</p>
+            </div>
+
+            <div>
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">新聞分類</p>
                 <div id="category-visibility-list" class="grid grid-cols-2 gap-2"></div>
             </div>
 
@@ -68,19 +117,30 @@
                 <p class="text-xs text-gray-400 uppercase tracking-widest">自訂追蹤關鍵字</p>
                 <div class="flex flex-col space-y-2" id="category-manager-list"></div>
                 <div class="flex space-x-2 mt-2">
-                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-[#13182a]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow">
+                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字，例如：iPhone" class="bg-[#13182a]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow min-w-0">
                     <button id="btn-add-cat" class="metro-btn">新增</button>
                 </div>
             </div>
 
             <div>
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">其他</p>
+                <button id="btn-open-gallery" class="settings-link-row" type="button">
+                    <span>
+                        <span class="block text-base text-gray-100">圖片圖庫</span>
+                        <span class="block text-xs text-white/35 mt-1">保留原有圖片搜尋功能</span>
+                    </span>
+                    <span class="text-white/35 text-xl">›</span>
+                </button>
+            </div>
+
+            <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">accent color</p>
                 <div class="flex space-x-3">
-                    <button class="color-btn w-10 h-10 bg-cyan-500 border-2 border-white" data-color="bg-cyan-500" data-border="border-l-cyan-400" data-text="text-cyan-400"></button>
-                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-transparent" data-color="bg-blue-600" data-border="border-l-blue-500" data-text="text-blue-400"></button>
-                    <button class="color-btn w-10 h-10 bg-purple-600 border-2 border-transparent" data-color="bg-purple-600" data-border="border-l-purple-400" data-text="text-purple-400"></button>
-                    <button class="color-btn w-10 h-10 bg-emerald-500 border-2 border-transparent" data-color="bg-emerald-500" data-border="border-l-emerald-400" data-text="text-emerald-400"></button>
-                    <button class="color-btn w-10 h-10 bg-orange-500 border-2 border-transparent" data-color="bg-orange-500" data-border="border-l-orange-400" data-text="text-orange-400"></button>
+                    <button class="color-btn w-10 h-10 bg-cyan-500 border-2 border-white" data-color="bg-cyan-500" data-border="border-l-cyan-400" data-text="text-cyan-400" aria-label="青色"></button>
+                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-transparent" data-color="bg-blue-600" data-border="border-l-blue-500" data-text="text-blue-400" aria-label="藍色"></button>
+                    <button class="color-btn w-10 h-10 bg-purple-600 border-2 border-transparent" data-color="bg-purple-600" data-border="border-l-purple-400" data-text="text-purple-400" aria-label="紫色"></button>
+                    <button class="color-btn w-10 h-10 bg-emerald-500 border-2 border-transparent" data-color="bg-emerald-500" data-border="border-l-emerald-400" data-text="text-emerald-400" aria-label="綠色"></button>
+                    <button class="color-btn w-10 h-10 bg-orange-500 border-2 border-transparent" data-color="bg-orange-500" data-border="border-l-orange-400" data-text="text-orange-400" aria-label="橙色"></button>
                 </div>
             </div>
 
@@ -95,6 +155,25 @@
             </div>
         </div>
     </main>
+
+    <nav id="bottom-nav" class="bottom-nav z-50" aria-label="主要導覽">
+        <button class="bottom-nav-btn active" data-section="news" aria-label="新聞" aria-current="page">
+            <span class="bottom-nav-icon" aria-hidden="true">▤</span>
+            <span class="bottom-nav-label">新聞</span>
+        </button>
+        <button class="bottom-nav-btn" data-section="search" aria-label="搜尋">
+            <span class="bottom-nav-icon" aria-hidden="true">⌕</span>
+            <span class="bottom-nav-label">搜尋</span>
+        </button>
+        <button class="bottom-nav-btn" data-section="bookmarks" aria-label="收藏">
+            <span class="bottom-nav-icon" aria-hidden="true">☆</span>
+            <span class="bottom-nav-label">收藏</span>
+        </button>
+        <button class="bottom-nav-btn" data-section="settings" aria-label="設定">
+            <span class="bottom-nav-icon" aria-hidden="true">⚙</span>
+            <span class="bottom-nav-label">設定</span>
+        </button>
+    </nav>
 
     <script type="module" src="./app.js"></script>
     <script>if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(()=>{}); }); }</script>
