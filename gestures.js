@@ -1,5 +1,5 @@
 let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
-let ptrStartY = 0, ptrCurrentY = 0, isPulling = false;
+let ptrStartX = 0, ptrStartY = 0, ptrCurrentY = 0, isPulling = false;
 
 export function initGestures({
     mainContainer,
@@ -28,11 +28,23 @@ export function initGestures({
         }
     }, { passive: true });
 
+    const resetPullState = () => {
+        isPulling = false;
+        ptrStartX = 0;
+        ptrStartY = 0;
+        ptrCurrentY = 0;
+        if (ptrIndicator) {
+            ptrIndicator.style.height = '0px';
+            ptrIndicator.innerHTML = '';
+        }
+    };
+
     mainContainer?.addEventListener('touchstart', e => {
         if (!canRefresh() || mainContainer.scrollTop !== 0) {
             isPulling = false;
             return;
         }
+        ptrStartX = e.touches[0].clientX;
         ptrStartY = e.touches[0].clientY;
         ptrCurrentY = ptrStartY;
         isPulling = true;
@@ -40,13 +52,25 @@ export function initGestures({
 
     mainContainer?.addEventListener('touchmove', e => {
         if (!isPulling || !canRefresh()) return;
-        ptrCurrentY = e.touches[0].clientY;
+
+        const touch = e.touches[0];
+        ptrCurrentY = touch.clientY;
         const pullDist = ptrCurrentY - ptrStartY;
-        if (pullDist > 0 && pullDist < 120 && ptrIndicator) {
-            ptrIndicator.style.height = `${pullDist}px`;
-            ptrIndicator.innerHTML = `<div class="loader-small" style="opacity: ${Math.min(pullDist / 80, 1)};"></div>`;
+        const horizontalDist = Math.abs(touch.clientX - ptrStartX);
+        const isVerticalPull = pullDist > 0 && pullDist > horizontalDist;
+
+        if (!isVerticalPull) return;
+
+        // Custom pull-to-refresh owns this gesture. Prevent Android/Chromium from
+        // starting its native PWA page-refresh overlay at the same time.
+        e.preventDefault();
+
+        if (ptrIndicator) {
+            const visualPull = Math.min(pullDist, 110);
+            ptrIndicator.style.height = `${visualPull}px`;
+            ptrIndicator.innerHTML = `<div class="loader-small" style="opacity: ${Math.min(visualPull / 80, 1)};"></div>`;
         }
-    }, { passive: true });
+    }, { passive: false });
 
     mainContainer?.addEventListener('touchend', async () => {
         if (!isPulling) return;
@@ -57,11 +81,8 @@ export function initGestures({
             await onRefresh();
         }
 
-        if (ptrIndicator) {
-            ptrIndicator.style.height = '0px';
-            ptrIndicator.innerHTML = '';
-        }
-        ptrStartY = 0;
-        ptrCurrentY = 0;
+        resetPullState();
     }, { passive: true });
+
+    mainContainer?.addEventListener('touchcancel', resetPullState, { passive: true });
 }
