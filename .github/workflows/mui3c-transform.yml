@@ -1,0 +1,38 @@
+name: MUI-3C branch transform
+
+on:
+  push:
+    branches:
+      - agent/mui3c-reader-controller-cleanup
+    paths:
+      - .github/workflows/mui3c-transform.yml
+
+permissions:
+  contents: write
+
+jobs:
+  transform:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/mui3c-reader-controller-cleanup
+          fetch-depth: 0
+
+      - name: Apply Reader controller transform
+        run: node scripts/mui3c-transform.mjs
+
+      - name: Validate transformed JavaScript
+        run: |
+          node --check app.js
+          node --check sw.js
+
+      - name: Commit transformed sources
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js sw.js
+          git diff --cached --quiet && { echo "Transform produced no changes"; exit 1; }
+          git commit -m "MUI-3C: decouple Reader data controller"
+          git push origin HEAD:agent/mui3c-reader-controller-cleanup
