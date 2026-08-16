@@ -88,11 +88,12 @@ export async function fetchNewsData(categoryId, page, forceSync = false, searchQ
         }
 
         if (result.success) {
+            const updatedAt = Date.now();
             if (page === 0 && Array.isArray(result.data) && result.data.length > 0) {
                 saveCachedFeed(categoryId, searchQuery, result.data, result.hasMore);
             }
-            emitDataState({ context, status: 'ok', query: searchQuery, append: page > 0 });
-            return { success: true, data: result.data || [], hasMore: !!result.hasMore };
+            emitDataState({ context, status: 'ok', query: searchQuery, append: page > 0, updatedAt });
+            return { success: true, data: result.data || [], hasMore: !!result.hasMore, updatedAt };
         }
 
         return fallbackNewsResult(
@@ -123,8 +124,9 @@ export async function fetchImageData(query, page) {
             return { success: false, data: [], hasMore: false, error: message };
         }
 
-        emitDataState({ context: 'gallery', status: 'ok', query, append: page > 0 });
-        return result;
+        const updatedAt = Date.now();
+        emitDataState({ context: 'gallery', status: 'ok', query, append: page > 0, updatedAt });
+        return { ...result, updatedAt };
     } catch (error) {
         const message = errorMessage(error, '圖庫連接失敗');
         emitDataState({ context: 'gallery', status: 'error', error: message, query, append: page > 0 });

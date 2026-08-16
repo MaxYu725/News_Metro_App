@@ -1,8 +1,15 @@
 import { DATA_STATE_EVENT } from './api.js';
 
+const SUCCESS_HIDE_DELAY_MS = 1800;
+const RETRY_MARKER_KEY = 'metro_news_retry_context';
+
 let banner = null;
 let bannerContext = '';
 let lastState = null;
+let retryingContext = '';
+let successTimer = 0;
+
+const degradedContexts = new Set();
 
 const CSS = `
 .data-state-banner {
@@ -23,6 +30,11 @@ const CSS = `
     display: none !important;
 }
 
+.data-state-banner.is-success {
+    border-color: rgba(56, 189, 248, 0.24);
+    background: rgba(12, 31, 43, 0.72);
+}
+
 .data-state-banner-copy {
     min-width: 0;
     flex: 1 1 auto;
@@ -33,6 +45,10 @@ const CSS = `
     font-weight: 600;
 }
 
+.data-state-banner.is-success .data-state-banner-copy strong {
+    color: rgba(125, 211, 252, 0.96);
+}
+
 .data-state-retry {
     min-height: 34px;
     flex: 0 0 auto;
@@ -41,6 +57,11 @@ const CSS = `
     background: rgba(255, 255, 255, 0.045);
     color: rgba(255, 255, 255, 0.88);
     font-size: 0.68rem;
+}
+
+.data-state-retry:disabled {
+    opacity: 0.42;
+    cursor: default;
 }
 
 .data-state-retry:focus-visible {
@@ -122,10 +143,18 @@ function ensureBanner() {
     return banner;
 }
 
+function clearSuccessTimer() {
+    if (!successTimer) return;
+    window.clearTimeout(successTimer);
+    successTimer = 0;
+}
+
 function hideBanner() {
     const node = ensureBanner();
     if (!node) return;
+    clearSuccessTimer();
     node.hidden = true;
+    node.classList.remove('is-success');
     bannerContext = '';
 }
 
@@ -140,8 +169,18 @@ function formatCacheAge(timestamp) {
     return `${Math.floor(hours / 24)} 天前`;
 }
 
+function formatClock(timestamp) {
+    const date = new Date(Number(timestamp || Date.now()));
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString('zh-HK', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+}
+
 function friendlyError(raw) {
-    if (!navigator.onLine) return '目前離線，重新連線後再試。';
+    if (!navigator.onLine) return '沒有可用的上次資料，重新連線後再試。';
     const message = String(raw || '').trim();
     if (!message || /failed to fetch|networkerror|load failed/i.test(message)) {
         return '暫時無法連接新聞服務，請稍後再試。';
@@ -155,22 +194,78 @@ function contextTitle(context) {
     return '暫時無法更新新聞';
 }
 
+function setRetryControl(button, context) {
+    if (!button) return;
+    const busy = retryingContext === context;
+    if (!navigator.onLine) {
+        button.disabled = true;
+        button.textContent = '等待連線';
+        return;
+    }
+    if (busy) {
+        button.disabled = true;
+        button.textContent = '重試中…';
+        return;
+    }
+    button.disabled = false;
+    button.textContent = '再試一次';
+}
+
+function syncRetryControls() {
+    const context = lastState?.context || activeContext();
+    document.querySelectorAll('.data-state-retry').forEach(button => setRetryControl(button, context));
+}
+
 function showBanner(detail) {
     const node = ensureBanner();
     if (!node) return;
 
+    clearSuccessTimer();
+    node.classList.remove('is-success');
+
     const copy = node.querySelector('.data-state-banner-copy');
-    if (!copy) return;
+    const retry = node.querySelector('.data-state-retry');
+    if (!copy || !retry) return;
+
+    retry.hidden = false;
 
     if (detail.status === 'stale') {
         const age = formatCacheAge(detail.cachedAt);
-        copy.innerHTML = `<strong>${navigator.onLine ? '暫時無法更新' : '目前離線'}</strong> · 顯示${age}的資料`;
+        const clock = formatClock(detail.cachedAt);
+        if (navigator.onLine) {
+            copy.innerHTML = `<strong>暫時無法更新</strong> · 顯示${age}的資料${clock ? `（${clock}）` : ''}`;
+        } else {
+            copy.innerHTML = `<strong>顯示上次資料</strong> · ${age}${clock ? `（${clock}）` : ''}`;
+        }
+    } else if (retryingContext === detail.context) {
+        copy.innerHTML = '<strong>正在重新載入…</strong>';
     } else {
         copy.innerHTML = `<strong>${detail.append ? '載入更多失敗' : contextTitle(detail.context)}</strong>`;
     }
 
     node.hidden = false;
     bannerContext = detail.context;
+    setRetryControl(retry, detail.context);
+}
+
+function showSuccess(context, updatedAt) {
+    const node = ensureBanner();
+    if (!node) return;
+
+    clearSuccessTimer();
+    const copy = node.querySelector('.data-state-banner-copy');
+    const retry = node.querySelector('.data-state-retry');
+    if (!copy || !retry) return;
+
+    node.classList.add('is-success');
+    copy.innerHTML = `<strong>已更新</strong> · ${formatClock(updatedAt)}`;
+    retry.hidden = true;
+    node.hidden = false;
+    bannerContext = context;
+
+    successTimer = window.setTimeout(() => {
+        if (bannerContext === context) hideBanner();
+    }, SUCCESS_HIDE_DELAY_MS);
 }
 
 function renderErrorPanel(detail) {
@@ -185,7 +280,9 @@ function renderErrorPanel(detail) {
             <button type="button" class="data-state-retry" data-data-state-retry>再試一次</button>
         </div>
     `;
-    grid.querySelector('[data-data-state-retry]')?.addEventListener('click', retryCurrentState);
+    const retry = grid.querySelector('[data-data-state-retry]');
+    retry?.addEventListener('click', retryCurrentState);
+    setRetryControl(retry, detail.context);
 
     if (detail.context === 'search') {
         const hint = document.getElementById('search-hint');
@@ -197,9 +294,30 @@ function renderErrorPanel(detail) {
     }
 }
 
+function saveRetryMarker(context) {
+    try { sessionStorage.setItem(RETRY_MARKER_KEY, context); } catch (error) {}
+}
+
+function readRetryMarker() {
+    try { return sessionStorage.getItem(RETRY_MARKER_KEY) || ''; } catch (error) { return ''; }
+}
+
+function clearRetryMarker() {
+    try { sessionStorage.removeItem(RETRY_MARKER_KEY); } catch (error) {}
+}
+
 function retryCurrentState() {
     const context = lastState?.context || activeContext();
-    hideBanner();
+    if (!context || !navigator.onLine) {
+        syncRetryControls();
+        return;
+    }
+
+    retryingContext = context;
+    saveRetryMarker(context);
+    syncRetryControls();
+
+    if (lastState?.status === 'stale') showBanner(lastState);
 
     if (context === 'search') {
         document.getElementById('news-search-form')?.requestSubmit();
@@ -216,6 +334,11 @@ function retryCurrentState() {
     }
 }
 
+function resetRetryState(context) {
+    if (retryingContext === context) retryingContext = '';
+    if (readRetryMarker() === context) clearRetryMarker();
+}
+
 function onDataState(event) {
     const detail = event.detail || {};
     if (!['news', 'search', 'gallery'].includes(detail.context)) return;
@@ -224,9 +347,22 @@ function onDataState(event) {
     lastState = detail;
 
     if (detail.status === 'ok') {
+        const recovered = degradedContexts.has(detail.context)
+            || retryingContext === detail.context
+            || readRetryMarker() === detail.context;
+
+        degradedContexts.delete(detail.context);
+        resetRetryState(detail.context);
         if (bannerContext === detail.context) hideBanner();
+
+        if (recovered && !detail.append) {
+            showSuccess(detail.context, detail.updatedAt || Date.now());
+        }
         return;
     }
+
+    degradedContexts.add(detail.context);
+    resetRetryState(detail.context);
 
     if (detail.status === 'stale') {
         showBanner(detail);
@@ -242,16 +378,42 @@ function onDataState(event) {
     }
 }
 
+function refreshConnectivityState() {
+    if (!lastState || activeContext() !== lastState.context) {
+        syncRetryControls();
+        return;
+    }
+
+    if (lastState.status === 'stale') {
+        showBanner(lastState);
+        return;
+    }
+
+    if (lastState.status === 'error' && !lastState.append) {
+        renderErrorPanel(lastState);
+        return;
+    }
+
+    syncRetryControls();
+}
+
 function installNavigationReset() {
     document.getElementById('bottom-nav')?.addEventListener('click', hideBanner, true);
     document.getElementById('btn-open-gallery')?.addEventListener('click', hideBanner, true);
     document.getElementById('gallery-back')?.addEventListener('click', hideBanner, true);
 }
 
+function installConnectivitySync() {
+    window.addEventListener('online', refreshConnectivityState);
+    window.addEventListener('offline', refreshConnectivityState);
+}
+
 function initDataStateUI() {
     installStyles();
     ensureBanner();
     installNavigationReset();
+    installConnectivitySync();
+    retryingContext = readRetryMarker();
     window.addEventListener(DATA_STATE_EVENT, onDataState);
 }
 
