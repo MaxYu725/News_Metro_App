@@ -1,0 +1,196 @@
+/* MUI-2 — feed hierarchy, density and calmer Metro surfaces */
+#app-bg-container svg {
+    opacity: 0.28 !important;
+}
+
+.metro-tile.feed-card {
+    margin: 6px 12px;
+    border-radius: 2px;
+    border-color: rgba(255, 255, 255, 0.08);
+    border-left-width: 3px;
+    background: rgba(15, 20, 33, 0.91);
+    -webkit-backdrop-filter: blur(4px) saturate(108%);
+    backdrop-filter: blur(4px) saturate(108%);
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.25);
+}
+
+.metro-tile.feed-card:active {
+    background: rgba(22, 28, 44, 0.96);
+    transform: scale(0.992);
+}
+
+.metro-tile.feed-card .tile-preview {
+    padding: 14px 15px;
+}
+
+.metro-tile.feed-card .news-title {
+    font-size: 1.02rem;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+}
+
+.feed-deck {
+    display: -webkit-box;
+    margin-top: 6px;
+    overflow: hidden;
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 0.76rem;
+    font-weight: 400;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.fresh-label {
+    color: #fb7185;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+}
+
+.fresh-category-hidden {
+    display: none;
+}
+
+.metro-tile.fresh-tile {
+    border-top-color: rgba(251, 113, 133, 0.20);
+}
+
+/* Only the first card of the actual Latest feed becomes the visual lead story. */
+.metro-tile.hero-tile {
+    margin-top: 10px;
+    background: rgba(12, 17, 29, 0.97);
+    box-shadow: 0 7px 22px rgba(0, 0, 0, 0.34);
+}
+
+.metro-tile.hero-tile .tile-preview {
+    padding: 0 0 16px;
+}
+
+.metro-tile.hero-tile .tile-preview > div:first-child {
+    padding: 14px 15px 4px;
+    margin-bottom: 4px;
+}
+
+.metro-tile.hero-tile .tile-preview > div:nth-child(2) {
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+}
+
+.metro-tile.hero-tile .tile-preview > div:nth-child(2) > div:first-child {
+    order: 2;
+    padding: 14px 15px 0;
+}
+
+.metro-tile.hero-tile .tile-preview > div:nth-child(2) > div.flex-shrink-0 {
+    order: 1;
+    width: 100%;
+    margin: 0;
+}
+
+.metro-tile.hero-tile .tile-preview > div:nth-child(2) > div.flex-shrink-0 img {
+    width: 100% !important;
+    height: clamp(180px, 48vw, 255px) !important;
+    border-width: 0 0 1px 0;
+    border-color: rgba(255, 255, 255, 0.08);
+    object-fit: cover;
+}
+
+.metro-tile.hero-tile .news-title {
+    font-size: 1.32rem;
+    line-height: 1.28;
+    -webkit-line-clamp: 3;
+}
+
+.metro-tile.hero-tile .feed-deck {
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.56);
+    font-size: 0.8rem;
+    -webkit-line-clamp: 3;
+}
+
+/* Density is intentionally a reading preference, not a second design system. */
+body[data-feed-density="compact"] .metro-tile.feed-card:not(.hero-tile) {
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+body[data-feed-density="compact"] .metro-tile.feed-card:not(.hero-tile) .tile-preview {
+    padding: 11px 13px;
+}
+
+body[data-feed-density="compact"] .metro-tile.feed-card:not(.hero-tile) .tile-preview > div:first-child {
+    margin-bottom: 5px;
+}
+
+body[data-feed-density="compact"] .metro-tile.feed-card:not(.hero-tile) .feed-deck {
+    display: none;
+}
+
+body[data-feed-density="compact"] .metro-tile.feed-card:not(.hero-tile) .news-title {
+    font-size: 0.95rem;
+    line-height: 1.3;
+    -webkit-line-clamp: 2;
+}
+
+body[data-feed-density="compact"] .metro-tile.feed-card:not(.hero-tile) .tile-preview img {
+    width: 4.3rem !important;
+    height: 4.3rem !important;
+}
+
+.density-control {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.density-btn {
+    min-height: 64px;
+    padding: 10px 12px;
+    text-align: left;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(22, 26, 46, 0.62);
+    color: rgba(255, 255, 255, 0.72);
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.density-btn.active {
+    border-color: rgba(56, 189, 248, 0.72);
+    background: rgba(56, 189, 248, 0.10);
+    color: #fff;
+}
+
+.density-btn:active {
+    background: rgba(255, 255, 255, 0.10);
+}
+
+.density-btn-title,
+.density-btn-copy {
+    display: block;
+}
+
+.density-btn-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.density-btn-copy {
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.36);
+    font-size: 0.64rem;
+    line-height: 1.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .metro-tile,
+    .nav-link,
+    .bottom-nav-btn,
+    .density-btn,
+    #back-to-top {
+        animation: none !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
+}
