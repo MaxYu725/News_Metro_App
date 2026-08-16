@@ -1,8 +1,62 @@
+import { getCachedFeed, saveCachedFeed } from './data-cache.js';
+
 const API_BASE_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/news/';
 const SEARCH_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/search';
 const IMAGE_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/images';
 const AI_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/summarize';
 const ARTICLE_FULL_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/article-full';
+
+export const DATA_STATE_EVENT = 'metro:data-state';
+
+function emitDataState(detail) {
+    if (typeof window === 'undefined') return;
+    window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent(DATA_STATE_EVENT, { detail }));
+    }, 0);
+}
+
+function newsContext(categoryId) {
+    return categoryId === 'search' ? 'search' : 'news';
+}
+
+function errorMessage(error, fallback) {
+    const message = String(error?.message || error || '').trim();
+    return message || fallback;
+}
+
+function fallbackNewsResult(categoryId, page, searchQuery, error, append = false) {
+    const context = newsContext(categoryId);
+    const message = errorMessage(error, '暫時無法連接新聞服務');
+    const cached = page === 0 ? getCachedFeed(categoryId, searchQuery) : null;
+
+    if (cached?.data?.length) {
+        emitDataState({
+            context,
+            status: 'stale',
+            error: message,
+            cachedAt: cached.savedAt,
+            query: searchQuery,
+            append
+        });
+        return {
+            success: true,
+            data: cached.data,
+            hasMore: false,
+            stale: true,
+            cachedAt: cached.savedAt,
+            error: message
+        };
+    }
+
+    emitDataState({
+        context,
+        status: 'error',
+        error: message,
+        query: searchQuery,
+        append
+    });
+    return { success: false, data: [], hasMore: false, error: message };
+}
 
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
     let url;
@@ -12,26 +66,69 @@ export async function fetchNewsData(categoryId, page, forceSync = false, searchQ
         url = `${API_BASE_URL}${categoryId}?page=${page}${forceSync ? '&sync=1' : ''}`;
     }
 
+    const context = newsContext(categoryId);
+
     try {
         const response = await fetch(url);
-        const result = await response.json();
-        if (result.success) {
-            return { success: true, data: result.data, hasMore: result.hasMore };
-        } else {
-            return { success: false, data: [], hasMore: false, error: result.error };
+        let result;
+        try {
+            result = await response.json();
+        } catch (parseError) {
+            throw new Error(`伺服器回應格式錯誤 (${response.status || 'unknown'})`);
         }
+
+        if (!response.ok) {
+            return fallbackNewsResult(
+                categoryId,
+                page,
+                searchQuery,
+                result?.error || `新聞服務暫時無法回應 (${response.status})`,
+                page > 0
+            );
+        }
+
+        if (result.success) {
+            if (page === 0 && Array.isArray(result.data) && result.data.length > 0) {
+                saveCachedFeed(categoryId, searchQuery, result.data, result.hasMore);
+            }
+            emitDataState({ context, status: 'ok', query: searchQuery, append: page > 0 });
+            return { success: true, data: result.data || [], hasMore: !!result.hasMore };
+        }
+
+        return fallbackNewsResult(
+            categoryId,
+            page,
+            searchQuery,
+            result.error || '新聞服務暫時無法回應',
+            page > 0
+        );
     } catch (error) {
-        return { success: false, data: [], hasMore: false, error: '無法連接到伺服器' };
+        return fallbackNewsResult(categoryId, page, searchQuery, error, page > 0);
     }
 }
 
 export async function fetchImageData(query, page) {
     try {
         const response = await fetch(`${IMAGE_API_URL}?q=${encodeURIComponent(query)}&page=${page + 1}`);
-        const result = await response.json();
-        return result.success ? result : { success: false, data: [], hasMore: false, error: result.error };
-    } catch (e) {
-        return { success: false, data: [], hasMore: false, error: '圖庫連接失敗' };
+        let result;
+        try {
+            result = await response.json();
+        } catch (parseError) {
+            throw new Error(`圖庫回應格式錯誤 (${response.status || 'unknown'})`);
+        }
+
+        if (!response.ok || !result.success) {
+            const message = result?.error || `圖庫服務暫時無法回應 (${response.status})`;
+            emitDataState({ context: 'gallery', status: 'error', error: message, query, append: page > 0 });
+            return { success: false, data: [], hasMore: false, error: message };
+        }
+
+        emitDataState({ context: 'gallery', status: 'ok', query, append: page > 0 });
+        return result;
+    } catch (error) {
+        const message = errorMessage(error, '圖庫連接失敗');
+        emitDataState({ context: 'gallery', status: 'error', error: message, query, append: page > 0 });
+        return { success: false, data: [], hasMore: false, error: message };
     }
 }
 
@@ -49,7 +146,6 @@ export async function fetchAISummary(text) {
     }
 }
 
-// 全新：向 Worker 請求文章完整段落
 export async function fetchFullArticleContent(targetUrl) {
     try {
         const response = await fetch(`${ARTICLE_FULL_API_URL}?url=${encodeURIComponent(targetUrl)}`);
