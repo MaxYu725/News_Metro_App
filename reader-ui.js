@@ -26,6 +26,9 @@ function ensureOverlay() {
                 <button type="button" class="reader-close" aria-label="返回新聞列表">←</button>
                 <div class="reader-toolbar-name">Metro News</div>
                 <div class="reader-toolbar-actions">
+                    <button type="button" class="reader-toolbar-btn reader-ai-trigger" data-reader-action="ai" aria-label="AI 摘要">
+                        <span aria-hidden="true">✦</span><span class="reader-ai-caption">AI</span>
+                    </button>
                     <button type="button" class="reader-toolbar-btn reader-bookmark" data-reader-action="bookmark" aria-label="收藏新聞">☆</button>
                     <button type="button" class="reader-toolbar-btn" data-reader-action="share" aria-label="分享新聞">↗</button>
                 </div>
@@ -39,12 +42,6 @@ function ensureOverlay() {
                     </div>
                     <h1 class="reader-title"></h1>
                     <div class="reader-media hidden"></div>
-
-                    <div class="reader-command-row">
-                        <button type="button" class="reader-command" data-reader-action="ai">✦ AI 摘要</button>
-                        <button type="button" class="reader-command" data-reader-action="bookmark">☆ 收藏</button>
-                        <button type="button" class="reader-command" data-reader-action="share">分享 ↗</button>
-                    </div>
 
                     <section class="reader-ai hidden" aria-live="polite">
                         <div class="reader-ai-label">✦ AI 摘要</div>
@@ -67,6 +64,7 @@ function ensureOverlay() {
     DOM.media = overlay.querySelector('.reader-media');
     DOM.ai = overlay.querySelector('.reader-ai');
     DOM.aiText = overlay.querySelector('.reader-ai-text');
+    DOM.aiTrigger = overlay.querySelector('[data-reader-action="ai"]');
     DOM.content = overlay.querySelector('.reader-content');
     DOM.bookmarkButtons = [...overlay.querySelectorAll('[data-reader-action="bookmark"]')];
 
@@ -86,8 +84,6 @@ function ensureOverlay() {
             const removingFromBookmarks = !!bookmarksActive && !!sourceButton?.classList.contains('saved');
 
             if (removingFromBookmarks) {
-                // The original bookmarks handler immediately re-renders the list. Collapse first
-                // while the source tile is still attached so wake-lock/expanded state is cleared.
                 collapseSourceTile();
                 sourceButton?.click();
                 closeReader();
@@ -180,6 +176,7 @@ function showReaderAILoading() {
     DOM.ai.classList.remove('hidden');
     DOM.aiText.textContent = '正在整理新聞重點…';
     DOM.ai.classList.add('loading');
+    DOM.aiTrigger?.classList.add('active');
 }
 
 function syncReaderAI() {
@@ -192,6 +189,7 @@ function syncReaderAI() {
 
     DOM.ai.classList.toggle('hidden', !visible);
     DOM.ai.classList.toggle('loading', text === '正在整理新聞重點…');
+    DOM.aiTrigger?.classList.toggle('active', visible);
     if (visible) DOM.aiText.textContent = text;
 }
 
@@ -201,13 +199,9 @@ function syncReaderBookmark() {
     const sourceButton = sourceTile.querySelector('.bookmark-btn');
     const saved = !!sourceButton?.classList.contains('saved') || sourceButton?.textContent?.includes('已收藏');
 
-    DOM.bookmarkButtons.forEach((button, index) => {
-        if (index === 0) {
-            button.textContent = saved ? '★' : '☆';
-            button.setAttribute('aria-label', saved ? '取消收藏' : '收藏新聞');
-        } else {
-            button.textContent = saved ? '★ 已收藏' : '☆ 收藏';
-        }
+    DOM.bookmarkButtons.forEach(button => {
+        button.textContent = saved ? '★' : '☆';
+        button.setAttribute('aria-label', saved ? '取消收藏' : '收藏新聞');
         button.classList.toggle('saved', saved);
     });
 }
@@ -259,7 +253,10 @@ function fillReaderHeader(tile) {
 }
 
 function openReader(tile, scrollTop) {
-    if (!tile || overlay?.classList.contains('open')) return;
+    if (!tile || overlay?.classList.contains('open')) {
+        document.body.classList.remove('reader-preparing');
+        return;
+    }
 
     ensureOverlay();
     sourceTile = tile;
@@ -276,6 +273,7 @@ function openReader(tile, scrollTop) {
     DOM.scroll.scrollTop = 0;
     document.body.classList.add('reader-open');
     overlay.classList.add('open');
+    document.body.classList.remove('reader-preparing');
 
     if (!historyPushed) {
         history.pushState({ metroReader: true }, '', location.href);
@@ -300,12 +298,15 @@ function collapseSourceTile() {
 function finalizeClose() {
     if (!overlay?.classList.contains('open')) return;
 
-    overlay.classList.remove('open');
-    document.body.classList.remove('reader-open');
     sourceObserver?.disconnect();
     sourceObserver = null;
 
+    // Keep the Reader covering the feed while the original tile collapses.
+    // The original app handler remains authoritative for expanded/wake-lock state.
     collapseSourceTile();
+
+    overlay.classList.remove('open');
+    document.body.classList.remove('reader-open', 'reader-preparing');
 
     const main = document.getElementById('main-container');
     requestAnimationFrame(() => {
@@ -314,6 +315,7 @@ function finalizeClose() {
     });
 
     sourceTile = null;
+    pendingOpen = null;
     restoreFocusTarget = null;
     historyPushed = false;
 }
@@ -337,12 +339,17 @@ function initReader() {
     ensureOverlay();
 
     grid.addEventListener('click', event => {
+        if (closingProgrammatically) return;
+
         const tile = event.target.closest('.metro-tile');
         if (!isReaderTrigger(event.target, tile)) {
             pendingOpen = null;
+            document.body.classList.remove('reader-preparing');
             return;
         }
 
+        // Hide the legacy inline detail expansion before app.js handles the click.
+        document.body.classList.add('reader-preparing');
         pendingOpen = {
             tile,
             scrollTop: main.scrollTop
@@ -354,17 +361,26 @@ function initReader() {
 
         const tile = event.target.closest('.metro-tile');
         if (!isReaderTrigger(event.target, tile)) return;
-        if (!tile.classList.contains('expanded')) return;
+
+        if (!tile.classList.contains('expanded')) {
+            pendingOpen = null;
+            document.body.classList.remove('reader-preparing');
+            return;
+        }
 
         const scrollTop = pendingOpen?.tile === tile ? pendingOpen.scrollTop : main.scrollTop;
         pendingOpen = null;
         openReader(tile, scrollTop);
     });
 
-    window.addEventListener('popstate', () => {
-        if (overlay?.classList.contains('open')) {
-            closeReader({ fromPopState: true });
-        }
+    window.addEventListener('popstate', event => {
+        if (!overlay?.classList.contains('open')) return;
+
+        // Closing the image Lightbox returns history to the Reader state.
+        // Stay in Reader in that case; only close when navigation leaves Reader state.
+        if (event.state?.metroReader === true) return;
+
+        closeReader({ fromPopState: true });
     });
 
     document.addEventListener('keydown', event => {
