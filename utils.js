@@ -11,43 +11,43 @@ export function timeAgo(dateString) {
     return `${Math.floor(diffHours / 24)} 天前`;
 }
 
-// 🚀 隨機全螢幕 Metro 幾何背景生成器
+// 🚀 高對比全螢幕 Metro 幾何背景生成器
 export function generateGeometricBackground() {
-    let svg = `<svg class="w-full h-full object-cover opacity-40" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">`;
+    let svg = `<svg class="w-full h-full object-cover opacity-75" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">`;
     
-    // 1. 底層微弱點陣圖
+    // 1. 高對比點陣網格
     svg += `
         <defs>
-            <pattern id="dot-grid" width="30" height="30" patternUnits="userSpaceOnUse">
-                <circle cx="2" cy="2" r="1" fill="#ffffff" fill-opacity="0.12"/>
+            <pattern id="dot-grid" width="32" height="32" patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r="1.2" fill="#ffffff" fill-opacity="0.25"/>
             </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#dot-grid)" />
     `;
 
-    // 2. 隨機大幾何圓形
+    // 2. 隨機大幾何圓形 (對比度強化)
     for (let i = 0; i < 3; i++) {
         const cx = Math.floor(Math.random() * 900) + 50;
         const cy = Math.floor(Math.random() * 600) + 50;
         const r = Math.floor(Math.random() * 180) + 100;
-        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.04" stroke="white" stroke-opacity="0.08" stroke-width="1" />`;
+        svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" fill-opacity="0.08" stroke="white" stroke-opacity="0.22" stroke-width="1.5" />`;
     }
 
-    // 3. 隨機斜向多邊形 (Metro UI 經典元素)
+    // 3. 隨機斜向多邊形 (輪廓強化)
     for (let i = 0; i < 3; i++) {
         const x = Math.floor(Math.random() * 700);
         const y = Math.floor(Math.random() * 400);
         const pts = `${x},${y} ${x + 280 + Math.random() * 100},${y + 60} ${x + 180},${y + 320} ${x - 80},${y + 240}`;
-        svg += `<polygon points="${pts}" fill="white" fill-opacity="0.03" stroke="white" stroke-opacity="0.06" stroke-width="1" />`;
+        svg += `<polygon points="${pts}" fill="white" fill-opacity="0.06" stroke="white" stroke-opacity="0.2" stroke-width="1.5" />`;
     }
 
-    // 4. 隨機幾何光彩虛線
+    // 4. 隨機幾何青藍虛線 (高亮顯示)
     for (let i = 0; i < 4; i++) {
         const x1 = Math.floor(Math.random() * 1000);
         const y1 = Math.floor(Math.random() * 700);
         const x2 = Math.floor(Math.random() * 1000);
         const y2 = Math.floor(Math.random() * 700);
-        svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#38bdf8" stroke-opacity="0.25" stroke-width="1.2" stroke-dasharray="8,6" />`;
+        svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#38bdf8" stroke-opacity="0.55" stroke-width="1.8" stroke-dasharray="10,6" />`;
     }
 
     svg += `</svg>`;
