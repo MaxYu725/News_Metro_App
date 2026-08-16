@@ -158,19 +158,20 @@ function ensureSearchMetaRow() {
 
 function polishTrackingSettings() {
     const help = document.querySelector('[data-tracking-help]');
-    if (help) help.textContent = '追蹤後會加入新聞分類，也可在搜尋結果直接管理。';
+    const helpCopy = '追蹤後會加入新聞分類，也可在搜尋結果直接管理。';
+    if (help && help.textContent !== helpCopy) help.textContent = helpCopy;
 
     const list = document.getElementById('category-manager-list');
     if (list) {
         list.querySelectorAll('span').forEach(span => {
-            if (span.textContent.trim() === '已加入新聞分類') span.hidden = true;
+            if (span.textContent.trim() === '已加入新聞分類' && !span.hidden) span.hidden = true;
         });
     }
 
     const status = document.querySelector('[data-tracking-status]');
     if (status) {
-        status.setAttribute('aria-live', 'polite');
-        status.setAttribute('aria-atomic', 'true');
+        if (status.getAttribute('aria-live') !== 'polite') status.setAttribute('aria-live', 'polite');
+        if (status.getAttribute('aria-atomic') !== 'true') status.setAttribute('aria-atomic', 'true');
     }
 }
 
@@ -181,7 +182,7 @@ function scheduleStatusClear() {
     if (statusTimer) window.clearTimeout(statusTimer);
     statusTimer = window.setTimeout(() => {
         const current = document.querySelector('[data-tracking-status]');
-        if (current) current.textContent = '';
+        if (current?.textContent) current.textContent = '';
         statusTimer = 0;
     }, 2200);
 }
