@@ -266,6 +266,18 @@ body.reader-open #news-grid .metro-tile.expanded {
     transition: none !important;
 }
 
+/* MUI-3R2 — preserve the feed footprint while app.js keeps the source tile in
+   expanded state for article loading. R1 hid details but the legacy expanded
+   rule also collapsed the preview to height:0, which made the card disappear. */
+body.reader-preparing #news-grid .metro-tile.expanded .tile-preview,
+body.reader-open #news-grid .metro-tile.expanded .tile-preview {
+    position: relative !important;
+    height: auto !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    pointer-events: none !important;
+}
+
 @media (min-width: 700px) {
     .reader-article {
         padding-left: 28px;
