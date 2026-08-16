@@ -1,6 +1,10 @@
 const RECENT_SEARCH_KEY = 'metro_news_recent_searches_v1';
-const SEARCH_SCROLL_KEY = 'metro_news_search_scroll_v1';
 const MAX_RECENT_SEARCHES = 6;
+const SCROLL_KEY_PREFIX = 'metro_news_section_scroll_v2:';
+const RESTORE_TIMEOUT_MS = 1600;
+
+let pendingRestore = null;
+let restoreTimer = 0;
 
 const CSS = `
 #search-view {
@@ -72,7 +76,7 @@ const CSS = `
 }
 
 .search-shortcut-group[hidden] {
-    display: none;
+    display: none !important;
 }
 
 .search-shortcut-heading {
@@ -172,9 +176,10 @@ function saveRecentSearch(query) {
     const clean = normalizeQuery(query);
     if (!clean) return;
 
+    const lower = clean.toLocaleLowerCase();
     const next = [
         clean,
-        ...getRecentSearches().filter(item => item.toLocaleLowerCase() !== clean.toLocaleLowerCase())
+        ...getRecentSearches().filter(item => item.toLocaleLowerCase() !== lower)
     ].slice(0, MAX_RECENT_SEARCHES);
 
     try {
@@ -214,6 +219,120 @@ function makeChip(query, tracked = false) {
     button.textContent = query;
     button.setAttribute('aria-label', `搜尋 ${query}`);
     return button;
+}
+
+function renderShortcuts() {
+    const root = document.getElementById('search-shortcuts');
+    if (!root) return;
+
+    const recentGroup = root.querySelector('[data-search-recent]');
+    const recentRow = root.querySelector('[data-search-recent-row]');
+    const trackedGroup = root.querySelector('[data-search-tracked]');
+    const trackedRow = root.querySelector('[data-search-tracked-row]');
+
+    const recent = getRecentSearches();
+    if (recentRow && recentGroup) {
+        recentRow.replaceChildren(...recent.map(query => makeChip(query, false)));
+        recentGroup.toggleAttribute('hidden', recent.length === 0);
+    }
+
+    const tracked = getTrackedKeywords();
+    if (trackedRow && trackedGroup) {
+        trackedRow.replaceChildren(...tracked.map(query => makeChip(query, true)));
+        trackedGroup.toggleAttribute('hidden', tracked.length === 0);
+    }
+}
+
+function activeSection() {
+    return document.querySelector('.bottom-nav-btn.active')?.dataset.section || '';
+}
+
+function isSearchActive() {
+    return activeSection() === 'search';
+}
+
+function scrollStorageKey(section) {
+    return `${SCROLL_KEY_PREFIX}${section}`;
+}
+
+function saveSectionScroll(section, top) {
+    if (!section || !['news', 'search'].includes(section)) return;
+    try {
+        sessionStorage.setItem(scrollStorageKey(section), String(Math.max(0, top || 0)));
+    } catch (error) {}
+}
+
+function readSectionScroll(section) {
+    if (!section || !['news', 'search'].includes(section)) return 0;
+    try {
+        const value = Number(sessionStorage.getItem(scrollStorageKey(section)));
+        return Number.isFinite(value) && value > 0 ? value : 0;
+    } catch (error) {
+        return 0;
+    }
+}
+
+function clearRestoreTimer() {
+    if (!restoreTimer) return;
+    clearTimeout(restoreTimer);
+    restoreTimer = 0;
+}
+
+function attemptPendingRestore() {
+    clearRestoreTimer();
+    if (!pendingRestore) return;
+
+    const main = document.getElementById('main-container');
+    const { section, top, startedAt } = pendingRestore;
+    if (!main || activeSection() !== section) return;
+
+    if (top <= 0) {
+        pendingRestore = null;
+        return;
+    }
+
+    const maxTop = Math.max(0, main.scrollHeight - main.clientHeight);
+    main.scrollTop = Math.min(top, maxTop);
+
+    if (Math.abs(main.scrollTop - top) <= 2) {
+        pendingRestore = null;
+        return;
+    }
+
+    if (performance.now() - startedAt >= RESTORE_TIMEOUT_MS) {
+        pendingRestore = null;
+        return;
+    }
+
+    restoreTimer = window.setTimeout(attemptPendingRestore, 80);
+}
+
+function scheduleSectionRestore(section) {
+    const top = readSectionScroll(section);
+    pendingRestore = {
+        section,
+        top,
+        startedAt: performance.now()
+    };
+
+    requestAnimationFrame(() => {
+        requestAnimationFrame(attemptPendingRestore);
+    });
+}
+
+function syncSearchStateFromVisibleUI() {
+    if (!isSearchActive()) return;
+
+    const input = document.getElementById('news-search-input');
+    const hint = document.getElementById('search-hint');
+    const query = normalizeQuery(input?.value);
+    const hintText = String(hint?.textContent || '');
+
+    if (query && (hintText.includes('搜尋結果') || hintText.includes('正在搜尋'))) {
+        saveRecentSearch(query);
+    }
+
+    renderShortcuts();
 }
 
 function installSearchChrome() {
@@ -295,90 +414,74 @@ function installSearchChrome() {
         syncValueState();
         form.requestSubmit();
     });
+
+    new MutationObserver(syncSearchStateFromVisibleUI)
+        .observe(hint, { childList: true, characterData: true, subtree: true });
 }
 
-function renderShortcuts() {
-    const root = document.getElementById('search-shortcuts');
-    if (!root) return;
-
-    const recentGroup = root.querySelector('[data-search-recent]');
-    const recentRow = root.querySelector('[data-search-recent-row]');
-    const trackedGroup = root.querySelector('[data-search-tracked]');
-    const trackedRow = root.querySelector('[data-search-tracked-row]');
-
-    const recent = getRecentSearches();
-    if (recentRow && recentGroup) {
-        recentRow.replaceChildren(...recent.map(query => makeChip(query, false)));
-        recentGroup.hidden = recent.length === 0;
-    }
-
-    const tracked = getTrackedKeywords();
-    if (trackedRow && trackedGroup) {
-        trackedRow.replaceChildren(...tracked.map(query => makeChip(query, true)));
-        trackedGroup.hidden = tracked.length === 0;
-    }
-}
-
-function isSearchActive() {
-    return !!document.querySelector('.bottom-nav-btn[data-section="search"].active');
-}
-
-function readSavedScroll() {
-    const value = Number(sessionStorage.getItem(SEARCH_SCROLL_KEY));
-    return Number.isFinite(value) && value > 0 ? value : 0;
-}
-
-function saveSearchScroll(main) {
-    if (!main) return;
-    try { sessionStorage.setItem(SEARCH_SCROLL_KEY, String(main.scrollTop || 0)); } catch (error) {}
-}
-
-function installScrollRestore() {
+function installSectionStateController() {
     const bottomNav = document.getElementById('bottom-nav');
     const main = document.getElementById('main-container');
+    const grid = document.getElementById('news-grid');
+    const searchView = document.getElementById('search-view');
     if (!bottomNav || !main) return;
 
     bottomNav.addEventListener('click', event => {
         const button = event.target.closest('.bottom-nav-btn');
         if (!button) return;
 
-        const targetSection = button.dataset.section;
-        const searchWasActive = isSearchActive();
+        const from = activeSection();
+        const to = button.dataset.section || '';
+        if (!to || from === to) return;
 
-        if (searchWasActive && targetSection !== 'search') {
-            saveSearchScroll(main);
-            return;
-        }
-
-        if (!searchWasActive && targetSection === 'search') {
-            const restoreTop = readSavedScroll();
-            if (restoreTop <= 0) return;
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    if (isSearchActive()) main.scrollTop = restoreTop;
-                });
-            });
-        }
+        saveSectionScroll(from, main.scrollTop);
+        if (to === 'news' || to === 'search') scheduleSectionRestore(to);
     }, true);
+
+    const observer = new MutationObserver(() => {
+        if (isSearchActive()) syncSearchStateFromVisibleUI();
+        attemptPendingRestore();
+    });
+
+    observer.observe(bottomNav, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+    });
+
+    if (grid) {
+        observer.observe(grid, { childList: true, subtree: false });
+    }
+
+    if (searchView) {
+        observer.observe(searchView, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
 }
 
 function observeTrackedKeywords() {
     window.addEventListener('storage', event => {
-        if (event.key === 'metro_news_custom_cats') renderShortcuts();
+        if (event.key === 'metro_news_custom_cats' || event.key === RECENT_SEARCH_KEY) {
+            renderShortcuts();
+        }
     });
 
     const settingsView = document.getElementById('settings-view');
     if (!settingsView) return;
-    new MutationObserver(() => renderShortcuts())
-        .observe(settingsView, { childList: true, subtree: true });
+    new MutationObserver(() => {
+        if (isSearchActive()) renderShortcuts();
+    }).observe(settingsView, { childList: true, subtree: true });
 }
 
 function initSearchUI() {
     installStyles();
     installSearchChrome();
     renderShortcuts();
-    installScrollRestore();
+    installSectionStateController();
     observeTrackedKeywords();
+    syncSearchStateFromVisibleUI();
 }
 
 if (document.readyState === 'loading') {
