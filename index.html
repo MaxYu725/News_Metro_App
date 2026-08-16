@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#08080c">
+    <meta name="theme-color" content="#0d111e">
     <link rel="manifest" href="./manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,28 +14,30 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
 </head>
-<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#08080c] text-white select-none overflow-hidden">
+<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#0d111e] text-white select-none overflow-hidden">
 
-    <!-- 高對比暗黑科技地圖背景 (Dark Vector Map Overlay) -->
-    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#08080c]">
-        <!-- 向量城市地形/地圖網格 SVG 紋理 -->
-        <svg class="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+    <!-- ✨ 高對比清晰暗黑地圖與網格背景 (Translucent Vector Map) -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#0d111e]">
+        <svg class="absolute inset-0 w-full h-full opacity-40" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
             <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="0.5" stroke-opacity="0.15"/>
+                <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+                    <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.25"/>
                 </pattern>
-                <radialGradient id="map-glow" cx="50%" cy="40%" r="60%">
-                    <stop offset="0%" stop-color="#1e293b" stop-opacity="0.6"/>
-                    <stop offset="100%" stop-color="#08080c" stop-opacity="0.95"/>
+                <radialGradient id="map-glow" cx="50%" cy="30%" r="75%">
+                    <stop offset="0%" stop-color="#1e2942" stop-opacity="0.8"/>
+                    <stop offset="100%" stop-color="#090c17" stop-opacity="0.95"/>
                 </radialGradient>
             </defs>
             <rect width="100%" height="100%" fill="url(#map-glow)" />
             <rect width="100%" height="100%" fill="url(#grid)" />
-            <!-- 向量海岸線與區域輪廓幾何點綴 -->
-            <path d="M-50,200 Q150,120 300,280 T600,180 T900,350" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.25" stroke-dasharray="4,4"/>
-            <path d="M0,450 Q250,380 450,520 T800,410" fill="none" stroke="#ffffff" stroke-width="1" stroke-opacity="0.2"/>
+            
+            <!-- 向量海岸線與地圖輪廓 (顯眼對比) -->
+            <path d="M-50,180 Q120,80 280,220 T580,140 T900,300" fill="rgba(255,255,255,0.04)" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.45" stroke-dasharray="6,4"/>
+            <path d="M0,400 Q220,320 420,480 T780,360" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-opacity="0.35"/>
+            <circle cx="280" cy="220" r="4" fill="#38bdf8" fill-opacity="0.8"/>
+            <circle cx="580" cy="140" r="3" fill="#ffffff" fill-opacity="0.6"/>
         </svg>
-        <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-transparent via-[#0d111e]/30 to-[#0d111e]/80"></div>
     </div>
 
     <!-- 圖片全螢幕燈箱 (Lightbox) -->
@@ -57,7 +59,7 @@
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-150" style="height: 0px;"></div>
         
         <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20">
-            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-[#12131c]/90 border border-white/20 px-4 py-3 text-white focus:outline-none focus:border-cyan-400 text-lg rounded-none shadow-lg">
+            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-[#161a2e]/70 backdrop-blur-md border border-white/20 px-4 py-3 text-white focus:outline-none focus:border-cyan-400 text-lg rounded-none shadow-lg">
         </div>
 
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
@@ -70,7 +72,7 @@
             <div class="loader-small"></div>
         </div>
 
-        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-[#12131c]/90 border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/20 active:scale-95 shadow-2xl">
+        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-[#161a2e]/80 backdrop-blur-md border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/20 active:scale-95 shadow-2xl">
             ↑
         </button>
 
@@ -87,7 +89,7 @@
                 <p class="text-xs text-gray-400 uppercase tracking-widest">自訂追蹤關鍵字</p>
                 <div class="flex flex-col space-y-2" id="category-manager-list"></div>
                 <div class="flex space-x-2 mt-2">
-                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-[#12131c] border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow">
+                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-[#161a2e]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow">
                     <button id="btn-add-cat" class="metro-btn">新增</button>
                 </div>
             </div>
