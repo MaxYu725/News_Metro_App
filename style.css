@@ -1,6 +1,6 @@
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    background-color: #08080c;
+    background-color: #0d111e;
     color: #FFFFFF;
     overflow: hidden;
     transition: font-size 0.3s ease;
@@ -19,17 +19,19 @@ body {
     font-weight: 600;
 }
 
-/* 🚀 Metro UI 高級暗黑懸浮卡片 */
+/* ✨ 真正的毛玻璃半透明卡片：降低不透明度至 52%，並加入毛玻璃模糊濾鏡 */
 .metro-tile {
     position: relative;
     cursor: pointer;
     overflow: hidden;
     border-radius: 2px;
-    margin: 6px 16px;
-    background-color: rgba(18, 19, 28, 0.88); /* 深灰藍高質感半透明 */
-    border: 1px solid rgba(255, 255, 255, 0.08); /* 極細微弱外框 */
-    border-left-width: 4px; /* 僅保留左側 Accent 彩色線條 */
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+    margin: 8px 16px;
+    background-color: rgba(20, 24, 38, 0.52); /* 52% 半透明底，背景完美透出 */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-left-width: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     transition: transform 0.18s ease-out, box-shadow 0.2s ease, background-color 0.2s ease;
     animation: fadeIn 0.25s ease-out forwards;
     opacity: 0;
@@ -41,13 +43,13 @@ body {
 
 .metro-tile:active {
     transform: scale(0.985);
-    background-color: rgba(26, 28, 42, 0.95);
+    background-color: rgba(30, 36, 56, 0.65);
 }
 
 .metro-tile.expanded {
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.95);
-    border-color: rgba(255, 255, 255, 0.2);
-    background-color: rgba(18, 19, 28, 0.95);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.75);
+    border-color: rgba(255, 255, 255, 0.28);
+    background-color: rgba(18, 22, 34, 0.72);
     z-index: 20;
 }
 
@@ -165,8 +167,8 @@ body {
 }
 
 @keyframes skeletonPulse {
-    0%, 100% { opacity: 0.1; }
-    50% { opacity: 0.22; }
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 0.3; }
 }
 .skeleton-pulse {
     animation: skeletonPulse 1.2s ease-in-out infinite;
