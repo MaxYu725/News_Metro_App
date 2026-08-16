@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#0d111e">
+    <meta name="theme-color" content="#0a0d18">
     <link rel="manifest" href="./manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,30 +14,56 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="./style.css">
 </head>
-<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#0d111e] text-white select-none overflow-hidden">
+<body class="h-screen w-screen flex flex-col pt-4 relative bg-[#0a0d18] text-white select-none overflow-hidden">
 
-    <!-- ✨ 高對比清晰暗黑地圖與網格背景 (Translucent Vector Map) -->
-    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#0d111e]">
-        <svg class="absolute inset-0 w-full h-full opacity-40" xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+    <!-- 🚀 方案 1：香港全境暗黑向量地圖背景 (Pure SVG - 0 耗能高對比) -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#0a0d18]">
+        <svg class="absolute inset-0 w-full h-full opacity-35" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
             <defs>
-                <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
-                    <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-opacity="0.25"/>
+                <!-- 科技地理網格 (Grid) -->
+                <pattern id="hk-grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                    <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#ffffff" stroke-width="0.6" stroke-opacity="0.12"/>
                 </pattern>
-                <radialGradient id="map-glow" cx="50%" cy="30%" r="75%">
-                    <stop offset="0%" stop-color="#1e2942" stop-opacity="0.8"/>
-                    <stop offset="100%" stop-color="#090c17" stop-opacity="0.95"/>
+                <!-- 暗黑夜藍背景漸變 -->
+                <radialGradient id="bg-radial" cx="50%" cy="40%" r="70%">
+                    <stop offset="0%" stop-color="#182238" stop-opacity="0.9"/>
+                    <stop offset="100%" stop-color="#0a0d18" stop-opacity="0.98"/>
                 </radialGradient>
             </defs>
-            <rect width="100%" height="100%" fill="url(#map-glow)" />
-            <rect width="100%" height="100%" fill="url(#grid)" />
-            
-            <!-- 向量海岸線與地圖輪廓 (顯眼對比) -->
-            <path d="M-50,180 Q120,80 280,220 T580,140 T900,300" fill="rgba(255,255,255,0.04)" stroke="#ffffff" stroke-width="1.5" stroke-opacity="0.45" stroke-dasharray="6,4"/>
-            <path d="M0,400 Q220,320 420,480 T780,360" fill="none" stroke="#38bdf8" stroke-width="1.2" stroke-opacity="0.35"/>
-            <circle cx="280" cy="220" r="4" fill="#38bdf8" fill-opacity="0.8"/>
-            <circle cx="580" cy="140" r="3" fill="#ffffff" fill-opacity="0.6"/>
+
+            <!-- 1. 背景漸變與網格 -->
+            <rect width="100%" height="100%" fill="url(#bg-radial)" />
+            <rect width="100%" height="100%" fill="url(#hk-grid)" />
+
+            <!-- 2. 香港全境地圖向量輪廓 (新界、九龍、港島、大嶼山) -->
+            <g fill="rgba(255, 255, 255, 0.04)" stroke="#ffffff" stroke-width="1.2" stroke-opacity="0.35" stroke-linejoin="round">
+                <!-- 大嶼山 (Lantau Island) -->
+                <path d="M 120,420 Q 180,380 260,410 T 320,480 T 240,540 T 140,500 Z"/>
+                <!-- 赤鱲角機場 -->
+                <path d="M 180,370 L 230,360 L 240,390 L 190,400 Z" fill="rgba(56, 189, 248, 0.1)" stroke="#38bdf8" stroke-opacity="0.5"/>
+                <!-- 九龍及新界大陸 (NT & Kowloon) -->
+                <path d="M 280,120 Q 450,100 620,130 T 780,180 T 820,280 T 720,380 T 580,390 T 480,380 T 380,330 T 260,260 Z"/>
+                <!-- 西貢半島與離島群 -->
+                <path d="M 720,200 Q 850,220 880,310 T 760,370 Z"/>
+                <!-- 香港島 (HK Island) -->
+                <path d="M 480,440 Q 580,430 680,450 T 660,520 T 540,530 T 460,480 Z"/>
+                <!-- 南丫島 (Lamma Island) -->
+                <path d="M 440,550 Q 470,540 480,590 T 450,630 Z"/>
+            </g>
+
+            <!-- 3. 維多利亞港航道與重要地理線條 -->
+            <path d="M 450,400 Q 550,415 650,425" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.6" stroke-dasharray="4,4"/>
+
+            <!-- 4. 城市節點標記 (中環、尖沙咀、旺角、荃灣) -->
+            <g fill="#38bdf8" fill-opacity="0.8">
+                <circle cx="530" cy="445" r="3"/><text x="540" y="450" fill="#ffffff" fill-opacity="0.5" font-size="10">CENTRAL</text>
+                <circle cx="535" cy="390" r="3"/><text x="545" y="395" fill="#ffffff" fill-opacity="0.5" font-size="10">TST</text>
+                <circle cx="525" cy="350" r="2.5"/><text x="535" y="355" fill="#ffffff" fill-opacity="0.4" font-size="9">MONG KOK</text>
+            </g>
         </svg>
-        <div class="absolute inset-0 bg-gradient-to-b from-transparent via-[#0d111e]/30 to-[#0d111e]/80"></div>
+
+        <!-- 暗化暗角遮罩，突出中央內容可讀性 -->
+        <div class="absolute inset-0 bg-radial from-transparent via-[#0a0d18]/40 to-[#0a0d18]/80"></div>
     </div>
 
     <!-- 圖片全螢幕燈箱 (Lightbox) -->
@@ -59,7 +85,7 @@
         <div id="ptr-indicator" class="w-full flex items-center justify-center overflow-hidden transition-all duration-150" style="height: 0px;"></div>
         
         <div id="gallery-search-container" class="hidden px-5 mb-4 relative z-20">
-            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-[#161a2e]/70 backdrop-blur-md border border-white/20 px-4 py-3 text-white focus:outline-none focus:border-cyan-400 text-lg rounded-none shadow-lg">
+            <input type="text" id="gallery-search-input" placeholder="搜尋靈感 (例: 健身, 楓葉)..." class="w-full bg-[#13182a]/70 backdrop-blur-md border border-white/20 px-4 py-3 text-white focus:outline-none focus:border-cyan-400 text-lg rounded-none shadow-lg">
         </div>
 
         <div id="loading-indicator" class="absolute inset-0 flex items-center justify-center hidden z-50">
@@ -72,7 +98,7 @@
             <div class="loader-small"></div>
         </div>
 
-        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-[#161a2e]/80 backdrop-blur-md border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/20 active:scale-95 shadow-2xl">
+        <button id="back-to-top" class="hidden-fab fixed bottom-8 right-6 w-14 h-14 bg-[#13182a]/80 backdrop-blur-md border border-white/30 text-white rounded-full flex justify-center items-center text-2xl z-40 hover:bg-white/20 active:scale-95 shadow-2xl">
             ↑
         </button>
 
@@ -89,7 +115,7 @@
                 <p class="text-xs text-gray-400 uppercase tracking-widest">自訂追蹤關鍵字</p>
                 <div class="flex flex-col space-y-2" id="category-manager-list"></div>
                 <div class="flex space-x-2 mt-2">
-                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-[#161a2e]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow">
+                    <input type="text" id="new-cat-input" placeholder="輸入追蹤關鍵字 (如: iPhone)..." class="bg-[#13182a]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow">
                     <button id="btn-add-cat" class="metro-btn">新增</button>
                 </div>
             </div>
