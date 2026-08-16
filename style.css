@@ -19,7 +19,7 @@ body {
     font-weight: 600;
 }
 
-/* 🚀 毛玻璃半透明卡片：52% 透明底 + 10px 模糊，完美透出背景靜態地圖與線條 */
+/* 🚀 毛玻璃半透明卡片：52% 透明底 + 10px 模糊，透出幾何圖樣 */
 .metro-tile {
     position: relative;
     cursor: pointer;
