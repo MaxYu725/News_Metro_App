@@ -1,4 +1,4 @@
-import { timeAgo, LocalDB } from './utils.js';
+import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
 import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 import { initLightbox, openLightbox } from './lightbox.js';
 import { initGestures } from './gestures.js';
@@ -62,8 +62,16 @@ const DOM = {
     ptrIndicator: document.getElementById('ptr-indicator'),
     backToTopBtn: document.getElementById('back-to-top'),
     gallerySearchContainer: document.getElementById('gallery-search-container'),
-    gallerySearchInput: document.getElementById('gallery-search-input')
+    gallerySearchInput: document.getElementById('gallery-search-input'),
+    appBgContainer: document.getElementById('app-bg-container')
 };
+
+// 🚀 隨機生成全 App 幾何背景
+function initRandomBackground() {
+    if (DOM.appBgContainer) {
+        DOM.appBgContainer.innerHTML = generateGeometricBackground() + '<div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/40 via-transparent to-[#0a0d1a]/85"></div>';
+    }
+}
 
 DOM.gallerySearchInput?.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
@@ -403,7 +411,6 @@ function showAISummaryInTile(tile, summaryText) {
     aiText.innerText = summaryText;
 }
 
-/* 渲染卡片：完全透出背景向量地圖 */
 function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
     if (!DOM.newsGrid) return;
 
@@ -495,7 +502,6 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                                 </div>
                             </div>
 
-                            <!-- 內文區塊：25% 透明黑，透出背景同時兼顧極致文字可讀性 -->
                             <div class="article-content-body text-base md:text-lg font-light text-gray-100 leading-relaxed bg-black/25 px-5 py-6 border-t border-white/10">
                                 ${cleanDescription}
                             </div>
@@ -696,6 +702,7 @@ DOM.mainContainer?.addEventListener('scroll', () => {
 DOM.backToTopBtn?.addEventListener('click', () => { DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' }); });
 
 window.addEventListener('DOMContentLoaded', () => { 
+    initRandomBackground();
     initLightbox();
     
     initGestures({
