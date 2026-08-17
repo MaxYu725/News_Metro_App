@@ -6,6 +6,7 @@ on:
       - agent/cloudflare-readonly-audit
     paths:
       - .github/workflows/cloudflare-recover.yml
+      - .github/scripts/recover-cloudflare-worker.py
 
 permissions:
   contents: write
@@ -18,7 +19,7 @@ jobs:
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       WORKER_NAME: news-proxy
-      RECOVERY_REVISION: "2"
+      RECOVERY_REVISION: "3"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,17 +69,36 @@ jobs:
           grep -q '^hardcoded_secret_heuristic=none$' /tmp/source-audit.txt
           grep -q '^handlers=.*fetch:True.*scheduled:True.*export_default:True' /tmp/source-audit.txt
 
-      - name: Record production deployment provenance
+      - name: Record sanitized production settings and deployment provenance
         shell: bash
         run: |
           set -euo pipefail
-          api="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/deployments"
-          curl -sS --retry 2 --retry-delay 1 \
-            -H "Authorization: Bearer ${CF_API_TOKEN}" \
-            "$api" > /tmp/deployments.json
+          base="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}"
+          auth=( -H "Authorization: Bearer ${CF_API_TOKEN}" )
+
+          curl -sS --retry 2 --retry-delay 1 "${auth[@]}" "${base}/settings" > /tmp/settings.json
+          curl -sS --retry 2 --retry-delay 1 "${auth[@]}" "${base}/deployments" > /tmp/deployments.json
+          jq -e '.success == true' /tmp/settings.json >/dev/null
           jq -e '.success == true' /tmp/deployments.json >/dev/null
+
+          settings=$(jq -c '.result | {
+            compatibility_date,
+            compatibility_flags,
+            usage_model,
+            observability,
+            bindings: [(.bindings // [])[] | {
+              name,
+              type,
+              id,
+              namespace_id,
+              bucket_name,
+              class_name
+            } | with_entries(select(.value != null))]
+          }' /tmp/settings.json)
           deployment=$(jq -c '.result.deployments[0] // .result[0] // {} | {id,created_on,source,versions}' /tmp/deployments.json)
-          jq --argjson deployment "$deployment" '. + {deployment:$deployment}' \
+
+          jq --argjson settings "$settings" --argjson deployment "$deployment" \
+            '. + {settings:$settings,deployment:$deployment}' \
             worker/recovery-manifest.json > /tmp/recovery-manifest.json
           mv /tmp/recovery-manifest.json worker/recovery-manifest.json
 
