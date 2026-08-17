@@ -1,0 +1,107 @@
+name: Cloudflare read-only audit
+
+on:
+  push:
+    branches:
+      - agent/cloudflare-readonly-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - name: Validate Cloudflare credentials are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ACCOUNT_ID:-}" || { echo "::error::CF_ACCOUNT_ID is missing"; exit 1; }
+          test -n "${CF_API_TOKEN:-}" || { echo "::error::CF_API_TOKEN is missing"; exit 1; }
+          echo "Cloudflare credentials are present."
+
+      - name: Audit Workers and D1 inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}"
+          AUTH=( -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" )
+
+          cf_get() {
+            local path="$1"
+            local out="$2"
+            local code
+            code=$(curl -sS --retry 2 --retry-delay 1 -o "$out" -w '%{http_code}' "${AUTH[@]}" "${API}${path}")
+            if [[ "$code" -lt 200 || "$code" -ge 300 ]] || [[ "$(jq -r '.success // false' "$out" 2>/dev/null || echo false)" != "true" ]]; then
+              echo "::error::Cloudflare GET ${path} failed (HTTP ${code})"
+              jq -c '{success,errors,messages}' "$out" 2>/dev/null || cat "$out"
+              return 1
+            fi
+          }
+
+          cf_post() {
+            local path="$1"
+            local body="$2"
+            local out="$3"
+            local code
+            code=$(curl -sS --retry 2 --retry-delay 1 -o "$out" -w '%{http_code}' -X POST "${AUTH[@]}" --data "$body" "${API}${path}")
+            if [[ "$code" -lt 200 || "$code" -ge 300 ]] || [[ "$(jq -r '.success // false' "$out" 2>/dev/null || echo false)" != "true" ]]; then
+              echo "::warning::Cloudflare POST ${path} failed (HTTP ${code})"
+              jq -c '{success,errors,messages}' "$out" 2>/dev/null || cat "$out"
+              return 1
+            fi
+          }
+
+          echo '## Workers inventory'
+          cf_get '/workers/scripts' /tmp/workers.json
+          jq -r '.result[] | [(.id // "?"),(.modified_on // "-"),(.compatibility_date // "-"),(.usage_model // "-")] | @tsv' /tmp/workers.json \
+            | awk 'BEGIN {print "worker\tmodified_on\tcompatibility_date\tusage_model"} {print}'
+
+          mapfile -t WORKERS < <(jq -r '.result[].id' /tmp/workers.json)
+          for worker in "${WORKERS[@]}"; do
+            echo
+            echo "### Worker: ${worker}"
+
+            if cf_get "/workers/scripts/${worker}/settings" /tmp/worker-settings.json; then
+              echo 'Bindings (name/type only; secret values are never printed):'
+              jq -r '.result.bindings // [] | if length == 0 then "(none)" else .[] | [(.name // "?"),(.type // "?"),(.id // .namespace_id // .bucket_name // .class_name // "-")] | @tsv end' /tmp/worker-settings.json
+              echo 'Runtime settings:'
+              jq -c '.result | {compatibility_date,compatibility_flags,usage_model,placement,observability,tail_consumers}' /tmp/worker-settings.json
+            fi
+
+            if cf_get "/workers/scripts/${worker}/deployments" /tmp/worker-deployments.json; then
+              echo 'Latest deployment:'
+              jq -c '.result.deployments[0] // .result[0] // {} | {id,created_on,source,author_email,versions}' /tmp/worker-deployments.json
+            fi
+
+            if cf_get "/workers/scripts/${worker}/schedules" /tmp/worker-schedules.json; then
+              echo 'Cron schedules:'
+              jq -c '.result // [] | if length == 0 then [] else map({cron,created_on,modified_on}) end' /tmp/worker-schedules.json
+            fi
+          done
+
+          echo
+          echo '## D1 inventory'
+          cf_get '/d1/database?per_page=100' /tmp/d1.json
+          jq -r '.result[] | [(.uuid // .id // "?"),(.name // "?"),(.created_at // "-"),((.file_size // 0)|tostring),(.version // "-")] | @tsv' /tmp/d1.json \
+            | awk 'BEGIN {print "database_id\tname\tcreated_at\tfile_size\tversion"} {print}'
+
+          mapfile -t DBS < <(jq -r '.result[] | [(.uuid // .id),.name] | @tsv' /tmp/d1.json)
+          for row in "${DBS[@]}"; do
+            db_id="${row%%$'\t'*}"
+            db_name="${row#*$'\t'}"
+            echo
+            echo "### D1: ${db_name} (${db_id})"
+
+            schema_body=$(jq -nc --arg sql "SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type IN ('table','index','trigger','view') ORDER BY type, name" '{sql:$sql}')
+            if cf_post "/d1/database/${db_id}/query" "$schema_body" /tmp/d1-schema.json; then
+              echo 'Schema objects:'
+              jq -r '.result[]?.results[]? | [(.type // "?"),(.name // "?"),(.tbl_name // "?"),(.sql // "-")] | @tsv' /tmp/d1-schema.json
+            fi
+          done
