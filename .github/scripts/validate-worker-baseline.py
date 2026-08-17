@@ -122,6 +122,11 @@ def main() -> int:
     if "targetUrl.includes('hk01.com')" in combined:
         fail("unsafe HK01 substring allowlist must not be reintroduced")
 
+    if '/hk01/zone/13' in source:
+        fail('stale HK01 image aggregate feed must not be reintroduced')
+    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
+        fail('HK01 image subchannel feed mapping is missing')
+
     print("Wrangler production resource alignment: OK")
     print("Rate limit security bindings: OK")
     print("D1 baseline schema/indexes: OK")
