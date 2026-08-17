@@ -1,0 +1,193 @@
+name: CF-W4 apply production cleanup
+
+on:
+  push:
+    branches:
+      - agent/cf-w4-production-cleanup
+    paths:
+      - .github/workflows/cf-w4-updater.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout CF-W4 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/cf-w4-production-cleanup
+
+      - name: Apply CF-W4 production cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'expected block not found in {path}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'worker/wrangler.jsonc',
+              '  "compatibility_flags": [],\n',
+              '  "compatibility_flags": [],\n  "preview_urls": false,\n',
+          )
+
+          replace_once(
+              'worker/src/index.js',
+              """async function cleanUpOldArticles(env) {
+            try {
+              await env.DB.prepare(`DELETE FROM articles WHERE datetime(pubDate) < datetime('now', '-30 days')`).run();
+            } catch {}
+          }
+
+          export default {
+            async scheduled(event, env, ctx) {
+              const catKeys = Object.keys(topicSources);
+              ctx.waitUntil(Promise.all([
+                ...catKeys.map(cat => syncCategoryToDB(cat, env)),
+                cleanUpOldArticles(env),
+              ]));
+            },
+          """,
+              """async function cleanUpOldArticles(env) {
+            try {
+              await env.DB.prepare(`DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')`).run();
+            } catch {}
+          }
+
+          async function syncAllCategoriesAndCleanup(env) {
+            await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
+            await cleanUpOldArticles(env);
+          }
+
+          export default {
+            async scheduled(event, env, ctx) {
+              ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+            },
+          """,
+          )
+
+          replace_once(
+              'worker/src/index.js',
+              """            if (forceSync || checkDB[0].count === 0) {
+                          if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
+                          await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
+                        }
+          """,
+              """            if (forceSync || checkDB[0].count === 0) {
+                          await syncAllCategoriesAndCleanup(env);
+                        }
+          """,
+          )
+
+          replace_once(
+              'worker/src/index.js',
+              """            if (forceSync || checkDB[0].count === 0) {
+                          if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
+                          await syncCategoryToDB(category, env);
+                        }
+          """,
+              """            if (forceSync || checkDB[0].count === 0) {
+                          await syncCategoryToDB(category, env);
+                          if (forceSync) await cleanUpOldArticles(env);
+                        }
+          """,
+          )
+
+          replace_once(
+              '.github/scripts/validate-worker-baseline.py',
+              '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n',
+              '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n    if config.get("preview_urls") is not False:\n        fail("preview_urls must be explicitly disabled")\n',
+          )
+
+          replace_once(
+              '.github/scripts/validate-worker-baseline.py',
+              """    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
+                  fail('HK01 image subchannel feed mapping is missing')
+          """,
+              """    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
+                  fail('HK01 image subchannel feed mapping is missing')
+
+              retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
+              if retention_sql not in source:
+                  fail('30-day retention must exclude the low-frequency video archive')
+              if "ctx.waitUntil(syncAllCategoriesAndCleanup(env));" not in source:
+                  fail('scheduled ingestion must clean up only after category sync completes')
+              if "ctx.waitUntil(cleanUpOldArticles(env))" in source:
+                  fail('cleanup must not race forced sync in the background')
+          """,
+          )
+
+          replace_once(
+              '.github/scripts/worker-production-smoke.sh',
+              "echo 'Production Worker smoke tests: PASS'\n",
+              """echo 'Smoke: image archive remains populated'
+          request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/video?page=0"
+          jq -e '.success == true and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null
+
+          echo 'Smoke: controlled full sync applies retention policy'
+          status=$(curl -sS --max-time 90 -D "$tmp_headers" -o "$tmp_body" -w '%{http_code}' \\
+            -H "Origin: ${APP_ORIGIN}" \\
+            "${WORKER_ORIGIN}/api/news/latest?page=0&sync=1")
+          if [[ "$status" != '200' ]]; then
+            echo "Expected force-sync HTTP 200, received ${status}" >&2
+            cat "$tmp_body" >&2 || true
+            exit 1
+          fi
+          jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
+
+          echo 'Production Worker smoke tests: PASS'
+          """,
+          )
+
+          replace_once(
+              '.github/workflows/deploy-worker-production.yml',
+              '      - .github/scripts/worker-production-smoke.sh\n',
+              '      - .github/scripts/worker-production-smoke.sh\n      - .github/scripts/worker-production-d1-audit.sh\n',
+          )
+
+          replace_once(
+              '.github/workflows/deploy-worker-production.yml',
+              '          bash -n .github/scripts/worker-production-smoke.sh\n',
+              '          bash -n .github/scripts/worker-production-smoke.sh\n          bash -n .github/scripts/worker-production-d1-audit.sh\n',
+          )
+
+          replace_once(
+              '.github/workflows/deploy-worker-production.yml',
+              """      - name: Show active deployments
+                working-directory: worker
+                run: npx wrangler deployments list
+          """,
+              """      - name: Read-only D1 production health audit
+                run: bash .github/scripts/worker-production-d1-audit.sh
+
+              - name: Show active deployments
+                working-directory: worker
+                run: npx wrangler deployments list
+          """,
+          )
+
+          marker = Path('.deploy/worker-production.txt')
+          marker.write_text('CF-W4 production cleanup: disable preview URLs, deterministic retention, low-frequency video archive exemption, D1 health audit.\n', encoding='utf-8')
+
+      - name: Commit CF-W4 changes and remove one-shot updater
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/cf-w4-updater.yml
+          git add worker/src/index.js worker/wrangler.jsonc \
+            .github/scripts/validate-worker-baseline.py \
+            .github/scripts/worker-production-smoke.sh \
+            .github/scripts/worker-production-d1-audit.sh \
+            .github/workflows/deploy-worker-production.yml \
+            .deploy/worker-production.txt
+          git commit -m "CF-W4: harden retention and production verification"
+          git push origin HEAD:agent/cf-w4-production-cleanup
