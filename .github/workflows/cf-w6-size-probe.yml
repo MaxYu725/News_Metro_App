@@ -1,0 +1,44 @@
+name: CF-W6 D1 size probe
+
+on:
+  push:
+    branches:
+      - agent/cf-w6-adaptive-retention
+    paths:
+      - .github/workflows/cf-w6-size-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Read production D1 size and row count
+        working-directory: worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute DB --remote --json \
+            --command "SELECT COUNT(*) AS total_rows, SUM(CASE WHEN category='video' THEN 1 ELSE 0 END) AS video_rows FROM articles" \
+            > /tmp/cf-w6-size.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync('/tmp/cf-w6-size.json', 'utf8'));
+          const first = Array.isArray(payload) ? payload[0] : payload?.result?.[0];
+          const row = first?.results?.[0] || {};
+          const size = Number(first?.meta?.size_after || 0);
+          console.log(`CF-W6 production baseline: size_bytes=${size} size_mib=${(size / 1024 / 1024).toFixed(2)} total_rows=${Number(row.total_rows || 0)} video_rows=${Number(row.video_rows || 0)}`);
+          if (!size) throw new Error('D1 size_after was unavailable');
+          NODE
