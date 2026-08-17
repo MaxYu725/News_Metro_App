@@ -1,0 +1,30 @@
+name: Cloudflare read-only audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Cloudflare credentials are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CF_ACCOUNT_ID:-}" || { echo "::error::CF_ACCOUNT_ID is missing"; exit 1; }
+          test -n "${CF_API_TOKEN:-}" || { echo "::error::CF_API_TOKEN is missing"; exit 1; }
+          echo "Cloudflare credentials are present."
+
+      - name: Audit Workers and D1
+        shell: bash
+        run: bash .github/scripts/cloudflare-audit.sh

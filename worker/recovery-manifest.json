@@ -1,0 +1,64 @@
+{
+  "source": "Cloudflare Workers Scripts API",
+  "main_module": "worker.js",
+  "parts": [
+    {
+      "name": "worker.js",
+      "filename": "worker.js",
+      "content_type": "text/plain",
+      "bytes": 16737,
+      "sha256": "a87dce53672d82caaa06ff0a361bab779fa05359a68eda2e4179a6197037f061"
+    }
+  ],
+  "recovered_source": {
+    "path": "worker/src/index.js",
+    "bytes": 16737,
+    "sha256": "a87dce53672d82caaa06ff0a361bab779fa05359a68eda2e4179a6197037f061"
+  },
+  "settings": {
+    "compatibility_date": "2026-08-07",
+    "compatibility_flags": [],
+    "usage_model": "standard",
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+    },
+    "bindings": [
+      {
+        "name": "AI",
+        "type": "ai"
+      },
+      {
+        "name": "API_KEY",
+        "type": "secret_text"
+      },
+      {
+        "name": "DB",
+        "type": "d1",
+        "id": "f8b597e9-8976-4f56-806e-51c9faa68a68"
+      }
+    ]
+  },
+  "deployment": {
+    "id": "2550566a-ad98-4daf-abc5-62d6931e9de0",
+    "created_on": "2026-08-07T03:41:26.289378Z",
+    "source": "quick_editor",
+    "versions": [
+      {
+        "version_id": "d83c08ce-d4c4-4963-ae88-6a08f5c35fce",
+        "percentage": 100
+      }
+    ]
+  }
+}

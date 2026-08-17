@@ -1,0 +1,11 @@
+{
+  "name": "metro-news-worker",
+  "private": true,
+  "scripts": {
+    "check": "wrangler deploy --dry-run --outdir .wrangler-dry-run",
+    "types": "wrangler types worker-configuration.d.ts"
+  },
+  "devDependencies": {
+    "wrangler": "4.118.0"
+  }
+}
