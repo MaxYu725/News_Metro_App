@@ -1,0 +1,165 @@
+name: Image fidelity diagnosis
+
+on:
+  push:
+    branches:
+      - agent/image-fidelity-diagnosis
+    paths:
+      - .github/workflows/image-fidelity-diagnosis.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Locate image and compare HK01 CDN variants
+        env:
+          TARGET_FRAGMENT: wu3KNfgiQF79tDWsMvk0NKr_WPw-uGYXO12X6ztdl-s
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, os, re, sys, time, urllib.request, urllib.parse
+          from pathlib import Path
+
+          frag = os.environ['TARGET_FRAGMENT']
+          api_base = 'https://news-proxy.maxyu0725us.workers.dev'
+          ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36'
+
+          def get(url, headers=None, timeout=30):
+              h = {'User-Agent': ua}
+              if headers: h.update(headers)
+              req = urllib.request.Request(url, headers=h)
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return r.status, dict(r.headers.items()), r.read(), r.geturl()
+
+          print('=== Locate target in production D1 API ===')
+          hit = None
+          for page in range(0, 160):
+              url = f'{api_base}/api/news/latest?page={page}'
+              try:
+                  status, headers, body, final = get(url)
+              except Exception as e:
+                  print('page fetch error', page, repr(e))
+                  break
+              data = json.loads(body)
+              rows = data.get('data') or []
+              if not rows:
+                  print('end at page', page)
+                  break
+              for row in rows:
+                  blob = json.dumps(row, ensure_ascii=False)
+                  if frag in blob:
+                      hit = row
+                      print('FOUND page=', page)
+                      print(json.dumps(row, ensure_ascii=False, indent=2))
+                      break
+              if hit: break
+
+          if not hit:
+              print('TARGET_NOT_FOUND_IN_PRODUCTION_API')
+              sys.exit(2)
+
+          link = hit.get('link','')
+          m = re.search(r'/(\d+)(?:/|$)', urllib.parse.urlparse(link).path)
+          if not m:
+              print('NO_ARTICLE_ID', link)
+              sys.exit(3)
+          article_id = m.group(1)
+          print('article_id=', article_id)
+
+          app_urls = []
+          for key in ('imageUrl',):
+              v = hit.get(key)
+              if isinstance(v,str) and v: app_urls.append(v)
+          imgs = hit.get('images')
+          if isinstance(imgs, str):
+              try: imgs = json.loads(imgs)
+              except Exception: imgs = []
+          if isinstance(imgs, list):
+              app_urls.extend(x for x in imgs if isinstance(x,str) and x)
+          app_urls = list(dict.fromkeys(app_urls))
+          print('\n=== App image URLs containing fragment ===')
+          matching_app = [u for u in app_urls if frag in u]
+          for u in matching_app: print(u)
+
+          print('\n=== HK01 article API image metadata ===')
+          official_api = f'https://web-data.api.hk01.com/v2/page/article/{article_id}'
+          try:
+              _, _, body, _ = get(official_api)
+              official = json.loads(body)
+          except Exception as e:
+              print('HK01_API_ERROR', repr(e))
+              official = None
+
+          found_nodes = []
+          urls = []
+          def walk(obj, path='root'):
+              if isinstance(obj, dict):
+                  # Capture image-ish objects and exact fragment hits.
+                  text = json.dumps(obj, ensure_ascii=False)
+                  if frag in text and len(text) < 12000:
+                      found_nodes.append((path, obj))
+                  for k,v in obj.items():
+                      walk(v, f'{path}.{k}')
+              elif isinstance(obj, list):
+                  for i,v in enumerate(obj): walk(v, f'{path}[{i}]')
+              elif isinstance(obj, str):
+                  if obj.startswith('http') and (frag in obj or any(t in path.lower() for t in ('image','cdn','url'))):
+                      urls.append((path,obj))
+
+          if official is not None:
+              walk(official)
+              for path,obj in found_nodes[:12]:
+                  print('NODE', path)
+                  print(json.dumps(obj, ensure_ascii=False, indent=2)[:10000])
+
+          official_matching = []
+          for path,u in urls:
+              if frag in u:
+                  official_matching.append(u)
+                  print('OFFICIAL_URL', path, u)
+          official_matching = list(dict.fromkeys(official_matching))
+
+          compare_urls = list(dict.fromkeys(matching_app + official_matching))
+          print('\n=== URL equality ===')
+          print('app_matches=', len(matching_app), 'official_matches=', len(official_matching), 'unique=', len(compare_urls))
+          for i,u in enumerate(compare_urls): print(i, u)
+
+          def fetch_variant(url, name, accept):
+              try:
+                  status, headers, body, final = get(url, {'Accept': accept})
+                  p = Path(name)
+                  p.write_bytes(body)
+                  print('VARIANT', name)
+                  print(' status=', status)
+                  print(' final=', final)
+                  print(' content-type=', headers.get('Content-Type') or headers.get('content-type'))
+                  print(' content-length-header=', headers.get('Content-Length') or headers.get('content-length'))
+                  print(' content-encoding=', headers.get('Content-Encoding') or headers.get('content-encoding'))
+                  print(' vary=', headers.get('Vary') or headers.get('vary'))
+                  print(' bytes=', len(body))
+                  print(' sha256=', hashlib.sha256(body).hexdigest())
+              except Exception as e:
+                  print('VARIANT_ERROR', name, repr(e))
+
+          print('\n=== Download representation comparison ===')
+          for idx,u in enumerate(compare_urls[:6]):
+              print('\nURL_INDEX', idx, u)
+              fetch_variant(u, f'/tmp/img{idx}-browser.bin', 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8')
+              fetch_variant(u, f'/tmp/img{idx}-generic.bin', '*/*')
+              fetch_variant(u, f'/tmp/img{idx}-jpeg.bin', 'image/jpeg,image/png,*/*;q=0.5')
+          PY
+
+      - name: Inspect downloaded image file signatures
+        if: always()
+        run: |
+          set +e
+          for f in /tmp/img*.bin; do
+            [ -e "$f" ] || continue
+            echo "--- $f"
+            ls -l "$f"
+            file "$f"
+          done
