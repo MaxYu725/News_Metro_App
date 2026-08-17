@@ -119,8 +119,8 @@
                 <p class="text-xs text-gray-400 uppercase tracking-widest">追蹤主題</p>
                 <div class="flex flex-col space-y-2" id="category-manager-list"></div>
                 <div class="flex space-x-2 mt-2">
-                    <input type="text" id="new-cat-input" placeholder="輸入主題，例如：天氣" class="bg-[#13182a]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-cyan-400 flex-grow min-w-0">
-                    <button id="btn-add-cat" class="metro-btn">追蹤</button>
+                    <input type="text" id="new-cat-input" placeholder="輸入主題，例如：天氣" class="bg-[#13182a]/80 border border-white/20 px-4 py-2 text-white focus:outline-none focus:border-[var(--metro-accent-color)] flex-grow min-w-0">
+                    <button id="btn-add-cat" class="metro-btn" type="button">追蹤</button>
                 </div>
             </div>
 
@@ -136,23 +136,23 @@
             </div>
 
             <div>
-                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">accent color</p>
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">主題色彩</p>
                 <div class="flex space-x-3">
-                    <button class="color-btn w-10 h-10 bg-cyan-500 border-2 border-white" data-color="bg-cyan-500" data-border="border-l-cyan-400" data-text="text-cyan-400" aria-label="青色"></button>
-                    <button class="color-btn w-10 h-10 bg-blue-600 border-2 border-transparent" data-color="bg-blue-600" data-border="border-l-blue-500" data-text="text-blue-400" aria-label="藍色"></button>
-                    <button class="color-btn w-10 h-10 bg-purple-600 border-2 border-transparent" data-color="bg-purple-600" data-border="border-l-purple-400" data-text="text-purple-400" aria-label="紫色"></button>
-                    <button class="color-btn w-10 h-10 bg-emerald-500 border-2 border-transparent" data-color="bg-emerald-500" data-border="border-l-emerald-400" data-text="text-emerald-400" aria-label="綠色"></button>
-                    <button class="color-btn w-10 h-10 bg-orange-500 border-2 border-transparent" data-color="bg-orange-500" data-border="border-l-orange-400" data-text="text-orange-400" aria-label="橙色"></button>
+                    <button type="button" class="color-btn w-10 h-10 bg-cyan-500 border-2 border-white" data-color="bg-cyan-500" data-border="border-l-cyan-400" data-text="text-cyan-400" aria-label="青色"></button>
+                    <button type="button" class="color-btn w-10 h-10 bg-blue-600 border-2 border-transparent" data-color="bg-blue-600" data-border="border-l-blue-500" data-text="text-blue-400" aria-label="藍色"></button>
+                    <button type="button" class="color-btn w-10 h-10 bg-purple-600 border-2 border-transparent" data-color="bg-purple-600" data-border="border-l-purple-400" data-text="text-purple-400" aria-label="紫色"></button>
+                    <button type="button" class="color-btn w-10 h-10 bg-emerald-500 border-2 border-transparent" data-color="bg-emerald-500" data-border="border-l-emerald-400" data-text="text-emerald-400" aria-label="綠色"></button>
+                    <button type="button" class="color-btn w-10 h-10 bg-orange-500 border-2 border-transparent" data-color="bg-orange-500" data-border="border-l-orange-400" data-text="text-orange-400" aria-label="橙色"></button>
                 </div>
             </div>
 
             <div>
-                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">typography size</p>
-                <div class="flex space-x-2">
-                    <button class="metro-btn" id="btn-font-minus">a -</button>
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">字體大小</p>
+                <div class="flex space-x-2 settings-font-controls">
+                    <button class="metro-btn" type="button" id="btn-font-minus" aria-label="縮小字體">A−</button>
                     <div class="flex items-center justify-center px-4 bg-white/10 text-white font-bold tracking-wider" id="font-size-display">110%</div>
-                    <button class="metro-btn" id="btn-font-plus">a +</button>
-                    <button class="metro-btn" id="btn-font-reset">reset</button>
+                    <button class="metro-btn" type="button" id="btn-font-plus" aria-label="放大字體">A＋</button>
+                    <button class="metro-btn" type="button" id="btn-font-reset" aria-label="重設字體大小">重設字體大小</button>
                 </div>
             </div>
         </div>
