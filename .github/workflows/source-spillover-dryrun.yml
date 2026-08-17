@@ -1,0 +1,75 @@
+name: Source spillover dry-run
+
+on:
+  push:
+    branches:
+      - fix/ns2c3r3-source-spillover
+    paths:
+      - .github/workflows/source-spillover-dryrun.yml
+
+permissions:
+  contents: read
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run policy regressions
+        working-directory: worker
+        run: node --test test/archive-backfill-policy.test.mjs
+      - name: Snapshot archive read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json --command "SELECT id,source,category,pubDate FROM articles ORDER BY pubDate DESC,id DESC" > /tmp/archive-existing.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json --command "SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state ORDER BY source_key" > /tmp/archive-state.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json --command "SELECT COUNT(*) AS total_rows FROM articles" > /tmp/count.json
+          node <<'NODE' >> "$GITHUB_ENV"
+          const p=require('/tmp/count.json'); const f=Array.isArray(p)?p[0]:p?.result?.[0]; const r=f?.results?.[0]||f?.result?.results?.[0];
+          const n=Number(r?.total_rows||0); if(n!==9000) throw new Error(`expected 9000 rows, got ${n}`); console.log(`BEFORE_ROWS=${n}`);
+          NODE
+      - name: Run formal 1000-row spillover generator without D1 writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node worker/scripts/archive-backfill.mjs \
+            --batch-id=ns2c3-010r1 \
+            --source=all \
+            --limit=1000 \
+            --before-rows="$BEFORE_ROWS" \
+            --existing=/tmp/archive-existing.json \
+            --state=/tmp/archive-state.json \
+            --out-dir=/tmp/archive-backfill \
+            --report=/tmp/archive-backfill/report.json
+          cat /tmp/archive-backfill/report.json
+          node <<'NODE'
+          const r=require('/tmp/archive-backfill/report.json');
+          if(r.generated!==1000) throw new Error(`expected 1000, got ${r.generated}`);
+          if(r.hk01?.generated>=500) throw new Error(`expected proven HK01 shortfall, got ${r.hk01?.generated}`);
+          if(r.bastille?.generated!==1000-r.hk01.generated) throw new Error('Bastille did not fill exact HK01 shortfall');
+          if(r.spilloverRows!==500-r.hk01.generated) throw new Error('spillover report mismatch');
+          if(!r.hk01?.partial) throw new Error('HK01 partial flag missing');
+          if(r.planChunkCount!==20||r.applyChunkCount!==20) throw new Error('unexpected chunk plan');
+          console.log(`READ_ONLY_SPILLOVER_PASS hk01=${r.hk01.generated} bastille=${r.bastille.generated} spillover=${r.spilloverRows} oldest=${r.oldest}`);
+          NODE
+      - name: Confirm archive unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json --command "SELECT COUNT(*) AS total_rows FROM articles" > /tmp/after.json
+          node <<'NODE'
+          const p=require('/tmp/after.json'); const f=Array.isArray(p)?p[0]:p?.result?.[0]; const r=f?.results?.[0]||f?.result?.results?.[0];
+          if(Number(r?.total_rows)!==9000) throw new Error(`archive changed: ${r?.total_rows}`);
+          console.log('ARCHIVE_UNCHANGED rows=9000');
+          NODE
