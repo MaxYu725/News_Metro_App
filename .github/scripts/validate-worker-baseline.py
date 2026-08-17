@@ -135,6 +135,7 @@ def main() -> int:
         fail('image archive must use the verified rssforever endpoint')
     if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:
         fail('image archive timeout policy is missing')
+
     retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
     if retention_sql not in source:
         fail("30-day retention must exclude the low-frequency video archive")
