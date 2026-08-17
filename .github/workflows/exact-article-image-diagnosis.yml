@@ -15,61 +15,59 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Inspect official page variants for target image
+      - name: Inspect rendered official page image variants
         env:
-          ARTICLE_ID: '60380674'
+          ARTICLE_URL: 'https://www.hk01.com/article/60380674'
           TARGET_HASH: 'wu3KNfgiQF79tDWsMvK0NKr_WPw-uGYXO12X6ztdl-s'
         run: |
           set -euo pipefail
+          google-chrome --version || true
+          google-chrome --headless=new --disable-gpu --no-sandbox --hide-scrollbars \
+            --window-size=1600,10000 --virtual-time-budget=12000 --dump-dom \
+            "$ARTICLE_URL" > /tmp/rendered.html 2>/tmp/chrome.err || true
+          echo "rendered_bytes=$(wc -c < /tmp/rendered.html)"
           python3 - <<'PY'
-          import hashlib, html, os, re, urllib.request
+          import html, os, re, urllib.request, hashlib
           from pathlib import Path
 
-          aid=os.environ['ARTICLE_ID']
           target=os.environ['TARGET_HASH']
-          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36'
-          def get(url):
-              req=urllib.request.Request(url, headers={'User-Agent':ua,'Accept':'text/html,application/xhtml+xml,application/json,image/avif,image/webp,image/*,*/*;q=0.8'})
-              with urllib.request.urlopen(req, timeout=30) as r:
-                  return r.status, dict(r.headers.items()), r.read(), r.geturl()
-
-          sources=[]
-          for label,url in [
-              ('api', f'https://web-data.api.hk01.com/v2/page/article/{aid}'),
-              ('page', f'https://www.hk01.com/article/{aid}')
-          ]:
-              status,headers,body,final=get(url)
-              text=body.decode('utf-8','ignore')
-              print('SOURCE',label,'status=',status,'final=',final,'bytes=',len(body))
-              normalized=html.unescape(text).replace('\\u0026','&').replace('\\/','/')
-              for m in re.finditer(re.escape(target), normalized):
-                  a=max(0,m.start()-450); b=min(len(normalized),m.end()+450)
-                  print('\nMATCH',label,normalized[a:b])
-              sources.append((label,normalized))
+          text=Path('/tmp/rendered.html').read_text('utf-8','ignore')
+          text=html.unescape(text).replace('\\u0026','&').replace('\\/','/')
+          print('target_occurrences=', text.count(target))
+          for m in re.finditer(re.escape(target), text):
+              a=max(0,m.start()-1000); b=min(len(text),m.end()+1000)
+              print('\n=== RENDERED MATCH ===\n',text[a:b])
 
           urls=[]
-          for label,text in sources:
-              pat=re.compile(r'https://cdn\.hk01\.com/[^"\'<>\\s]*'+re.escape(target)+r'[^"\'<>\\s]*')
-              for u in pat.findall(text):
-                  u=u.rstrip('),]}')
-                  if u not in [x[1] for x in urls]: urls.append((label,u))
+          # Extract every quoted HTTP URL containing the target hash, preserving query params.
+          for m in re.finditer(r'https://cdn\.hk01\.com/[^"\'<>\s,]+', text):
+              u=m.group(0).rstrip(')]};')
+              if target in u and u not in urls: urls.append(u)
+          print('\n=== RENDERED TARGET URLS ===')
+          for i,u in enumerate(urls): print(i,u)
 
-          print('\n=== UNIQUE TARGET URLS ===')
-          for i,(label,u) in enumerate(urls):
-              print(i,label,u)
+          ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36'
+          def get(url):
+              req=urllib.request.Request(url, headers={'User-Agent':ua,'Accept':'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return dict(r.headers.items()),r.read(),r.geturl()
+
+          for i,u in enumerate(urls):
               try:
-                  _,h,b,final=get(u)
-                  path=Path(f'/tmp/target-{i}.bin'); path.write_bytes(b)
-                  print(' bytes=',len(b),'type=',h.get('Content-Type'),'sha=',hashlib.sha256(b).hexdigest(),'final=',final)
+                  h,b,final=get(u)
+                  Path(f'/tmp/rendered-{i}.bin').write_bytes(b)
+                  print('DOWNLOAD',i,'bytes=',len(b),'type=',h.get('Content-Type'),'sha=',hashlib.sha256(b).hexdigest(),'final=',final)
               except Exception as e:
-                  print(' ERROR',repr(e))
+                  print('DOWNLOAD_ERROR',i,repr(e))
           PY
 
-      - name: Inspect target image dimensions
+      - name: Inspect rendered target dimensions
         if: always()
         run: |
           set +e
-          for f in /tmp/target-*.bin; do
+          echo '--- chrome stderr tail ---'
+          tail -30 /tmp/chrome.err 2>/dev/null || true
+          for f in /tmp/rendered-*.bin; do
             [ -e "$f" ] || continue
             echo "--- $f"
             ls -l "$f"
