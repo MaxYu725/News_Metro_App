@@ -1,0 +1,50 @@
+name: Image quality updater
+
+on:
+  push:
+    branches:
+      - agent/original-image-on-demand
+    paths:
+      - .github/workflows/image-quality-updater.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/original-image-on-demand
+
+      - name: Apply MUI-P3 patch
+        run: python3 .github/scripts/apply-image-quality-on-demand.py
+
+      - name: Validate JavaScript syntax
+        run: |
+          set -euo pipefail
+          node --check lightbox.js
+          node --check sw.js
+
+      - name: Validate on-demand quality contract
+        run: |
+          set -euo pipefail
+          grep -q 'id="lightbox-quality"' index.html
+          grep -q "searchParams.set('v', 'w1920')" lightbox.js
+          grep -q "imgEl.naturalWidth < 1920" lightbox.js
+          grep -q "qualityBtnEl?.addEventListener('click'" lightbox.js
+          grep -q "candidate.src = src" lightbox.js
+          grep -q "metro-news-shell-v25-image-quality" sw.js
+          ! grep -q "preload.*w1920" index.html
+
+      - name: Commit generated app changes
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html style.css lightbox.js sw.js
+          git commit -m "MUI-P3: add on-demand HK01 HD image toggle"
+          git push origin HEAD:agent/original-image-on-demand
