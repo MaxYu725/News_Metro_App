@@ -38,6 +38,18 @@ export function initGestures({
     canSwipe = () => true,
     canRefresh = () => true
 }) {
+    const navMenu = document.getElementById('nav-menu');
+
+    // A hidden horizontal scrollbar is awkward on desktop. Convert the normal
+    // vertical mouse-wheel gesture into horizontal category-strip scrolling only
+    // while the strip actually overflows.
+    navMenu?.addEventListener('wheel', event => {
+        if (navMenu.scrollWidth <= navMenu.clientWidth) return;
+        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || event.deltaY === 0) return;
+        event.preventDefault();
+        navMenu.scrollLeft += event.deltaY;
+    }, { passive: false });
+
     let suppressMouseClick = false;
     let mouseSwipePointerId = null;
     let mouseSwipeStartX = 0;
