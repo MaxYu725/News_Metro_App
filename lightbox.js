@@ -1,5 +1,7 @@
 let currentScale = 1, posX = 0, posY = 0, startX = 0, startY = 0;
 let isPanning = false, isPinching = false, initialDistance = 0, initialScale = 1, lastTapTime = 0;
+let touchGestureStartedWithSingle = false, touchGestureMoved = false, pinchGestureOccurred = false;
+let touchStartClientX = 0, touchStartClientY = 0;
 export let isLightboxOpen = false;
 
 let overlayEl = null;
@@ -20,9 +22,12 @@ let mouseStartY = 0;
 let restoreFocusTarget = null;
 let inertTargets = [];
 
+const DOUBLE_TAP_WINDOW_MS = 300;
+const TAP_MOVE_THRESHOLD_PX = 10;
+
 function updateTransform() {
     if (imgEl) {
-        imgEl.style.transform = `translate(${posX}px, ${posY}px) scale(${currentScale})`;
+        imgEl.style.transform = `translate3d(${posX}px, ${posY}px, 0) scale(${currentScale})`;
     }
 }
 
@@ -31,6 +36,20 @@ function updatePointerUI() {
     if (mouseDragging) imgEl.style.cursor = 'grabbing';
     else if (currentScale > 1) imgEl.style.cursor = 'grab';
     else imgEl.style.cursor = 'zoom-in';
+}
+
+function setTouchInteraction(active) {
+    if (!imgEl) return;
+    imgEl.style.transition = active ? 'none' : '';
+}
+
+function resetTouchGestureState() {
+    isPanning = false;
+    isPinching = false;
+    touchGestureStartedWithSingle = false;
+    touchGestureMoved = false;
+    pinchGestureOccurred = false;
+    setTouchInteraction(false);
 }
 
 function resetView() {
@@ -52,8 +71,6 @@ function scaleAt(nextScale, clientX, clientY) {
     const dy = clientY - (rect.top + rect.height / 2);
     const scaleRatio = clampedScale / currentScale;
 
-    // Preserve the content point under the mouse cursor even after the image
-    // has already been panned away from the stage centre.
     posX = (posX * scaleRatio) - (dx * (scaleRatio - 1));
     posY = (posY * scaleRatio) - (dy * (scaleRatio - 1));
     currentScale = clampedScale;
@@ -74,7 +91,6 @@ function updateHint() {
         : '雙指縮放 · 雙擊還原';
 }
 
-
 function buildHk01HighQualityUrl(src) {
     try {
         const url = new URL(src, location.href);
@@ -87,6 +103,15 @@ function buildHk01HighQualityUrl(src) {
     }
 }
 
+function applyQualityVisual(active) {
+    if (!qualityBtnEl) return;
+
+    qualityBtnEl.style.backgroundColor = active ? '#38bdf8' : '';
+    qualityBtnEl.style.borderColor = active ? '#38bdf8' : '';
+    qualityBtnEl.style.color = active ? '#07111c' : '';
+    qualityBtnEl.style.boxShadow = active ? '0 0 18px rgba(56, 189, 248, 0.28)' : '';
+}
+
 function hideQualityControl() {
     if (!qualityBtnEl) return;
     qualityBtnEl.classList.add('hidden');
@@ -94,6 +119,7 @@ function hideQualityControl() {
     qualityBtnEl.textContent = '高清';
     qualityBtnEl.setAttribute('aria-pressed', 'false');
     qualityBtnEl.setAttribute('aria-label', '載入高清圖片');
+    applyQualityVisual(false);
 }
 
 function syncQualityControl() {
@@ -103,15 +129,17 @@ function syncQualityControl() {
         qualityBtnEl.classList.remove('hidden');
         qualityBtnEl.disabled = true;
         qualityBtnEl.textContent = '載入中…';
+        applyQualityVisual(highQualityActive);
         return;
     }
 
     if (highQualityActive) {
         qualityBtnEl.classList.remove('hidden');
         qualityBtnEl.disabled = false;
-        qualityBtnEl.textContent = '一般';
+        qualityBtnEl.textContent = '高清 ✓';
         qualityBtnEl.setAttribute('aria-pressed', 'true');
-        qualityBtnEl.setAttribute('aria-label', '切回一般圖片');
+        qualityBtnEl.setAttribute('aria-label', '高清圖片已啟用，按下切回標準圖片');
+        applyQualityVisual(true);
         return;
     }
 
@@ -131,6 +159,7 @@ function syncQualityControl() {
     qualityBtnEl.textContent = '高清';
     qualityBtnEl.setAttribute('aria-pressed', 'false');
     qualityBtnEl.setAttribute('aria-label', '載入高清圖片');
+    applyQualityVisual(false);
 }
 
 function resetQualityState() {
@@ -222,6 +251,8 @@ export function openLightbox(src) {
 
     restoreFocusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     resetQualityState();
+    resetTouchGestureState();
+    lastTapTime = 0;
     normalImageSrc = src;
     imgEl.src = src;
     resetView();
@@ -244,6 +275,8 @@ export function closeLightbox(fromHardwareBackBtn = false) {
     overlayEl.setAttribute('aria-hidden', 'true');
     isLightboxOpen = false;
     resetQualityState();
+    resetTouchGestureState();
+    lastTapTime = 0;
     setUnderlyingInert(false);
     restoreFocus();
 
@@ -282,6 +315,12 @@ export function initLightbox() {
 
     if (!overlayEl || !imgEl) return;
 
+    if (stageEl) stageEl.style.touchAction = 'none';
+    imgEl.style.touchAction = 'none';
+    imgEl.style.willChange = 'transform';
+    imgEl.style.backfaceVisibility = 'hidden';
+    imgEl.style.webkitBackfaceVisibility = 'hidden';
+
     window.addEventListener('popstate', () => {
         if (isLightboxOpen) closeLightbox(true);
     });
@@ -310,7 +349,6 @@ export function initLightbox() {
         trapLightboxFocus(event);
     });
 
-    // Desktop lightbox interaction: wheel zoom, drag-to-pan and double-click.
     stageEl?.addEventListener('wheel', event => {
         if (!isLightboxOpen || event.ctrlKey) return;
         event.preventDefault();
@@ -361,55 +399,136 @@ export function initLightbox() {
         else scaleAt(2, event.clientX, event.clientY);
     });
 
-    imgEl.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 1) {
-            isPanning = true;
-            startX = e.touches[0].clientX - posX;
-            startY = e.touches[0].clientY - posY;
-        } else if (e.touches.length === 2) {
+    imgEl.addEventListener('touchstart', event => {
+        if (!isLightboxOpen) return;
+        event.preventDefault();
+
+        if (event.touches.length === 1) {
+            const touch = event.touches[0];
+            touchGestureStartedWithSingle = true;
+            touchGestureMoved = false;
+            pinchGestureOccurred = false;
+            touchStartClientX = touch.clientX;
+            touchStartClientY = touch.clientY;
+            isPinching = false;
+            isPanning = currentScale > 1;
+            startX = touch.clientX - posX;
+            startY = touch.clientY - posY;
+            setTouchInteraction(isPanning);
+            return;
+        }
+
+        if (event.touches.length === 2) {
+            touchGestureStartedWithSingle = false;
+            pinchGestureOccurred = true;
+            touchGestureMoved = true;
             isPanning = false;
             isPinching = true;
             initialDistance = Math.hypot(
-                e.touches[0].clientX - e.touches[1].clientX,
-                e.touches[0].clientY - e.touches[1].clientY
+                event.touches[0].clientX - event.touches[1].clientX,
+                event.touches[0].clientY - event.touches[1].clientY
             );
             initialScale = currentScale;
+            setTouchInteraction(true);
         }
     }, { passive: false });
 
-    imgEl.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        if (isPinching && e.touches.length === 2) {
+    imgEl.addEventListener('touchmove', event => {
+        if (!isLightboxOpen) return;
+        event.preventDefault();
+
+        if (isPinching && event.touches.length === 2 && stageEl) {
             const currentDistance = Math.hypot(
-                e.touches[0].clientX - e.touches[1].clientX,
-                e.touches[0].clientY - e.touches[1].clientY
+                event.touches[0].clientX - event.touches[1].clientX,
+                event.touches[0].clientY - event.touches[1].clientY
             );
+            if (!initialDistance) return;
+
             const newScale = Math.min(Math.max(1, initialScale * (currentDistance / initialDistance)), 5);
-            const clientX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-            const clientY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-            const rect = imgEl.getBoundingClientRect();
+            const clientX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+            const clientY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+            const rect = stageEl.getBoundingClientRect();
             const dx = clientX - (rect.left + rect.width / 2);
             const dy = clientY - (rect.top + rect.height / 2);
             const scaleRatio = newScale / currentScale;
-            posX -= dx * (scaleRatio - 1);
-            posY -= dy * (scaleRatio - 1);
+
+            posX = (posX * scaleRatio) - (dx * (scaleRatio - 1));
+            posY = (posY * scaleRatio) - (dy * (scaleRatio - 1));
             currentScale = newScale;
+
+            if (currentScale === 1) {
+                posX = 0;
+                posY = 0;
+            }
+
+            touchGestureMoved = true;
             updateTransform();
             updatePointerUI();
-        } else if (isPanning && e.touches.length === 1 && currentScale > 1) {
-            posX = e.touches[0].clientX - startX;
-            posY = e.touches[0].clientY - startY;
+            return;
+        }
+
+        if (isPanning && event.touches.length === 1 && currentScale > 1) {
+            const touch = event.touches[0];
+            if (
+                Math.abs(touch.clientX - touchStartClientX) > TAP_MOVE_THRESHOLD_PX
+                || Math.abs(touch.clientY - touchStartClientY) > TAP_MOVE_THRESHOLD_PX
+            ) {
+                touchGestureMoved = true;
+            }
+            posX = touch.clientX - startX;
+            posY = touch.clientY - startY;
             updateTransform();
         }
     }, { passive: false });
 
-    imgEl.addEventListener('touchend', (e) => {
+    imgEl.addEventListener('touchend', event => {
+        if (!isLightboxOpen) return;
+        event.preventDefault();
+
+        if (event.touches.length === 1 && pinchGestureOccurred) {
+            const touch = event.touches[0];
+            isPinching = false;
+            isPanning = currentScale > 1;
+            startX = touch.clientX - posX;
+            startY = touch.clientY - posY;
+            touchStartClientX = touch.clientX;
+            touchStartClientY = touch.clientY;
+            setTouchInteraction(isPanning);
+            return;
+        }
+
+        if (event.touches.length > 0) return;
+
+        const wasSingleTap = touchGestureStartedWithSingle
+            && !pinchGestureOccurred
+            && !touchGestureMoved;
+
         isPanning = false;
         isPinching = false;
-        const currentTime = Date.now();
-        if (currentTime - lastTapTime < 300 && currentTime - lastTapTime > 0 && e.touches.length === 0) {
-            resetView();
+        setTouchInteraction(false);
+
+        if (wasSingleTap) {
+            const currentTime = Date.now();
+            const isDoubleTap = lastTapTime > 0
+                && currentTime - lastTapTime < DOUBLE_TAP_WINDOW_MS;
+
+            if (isDoubleTap) {
+                lastTapTime = 0;
+                if (currentScale > 1.05) resetView();
+            } else {
+                lastTapTime = currentTime;
+            }
+        } else {
+            lastTapTime = 0;
         }
-        lastTapTime = currentTime;
-    });
+
+        touchGestureStartedWithSingle = false;
+        touchGestureMoved = false;
+        pinchGestureOccurred = false;
+    }, { passive: false });
+
+    imgEl.addEventListener('touchcancel', () => {
+        resetTouchGestureState();
+        lastTapTime = 0;
+    }, { passive: true });
 }
