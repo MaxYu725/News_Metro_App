@@ -1,12 +1,6 @@
 name: Cloudflare read-only audit
 
 on:
-  push:
-    branches:
-      - agent/cloudflare-readonly-audit
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
