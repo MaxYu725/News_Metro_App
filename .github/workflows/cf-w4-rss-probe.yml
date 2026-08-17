@@ -1,4 +1,4 @@
-name: CF-W4 RSS parser probe
+name: CF-W4 D1 collision probe
 
 on:
   push:
@@ -15,76 +15,82 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Reproduce Worker RSS parser on live HK01 image feeds
+      - name: Compare live image feed links with public production D1 search
         shell: node {0}
         run: |
-          function decodeHTMLEntities(text) {
-            if (!text) return '';
-            return text
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/&amp;/g, '&')
-              .replace(/&quot;/g, '"')
-              .replace(/&#39;/g, "'")
-              .replace(/&apos;/g, "'")
-              .replace(/&nbsp;/g, ' ');
-          }
+          const RSS_BASE = 'https://rsshub.rssforever.com';
+          const WORKER = 'https://news-proxy.maxyu0725us.workers.dev';
+          const paths = ['/hk01/channel/259', '/hk01/channel/256'];
 
-          function parseRSS(xmlString, sourceName, categoryName) {
-            const items = [];
-            const itemRegex = /<item>([\s\S]*?)<\/item>/g;
-            let match;
-            while ((match = itemRegex.exec(xmlString)) !== null) {
-              const itemContent = match[1];
-              const titleMatch = itemContent.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || itemContent.match(/<title>([\s\S]*?)<\/title>/);
-              const title = titleMatch ? titleMatch[1].trim() : '';
-              const linkMatch = itemContent.match(/<link>([\s\S]*?)<\/link>/);
-              const link = linkMatch ? linkMatch[1].trim() : '';
-              const pubDateMatch = itemContent.match(/<pubDate>([\s\S]*?)<\/pubDate>/);
-              const pubDate = pubDateMatch ? pubDateMatch[1].trim() : '';
-              const descMatch = itemContent.match(/<content:encoded><!\[CDATA\[([\s\S]*?)\]\]><\/content:encoded>/i) || itemContent.match(/<content:encoded>([\s\S]*?)<\/content:encoded>/i) || itemContent.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i) || itemContent.match(/<description>([\s\S]*?)<\/description>/i);
-              const rawDescription = descMatch ? descMatch[1].trim() : '';
-              const decodedContent = decodeHTMLEntities(rawDescription);
-              if (title && link) {
-                items.push({ title, link, pubDate, descriptionLength: decodedContent.length, category: categoryName, source: sourceName });
-              }
+          function parseItems(xml) {
+            const rows = [];
+            for (const match of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
+              const content = match[1];
+              const title = (content.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || content.match(/<title>([\s\S]*?)<\/title>/))?.[1]?.trim() || '';
+              const link = content.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim() || '';
+              const pubDate = content.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() || '';
+              if (title && link) rows.push({ title, link, pubDate });
             }
-            return items;
+            return rows;
           }
 
-          function compact(value, limit = 180) {
-            return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit);
+          function searchTerm(title) {
+            return title
+              .replace(/[【】「」『』（）()｜|·．。！？：:、,.]/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 36);
           }
 
-          const base = 'https://rsshub.rssforever.com';
-          const paths = ['/hk01/channel/259', '/hk01/channel/256', '/hk01/zone/1'];
-
+          const feedItems = [];
           for (const path of paths) {
-            const response = await fetch(base + path, {
-              headers: { 'User-Agent': 'Mozilla/5.0 MetroNews-CF-W4-Parser-Probe/1.0' },
-              signal: AbortSignal.timeout(15000),
-            });
+            const response = await fetch(RSS_BASE + path, { signal: AbortSignal.timeout(15000) });
             const xml = await response.text();
-            const rawItems = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-            const parsed = parseRSS(xml, '香港01', path.includes('/channel/') ? 'video' : 'local');
+            for (const item of parseItems(xml)) feedItems.push({ path, ...item });
+          }
 
-            console.log(`\n=== ${path} ===`);
-            console.log(`http=${response.status} bytes=${xml.length} rawItems=${rawItems.length} workerParsed=${parsed.length}`);
-            console.log('first parsed items:');
-            for (const item of parsed.slice(0, 3)) {
-              console.log(JSON.stringify({
-                title: compact(item.title),
-                link: compact(item.link),
-                pubDate: compact(item.pubDate),
-                descriptionLength: item.descriptionLength,
-              }));
-            }
-
-            if (rawItems.length > 0) {
-              const first = rawItems[0][1];
-              const tagSummary = [...first.matchAll(/<([A-Za-z0-9:_-]+)(?:\s|>)/g)].map(m => m[1]).slice(0, 20);
-              console.log(`first raw item tags=${JSON.stringify(tagSummary)}`);
-              console.log(`first raw item has exact <link>=${/<link>([\s\S]*?)<\/link>/.test(first)}`);
-              console.log(`first raw item snippet=${compact(first, 500)}`);
+          async function check(item) {
+            const q = searchTerm(item.title);
+            const url = `${WORKER}/api/search?q=${encodeURIComponent(q)}&page=0`;
+            try {
+              const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
+              const payload = await response.json();
+              const exact = (payload.data || []).find(row => row.link === item.link || row.id === item.link);
+              return {
+                ...item,
+                q,
+                http: response.status,
+                exact: exact ? { category: exact.category, pubDate: exact.pubDate, title: exact.title } : null,
+                resultCount: Array.isArray(payload.data) ? payload.data.length : -1,
+              };
+            } catch (error) {
+              return { ...item, q, http: 'ERR', exact: null, resultCount: -1, error: String(error) };
             }
           }
+
+          const results = [];
+          for (let i = 0; i < feedItems.length; i += 8) {
+            results.push(...await Promise.all(feedItems.slice(i, i + 8).map(check)));
+          }
+
+          const counts = new Map();
+          let exactFound = 0;
+          for (const result of results) {
+            if (result.exact) {
+              exactFound += 1;
+              counts.set(result.exact.category, (counts.get(result.exact.category) || 0) + 1);
+            }
+            console.log(JSON.stringify({
+              feed: result.path,
+              title: result.title.slice(0, 80),
+              link: result.link,
+              feedPubDate: result.pubDate,
+              searchHttp: result.http,
+              exactCategory: result.exact?.category || null,
+              dbPubDate: result.exact?.pubDate || null,
+              searchResultCount: result.resultCount,
+            }));
+          }
+
+          console.log(`\nfeedItems=${feedItems.length} exactLinksAlreadyInD1=${exactFound}`);
+          console.log(`existingCategories=${JSON.stringify(Object.fromEntries([...counts.entries()].sort()))}`);
