@@ -1,4 +1,4 @@
-name: CF-W4 apply non-workflow patch
+name: CF-W4 normalize Worker formatting
 
 on:
   push:
@@ -20,94 +20,41 @@ jobs:
         with:
           ref: agent/cf-w4-production-cleanup
 
-      - name: Apply non-workflow CF-W4 patches
+      - name: Normalize touched Worker blocks
         shell: python
         run: |
           from pathlib import Path
-          import re
 
-          def replace_once(path, old, new, label):
-              p = Path(path)
-              text = p.read_text(encoding='utf-8')
-              if old not in text:
-                  raise SystemExit(f'{label}: expected text not found in {path}')
-              p.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          def regex_once(path, pattern, repl, label, flags=0):
-              p = Path(path)
-              text = p.read_text(encoding='utf-8')
-              updated, count = re.subn(pattern, repl, text, count=1, flags=flags)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected one regex match in {path}, got {count}')
-              p.write_text(updated, encoding='utf-8')
-
-          replace_once('worker/wrangler.jsonc', '  "compatibility_flags": [],\n', '  "compatibility_flags": [],\n  "preview_urls": false,\n', 'preview urls')
-          replace_once('worker/src/index.js', "DELETE FROM articles WHERE datetime(pubDate) < datetime('now', '-30 days')", "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')", 'video retention exemption')
-
-          regex_once(
-              'worker/src/index.js',
-              r"async function cleanUpOldArticles\(env\) \{.*?\n\}\n\nexport default \{",
-              """async function cleanUpOldArticles(env) {
-            try {
-              await env.DB.prepare(`DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')`).run();
-            } catch {}
-          }
-
-          async function syncAllCategoriesAndCleanup(env) {
-            await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
-            await cleanUpOldArticles(env);
-          }
-
-          export default {""",
-              'sync helper', re.S,
-          )
-          regex_once(
-              'worker/src/index.js',
-              r"  async scheduled\(event, env, ctx\) \{.*?\n  \},\n\n  async fetch",
-              """  async scheduled(event, env, ctx) {
+          path = Path('worker/src/index.js')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              """export default {
+            async scheduled(event, env, ctx) {
             ctx.waitUntil(syncAllCategoriesAndCleanup(env));
           },
 
-          async fetch""",
-              'scheduled ordering', re.S,
-          )
-          regex_once('worker/src/index.js', r"if \(forceSync\) ctx\.waitUntil\(cleanUpOldArticles\(env\)\);\n\s+await Promise\.all\(Object\.keys\(topicSources\)\.map\(cat => syncCategoryToDB\(cat, env\)\)\);", 'await syncAllCategoriesAndCleanup(env);', 'latest force sync ordering')
-          regex_once('worker/src/index.js', r"if \(forceSync\) ctx\.waitUntil\(cleanUpOldArticles\(env\)\);\n\s+await syncCategoryToDB\(category, env\);", "await syncCategoryToDB(category, env);\n                if (forceSync) await cleanUpOldArticles(env);", 'category force sync ordering')
+          async fetch(request, env, ctx) {""": """export default {
+            async scheduled(event, env, ctx) {
+              ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+            },
 
-          replace_once(
-              '.github/scripts/validate-worker-baseline.py',
-              '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n',
-              '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n    if config.get("preview_urls") is not False:\n        fail("preview_urls must be explicitly disabled")\n',
-              'validator preview urls',
-          )
-          replace_once(
-              '.github/scripts/validate-worker-baseline.py',
-              '    print("Wrangler production resource alignment: OK")\n',
-              '''    retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"\n    if retention_sql not in source:\n        fail("30-day retention must exclude the low-frequency video archive")\n    if "ctx.waitUntil(syncAllCategoriesAndCleanup(env));" not in source:\n        fail("scheduled ingestion must clean up only after category sync completes")\n    if "ctx.waitUntil(cleanUpOldArticles(env))" in source:\n        fail("cleanup must not race forced sync in the background")\n\n    print("Wrangler production resource alignment: OK")\n''',
-              'validator retention',
-          )
+            async fetch(request, env, ctx) {""",
+              """              await syncCategoryToDB(category, env);
+                        if (forceSync) await cleanUpOldArticles(env);""": """              await syncCategoryToDB(category, env);
+              if (forceSync) await cleanUpOldArticles(env);""",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit('expected formatting target not found')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
 
-          replace_once(
-              '.github/scripts/worker-production-smoke.sh',
-              "echo 'Production Worker smoke tests: PASS'\n",
-              '''echo 'Smoke: image archive remains populated'\nrequest 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/video?page=0"\njq -e '.success == true and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null\n\necho 'Smoke: controlled full sync applies retention policy'\nstatus=$(curl -sS --max-time 90 -D "$tmp_headers" -o "$tmp_body" -w '%{http_code}' \\\n  -H "Origin: ${APP_ORIGIN}" \\\n  "${WORKER_ORIGIN}/api/news/latest?page=0&sync=1")\nif [[ "$status" != '200' ]]; then\n  echo "Expected force-sync HTTP 200, received ${status}" >&2\n  cat "$tmp_body" >&2 || true\n  exit 1\nfi\njq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null\n\necho 'Production Worker smoke tests: PASS'\n''',
-              'production video/sync smoke',
-          )
-
-          Path('.deploy/worker-production.txt').write_text(
-              'CF-W4 production cleanup: disable preview URLs, deterministic retention, low-frequency video archive exemption, D1 health audit.\n',
-              encoding='utf-8',
-          )
-
-      - name: Commit non-workflow CF-W4 changes
+      - name: Commit formatting normalization
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add worker/src/index.js worker/wrangler.jsonc \
-            .github/scripts/validate-worker-baseline.py \
-            .github/scripts/worker-production-smoke.sh \
-            .deploy/worker-production.txt
-          git commit -m "CF-W4: harden retention and production verification"
+          git add worker/src/index.js
+          git commit -m "style: normalize CF-W4 Worker blocks"
           git push origin HEAD:agent/cf-w4-production-cleanup
