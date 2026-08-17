@@ -1,0 +1,96 @@
+name: NS2C1 refine backfill estimate
+
+on:
+  push:
+    branches:
+      - probe/ns2c1-backfill-estimate
+    paths:
+      - .github/workflows/ns2c1-backfill-estimate-refine.yml
+
+permissions:
+  contents: read
+
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Measure HK01 unique articles per UTC day
+        working-directory: worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute metro_news_db --remote --json --command "
+          SELECT date(pubDate) AS day, COUNT(*) AS rows
+          FROM articles
+          WHERE source='香港01'
+            AND category <> 'video'
+            AND datetime(pubDate) >= datetime('now','-14 days')
+          GROUP BY date(pubDate)
+          ORDER BY day DESC;
+          " | tee /tmp/hk01-daily.json
+
+          node <<'NODE'
+          const fs=require('fs');
+          const doc=JSON.parse(fs.readFileSync('/tmp/hk01-daily.json','utf8'));
+          const rows=(Array.isArray(doc)?doc[0]:doc).results || [];
+          const completed=rows.slice(1); // exclude today's partial UTC day
+          const values=completed.map(r=>Number(r.rows)).sort((a,b)=>a-b);
+          const avg=values.reduce((a,b)=>a+b,0)/(values.length||1);
+          const median=values.length ? (values.length%2 ? values[(values.length-1)/2] : (values[values.length/2-1]+values[values.length/2])/2) : 0;
+          console.log('=== HK01 DAILY DERIVED ===');
+          console.log(JSON.stringify({days:rows, completedDays:completed.length, averageCompletedDay:+avg.toFixed(1), medianCompletedDay:median, min:values[0]||0, max:values.at(-1)||0}, null, 2));
+          NODE
+
+      - name: Count Bastille posts by historical window
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, urllib.parse, urllib.request
+          from datetime import datetime, timedelta, timezone
+
+          base='https://www.bastillepost.com/hongkong/wp-json/wp/v2/posts'
+          now=datetime.now(timezone.utc)
+          headers={'User-Agent':'MetroNews-NS2C1-Probe/1.0','Accept':'application/json'}
+          out=[]
+          for days in [30,60,90,180,365]:
+              after=now-timedelta(days=days)
+              params=urllib.parse.urlencode({
+                  'per_page':1,
+                  'after':after.strftime('%Y-%m-%dT%H:%M:%S'),
+                  'before':now.strftime('%Y-%m-%dT%H:%M:%S'),
+                  'status':'publish',
+              })
+              url=base+'?'+params
+              req=urllib.request.Request(url,headers=headers)
+              try:
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      body=r.read()
+                      rec={
+                          'days':days,
+                          'status':r.status,
+                          'total':int(r.headers.get('X-WP-Total','0')),
+                          'pages':int(r.headers.get('X-WP-TotalPages','0')),
+                          'bytes':len(body),
+                      }
+              except Exception as e:
+                  rec={'days':days,'error':repr(e)}
+              out.append(rec)
+              print(json.dumps(rec,ensure_ascii=False))
+          print('=== BASTILLE WINDOW DERIVED ===')
+          for rec in out:
+              if rec.get('total'):
+                  rec['perDay']=round(rec['total']/rec['days'],1)
+          print(json.dumps(out,ensure_ascii=False,indent=2))
+          PY
