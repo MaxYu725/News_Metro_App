@@ -22,20 +22,33 @@ function compareRowsDesc(a, b) {
   return String(b?.id || b?.link || '').localeCompare(String(a?.id || a?.link || ''));
 }
 
+function utf8ToBase64(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function base64ToUtf8(value) {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 export function encodeSearchCursor(row) {
   if (!row?.pubDate) return '';
   const id = String(row.id || row.link || '');
   if (!id) return '';
   const json = JSON.stringify({ pubDate: String(row.pubDate), id });
-  return btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return utf8ToBase64(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 export function decodeSearchCursor(value) {
   if (!value) return null;
-  if (typeof value !== 'string' || value.length > 1024) throw new Error('invalid search cursor');
+  if (typeof value !== 'string' || value.length > 4096) throw new Error('invalid search cursor');
   try {
     const base64 = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
-    const parsed = JSON.parse(atob(base64));
+    const parsed = JSON.parse(base64ToUtf8(base64));
     if (!parsed || typeof parsed.pubDate !== 'string' || typeof parsed.id !== 'string') throw new Error('shape');
     if (!parsed.pubDate || !parsed.id || parsed.pubDate.length > 64 || parsed.id.length > 2048) throw new Error('bounds');
     return { pubDate: parsed.pubDate, id: parsed.id };
