@@ -1,0 +1,52 @@
+name: NS2B integration updater
+
+on:
+  push:
+    branches:
+      - feature/ns2b-bastille-provider
+    paths:
+      - .github/scripts/apply-ns2b-bastille.py
+      - .github/workflows/ns2b-updater.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/ns2b-bastille-provider
+
+      - name: Apply integration patch
+        run: python3 .github/scripts/apply-ns2b-bastille.py
+
+      - name: Validate syntax and provider tests
+        run: |
+          node --check worker/src/index.js
+          node --check worker/src/security.js
+          node --check worker/src/sources/bastille.js
+          node --check app.js
+          node --check reader-ui.js
+          node --check sw.js
+          bash -n .github/scripts/worker-production-d1-audit.sh
+          cd worker
+          node --test test/bastille.test.mjs test/security.test.mjs
+
+      - name: Commit generated integration changes
+        run: |
+          set -euo pipefail
+          git config user.name "MaxYu725"
+          git config user.email "maxyu0725@outlook.com"
+          git add worker/src/index.js worker/src/security.js worker/test/security.test.mjs \
+            .github/scripts/worker-production-d1-audit.sh .github/scripts/validate-worker-baseline.py \
+            app.js reader-ui.js sw.js
+          if git diff --cached --quiet; then
+            echo 'No generated changes'
+            exit 0
+          fi
+          git commit -m "NS2B: integrate Bastille source runtime"
+          git push origin HEAD:feature/ns2b-bastille-provider
