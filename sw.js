@@ -124,7 +124,7 @@ self.addEventListener('fetch', event => {
     if (request.method !== 'GET') return;
 
     const url = new URL(request.url);
-    const isApiRequest = url.hostname === 'news-proxy.maxyu725us.workers.dev'
+    const isApiRequest = url.hostname === 'news-proxy.maxyu0725us.workers.dev'
         || url.pathname.includes('/api/');
 
     if (isApiRequest) return;
