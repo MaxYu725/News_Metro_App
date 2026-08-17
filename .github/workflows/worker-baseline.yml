@@ -8,6 +8,7 @@ on:
       - worker/**
       - .github/scripts/validate-worker-baseline.py
       - .github/scripts/validate-search-fts.sh
+      - .github/scripts/validate-adaptive-retention.sh
       - .github/workflows/worker-baseline.yml
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - worker/**
       - .github/scripts/validate-worker-baseline.py
       - .github/scripts/validate-search-fts.sh
+      - .github/scripts/validate-adaptive-retention.sh
       - .github/workflows/worker-baseline.yml
 
 permissions:
@@ -37,7 +39,9 @@ jobs:
           node --check worker/src/index.js
           node --check worker/src/security.js
           node --check worker/src/search.js
+          node --check worker/src/retention.js
           bash -n .github/scripts/validate-search-fts.sh
+          bash -n .github/scripts/validate-adaptive-retention.sh
 
       - name: Install pinned Wrangler
         working-directory: worker
@@ -45,6 +49,9 @@ jobs:
 
       - name: Validate D1 FTS5 migration locally
         run: bash .github/scripts/validate-search-fts.sh
+
+      - name: Validate adaptive retention migration locally
+        run: bash .github/scripts/validate-adaptive-retention.sh
 
       - name: Run Worker tests
         working-directory: worker
