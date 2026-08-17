@@ -67,10 +67,9 @@ request 200 -G \
   "${WORKER_ORIGIN}/api/search"
 jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
 
-echo 'Smoke: image archive remains populated'
-request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/video?page=0"
-jq -e '.success == true and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null
-
+# Rebuild archive rows under the new retention policy before asserting archive depth.
+# The previous production version could legitimately leave only the newest video row
+# after its concurrent sync/cleanup race, so checking video first creates a false failure.
 echo 'Smoke: controlled full sync applies retention policy'
 status=$(curl -sS --max-time 90 -D "$tmp_headers" -o "$tmp_body" -w '%{http_code}' \
   -H "Origin: ${APP_ORIGIN}" \
@@ -81,5 +80,9 @@ if [[ "$status" != '200' ]]; then
   exit 1
 fi
 jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
+
+echo 'Smoke: image archive remains populated after controlled sync'
+request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/video?page=0"
+jq -e '.success == true and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null
 
 echo 'Production Worker smoke tests: PASS'
