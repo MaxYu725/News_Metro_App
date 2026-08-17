@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Verify HK01 archive date partitions
+      - name: Check HK01 count semantics and retrieval
         shell: bash
         run: |
           python - <<'PY'
@@ -25,7 +25,7 @@ jobs:
           import urllib.request
           from urllib.parse import urljoin
 
-          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-archive-filter-probe/1.0)'
+          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-count-semantics-probe/1.0)'
           SEARCH_ORIGIN = 'https://universal-search.hk01.com'
 
           def fetch_text(url, limit=5_000_000):
@@ -50,7 +50,6 @@ jobs:
           index = env('REACT_APP_HK01_ARTICLE_INDEX_NAME')
           if not app_id or not api_key or not index:
               raise SystemExit('search index config not discovered')
-          print('CONFIG', {'app_id_found': True, 'api_key_found': True, 'index': index})
 
           base = f'https://{app_id.lower()}-dsn.algolia.net/1/indexes/{urllib.parse.quote(index, safe="")}'
           headers = {
@@ -76,92 +75,74 @@ jobs:
                   except Exception:
                       return exc.code, {'raw': raw[:1200]}
 
-          def epoch(y, m=1, d=1):
+          def ep(y, m=1, d=1):
               return int(dt.datetime(y, m, d, tzinfo=dt.timezone.utc).timestamp())
 
-          def range_filter(start, end, article_only=True):
-              parts = [f'published_at_ts >= {start}', f'published_at_ts < {end}']
-              if article_only:
-                  parts.append('type:article')
-              return ' AND '.join(parts)
+          def f(start, end):
+              return f'published_at_ts >= {start} AND published_at_ts < {end} AND type:article'
 
-          print('=== annual exact range counts ===')
-          total = 0
-          for year in range(2016, 2027):
-              status, body = query({
-                  'query': '',
-                  'hitsPerPage': 1,
-                  'page': 0,
-                  'filters': range_filter(epoch(year), epoch(year + 1)),
-              })
-              count = body.get('nbHits') if isinstance(body, dict) else None
-              if isinstance(count, int):
-                  total += count
-              print('YEAR', year, {'status': status, 'nbHits': count})
-          print('YEAR_SUM', total)
+          ranges = [
+              ('2016-year', ep(2016), ep(2017)),
+              ('2016-Jan', ep(2016,1,1), ep(2016,2,1)),
+              ('2016-Feb', ep(2016,2,1), ep(2016,3,1)),
+              ('2016-Jul01-UTC', ep(2016,7,1), ep(2016,7,2)),
+          ]
 
-          print('=== 2016 exact monthly counts ===')
-          monthly_total = 0
-          for month in range(1, 13):
-              start = int(dt.datetime(2016, month, 1, tzinfo=dt.timezone.utc).timestamp())
-              end = epoch(2017) if month == 12 else int(dt.datetime(2016, month + 1, 1, tzinfo=dt.timezone.utc).timestamp())
-              status, body = query({
-                  'query': '',
-                  'hitsPerPage': 1,
-                  'page': 0,
-                  'filters': range_filter(start, end),
-              })
-              count = body.get('nbHits') if isinstance(body, dict) else None
-              if isinstance(count, int):
-                  monthly_total += count
-              print('MONTH', f'2016-{month:02d}', {'status': status, 'nbHits': count})
-          print('MONTH_SUM_2016', monthly_total)
+          print('CONFIG', {'index': index})
+          for name, start, end in ranges:
+              for distinct in (None, 0, 1):
+                  params = {
+                      'query': '',
+                      'hitsPerPage': 1,
+                      'page': 0,
+                      'filters': f(start, end),
+                  }
+                  if distinct is not None:
+                      params['distinct'] = distinct
+                  status, body = query(params)
+                  print('COUNT', name, 'distinct=', distinct, {
+                      'status': status,
+                      'nbHits': body.get('nbHits') if isinstance(body, dict) else None,
+                      'exhaustiveNbHits': body.get('exhaustiveNbHits') if isinstance(body, dict) else None,
+                      'exhaustive': body.get('exhaustive') if isinstance(body, dict) else None,
+                      'message': body.get('message') if isinstance(body, dict) else None,
+                  })
 
-          print('=== one-day complete retrieval proof ===')
-          start = int(dt.datetime(2016, 7, 1, tzinfo=dt.timezone.utc).timestamp())
-          end = int(dt.datetime(2016, 7, 2, tzinfo=dt.timezone.utc).timestamp())
-          filter_expr = range_filter(start, end)
+          print('=== day paging with distinct=0 ===')
+          start, end = ep(2016,7,1), ep(2016,7,2)
           status, first = query({
               'query': '',
               'hitsPerPage': 100,
               'page': 0,
-              'filters': filter_expr,
+              'filters': f(start, end),
+              'distinct': 0,
           })
-          nb_hits = first.get('nbHits') if isinstance(first, dict) else None
-          nb_pages = first.get('nbPages') if isinstance(first, dict) else None
-          gathered = []
-          if status == 200 and isinstance(nb_pages, int):
-              for page in range(nb_pages):
-                  if page == 0:
-                      body = first
-                  else:
-                      pstatus, body = query({
-                          'query': '',
-                          'hitsPerPage': 100,
-                          'page': page,
-                          'filters': filter_expr,
-                      })
-                      if pstatus != 200:
-                          raise SystemExit(f'page {page} failed: {pstatus}')
-                  gathered.extend(body.get('hits', []))
-          ids = [str(hit.get('id') or '') for hit in gathered if hit.get('id')]
-          print('DAY', '2016-07-01', {
+          pages = first.get('nbPages', 0) if isinstance(first, dict) else 0
+          hits = []
+          for page in range(pages):
+              if page == 0:
+                  body = first
+              else:
+                  pstatus, body = query({
+                      'query': '',
+                      'hitsPerPage': 100,
+                      'page': page,
+                      'filters': f(start, end),
+                      'distinct': 0,
+                  })
+                  if pstatus != 200:
+                      raise SystemExit(f'page failure {page}: {pstatus}')
+              hits.extend(body.get('hits', []))
+          ids = [str(x.get('id')) for x in hits if x.get('id')]
+          timestamps = [int(x.get('published_at_ts')) for x in hits if x.get('published_at_ts') is not None]
+          print('DAY_PAGE_RESULT', {
               'status': status,
-              'nbHits': nb_hits,
-              'nbPages': nb_pages,
-              'gathered': len(gathered),
+              'nbHits': first.get('nbHits') if isinstance(first, dict) else None,
+              'nbPages': pages,
+              'gathered': len(hits),
               'uniqueIds': len(set(ids)),
-              'complete': isinstance(nb_hits, int) and len(gathered) == nb_hits and len(set(ids)) == nb_hits,
+              'minTs': min(timestamps) if timestamps else None,
+              'maxTs': max(timestamps) if timestamps else None,
+              'withinRange': bool(timestamps) and min(timestamps) >= start and max(timestamps) < end,
           })
-          for hit in gathered[:8]:
-              print(' DAY_HIT', json.dumps({
-                  'id': hit.get('id'),
-                  'title': hit.get('title'),
-                  'url': hit.get('url'),
-                  'published_at': hit.get('published_at'),
-                  'published_at_ts': hit.get('published_at_ts'),
-                  'main_category': hit.get('main_category'),
-                  'lead': hit.get('lead'),
-                  'main_image': hit.get('main_image'),
-              }, ensure_ascii=False, separators=(',', ':')))
           PY
