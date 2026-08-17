@@ -136,33 +136,32 @@ jobs:
 
           validator_path = Path('.github/scripts/validate-worker-baseline.py')
           validator = validator_path.read_text('utf-8')
-          old_signal = '                "ARCHIVE_SHARD_POST_WRITE_MAX_BYTES = 325_000_000",\n'
+          const_anchor = '        "ARCHIVE_SHARD_POST_WRITE_MAX_BYTES = 325_000_000",\n'
+          helper_signal = '        "backfillMarkCompletedSql",\n'
+          generator_signal = '        "args[\'batch-id\']",\n'
+
           if "BASTILLE_SEEK_MAX_PAGE = 4096" not in validator:
-              if old_signal not in validator:
+              if const_anchor not in validator:
                   raise SystemExit('validator constant anchor missing')
               validator = validator.replace(
-                  old_signal,
-                  old_signal + '                "BASTILLE_SEEK_MAX_PAGE = 4096",\n',
+                  const_anchor,
+                  const_anchor + '        "BASTILLE_SEEK_MAX_PAGE = 4096",\n',
                   1,
               )
-
-          old_helper_signal = '                "backfillMarkCompletedSql",\n'
           if '"seekBastillePageBeforeFloor"' not in validator:
-              if old_helper_signal not in validator:
+              if helper_signal not in validator:
                   raise SystemExit('validator helper anchor missing')
               validator = validator.replace(
-                  old_helper_signal,
-                  old_helper_signal + '                "seekBastillePageBeforeFloor",\n',
+                  helper_signal,
+                  helper_signal + '        "seekBastillePageBeforeFloor",\n',
                   1,
               )
-
-          old_generator_signal = '                "args[\'batch-id\']",\n'
           if '"seekBastillePageBeforeFloor(floor)"' not in validator:
-              if old_generator_signal not in validator:
+              if generator_signal not in validator:
                   raise SystemExit('validator generator anchor missing')
               validator = validator.replace(
-                  old_generator_signal,
-                  old_generator_signal + '                "seekBastillePageBeforeFloor(floor)",\n',
+                  generator_signal,
+                  generator_signal + '        "seekBastillePageBeforeFloor(floor)",\n',
                   1,
               )
           validator_path.write_text(validator, 'utf-8')
