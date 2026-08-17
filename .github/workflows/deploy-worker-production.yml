@@ -1,0 +1,116 @@
+name: Deploy Worker production
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - .github/scripts/validate-worker-baseline.py
+      - .github/scripts/worker-production-smoke.sh
+      - .github/workflows/deploy-worker-production.yml
+      - .deploy/worker-production.txt
+  push:
+    branches:
+      - main
+    paths:
+      - .deploy/worker-production.txt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: news-proxy-production
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Worker contract
+        run: python3 .github/scripts/validate-worker-baseline.py
+
+      - name: Validate JavaScript and smoke script syntax
+        run: |
+          node --check worker/src/index.js
+          node --check worker/src/security.js
+          bash -n .github/scripts/worker-production-smoke.sh
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run security regressions
+        working-directory: worker
+        run: npm test
+
+      - name: Wrangler dry-run
+        working-directory: worker
+        run: npm run check
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo '::error::CF_ACCOUNT_ID is missing'; exit 1; }
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo '::error::CF_API_TOKEN is missing'; exit 1; }
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Record current production version
+        id: previous
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/news-proxy/deployments"
+          curl -sS --retry 2 --retry-delay 1 \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$api" > /tmp/deployments.json
+          jq -e '.success == true' /tmp/deployments.json >/dev/null
+          previous_version=$(jq -r '.result.deployments[0].versions | max_by(.percentage) | .version_id // empty' /tmp/deployments.json)
+          test -n "$previous_version" || { echo '::error::Unable to determine current production Worker version'; exit 1; }
+          echo "version_id=${previous_version}" >> "$GITHUB_OUTPUT"
+          echo "Recorded current production version: ${previous_version}"
+
+      - name: Deploy Worker
+        working-directory: worker
+        run: npx wrangler deploy
+
+      - name: Smoke test and rollback on failure
+        env:
+          PREVIOUS_VERSION: ${{ steps.previous.outputs.version_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bash .github/scripts/worker-production-smoke.sh; then
+            exit 0
+          fi
+
+          echo '::error::Production smoke failed; rolling back Worker code immediately.'
+          cd worker
+          npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed CF-W3 production smoke"
+          exit 1
+
+      - name: Show active deployments
+        working-directory: worker
+        run: npx wrangler deployments list
