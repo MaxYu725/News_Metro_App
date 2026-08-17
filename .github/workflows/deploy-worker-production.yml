@@ -7,6 +7,7 @@ on:
     paths:
       - worker/**
       - .github/scripts/validate-worker-baseline.py
+      - .github/scripts/validate-search-fts.sh
       - .github/scripts/worker-production-smoke.sh
       - .github/scripts/worker-production-d1-audit.sh
       - .github/workflows/deploy-worker-production.yml
@@ -40,6 +41,8 @@ jobs:
         run: |
           node --check worker/src/index.js
           node --check worker/src/security.js
+          node --check worker/src/search.js
+          bash -n .github/scripts/validate-search-fts.sh
           bash -n .github/scripts/worker-production-smoke.sh
           bash -n .github/scripts/worker-production-d1-audit.sh
 
@@ -47,7 +50,10 @@ jobs:
         working-directory: worker
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Run security regressions
+      - name: Validate D1 FTS5 migration locally
+        run: bash .github/scripts/validate-search-fts.sh
+
+      - name: Run Worker regressions
         working-directory: worker
         run: npm test
 
@@ -93,6 +99,10 @@ jobs:
           test -n "$previous_version" || { echo '::error::Unable to determine current production Worker version'; exit 1; }
           echo "version_id=${previous_version}" >> "$GITHUB_OUTPUT"
           echo "Recorded current production version: ${previous_version}"
+
+      - name: Apply D1 migrations
+        working-directory: worker
+        run: npx wrangler d1 migrations apply metro_news_db --remote
 
       - name: Deploy Worker
         working-directory: worker
