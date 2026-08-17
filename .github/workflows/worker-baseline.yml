@@ -9,6 +9,7 @@ on:
       - .github/scripts/validate-worker-baseline.py
       - .github/scripts/validate-search-fts.sh
       - .github/scripts/validate-adaptive-retention.sh
+      - .github/scripts/validate-archive-search.sh
       - .github/workflows/worker-baseline.yml
   push:
     branches:
@@ -18,6 +19,7 @@ on:
       - .github/scripts/validate-worker-baseline.py
       - .github/scripts/validate-search-fts.sh
       - .github/scripts/validate-adaptive-retention.sh
+      - .github/scripts/validate-archive-search.sh
       - .github/workflows/worker-baseline.yml
 
 permissions:
@@ -43,6 +45,7 @@ jobs:
           node --check worker/src/sources/bastille.js
           bash -n .github/scripts/validate-search-fts.sh
           bash -n .github/scripts/validate-adaptive-retention.sh
+          bash -n .github/scripts/validate-archive-search.sh
 
       - name: Install pinned Wrangler
         working-directory: worker
@@ -53,6 +56,9 @@ jobs:
 
       - name: Validate adaptive retention migration locally
         run: bash .github/scripts/validate-adaptive-retention.sh
+
+      - name: Validate archive D1 migration locally
+        run: bash .github/scripts/validate-archive-search.sh
 
       - name: Run Worker tests
         working-directory: worker
