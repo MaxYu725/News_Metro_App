@@ -200,20 +200,21 @@ async function syncCategoryToDB(category, env) {
 
 async function cleanUpOldArticles(env) {
   try {
-    await env.DB.prepare(`DELETE FROM articles WHERE datetime(pubDate) < datetime('now', '-30 days')`).run();
+    await env.DB.prepare(`DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')`).run();
   } catch {}
+}
+
+async function syncAllCategoriesAndCleanup(env) {
+  await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
+  await cleanUpOldArticles(env);
 }
 
 export default {
   async scheduled(event, env, ctx) {
-    const catKeys = Object.keys(topicSources);
-    ctx.waitUntil(Promise.all([
-      ...catKeys.map(cat => syncCategoryToDB(cat, env)),
-      cleanUpOldArticles(env),
-    ]));
-  },
+  ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+},
 
-  async fetch(request, env, ctx) {
+async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       if (!isTrustedAppRequest(request)) {
         return textResponse(request, 'Forbidden', 403);
@@ -448,8 +449,7 @@ export default {
           if (forceSync || page === 0) {
             const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles`).all();
             if (forceSync || checkDB[0].count === 0) {
-              if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
-              await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
+              await syncAllCategoriesAndCleanup(env);
             }
           }
           query = `SELECT * FROM articles ORDER BY pubDate DESC LIMIT ? OFFSET ?`;
@@ -458,8 +458,8 @@ export default {
           if (forceSync || page === 0) {
             const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?`).bind(category).all();
             if (forceSync || checkDB[0].count === 0) {
-              if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
               await syncCategoryToDB(category, env);
+                if (forceSync) await cleanUpOldArticles(env);
             }
           }
           query = `SELECT * FROM articles WHERE category = ? ORDER BY pubDate DESC LIMIT ? OFFSET ?`;

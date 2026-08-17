@@ -1,7 +1,1 @@
-CF-W3 initial controlled production promotion
-
-Promote main Worker baseline containing CF-W2 security hardening.
-Source checkpoint before this deployment PR: 52791d40ea592fdf2b440bca11b6d31210f34c9a
-
-Changing this file on main is an explicit production Worker deployment trigger.
-D1 migrations are not executed by the deployment workflow.
+CF-W4 production cleanup: disable preview URLs, deterministic retention, low-frequency video archive exemption, D1 health audit.
