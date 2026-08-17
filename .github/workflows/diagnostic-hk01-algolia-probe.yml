@@ -13,10 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Query HK01 public search index for legacy records
+      - name: Test date-partitioned HK01 archive discovery
         shell: bash
         run: |
           python - <<'PY'
+          import datetime as dt
           import json
           import re
           import urllib.error
@@ -24,40 +25,32 @@ jobs:
           import urllib.request
           from urllib.parse import urljoin
 
-          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-search-index-probe/1.0)'
+          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-archive-partition-probe/1.0)'
           SEARCH_ORIGIN = 'https://universal-search.hk01.com'
 
-          def get(url, limit=5_000_000):
+          def fetch_text(url, limit=5_000_000):
               req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': '*/*'})
               with urllib.request.urlopen(req, timeout=25) as r:
                   return r.geturl(), r.read(limit).decode('utf-8', 'replace')
 
-          home_url, html = get(SEARCH_ORIGIN + '/', 1_000_000)
+          home_url, html = fetch_text(SEARCH_ORIGIN + '/', 1_000_000)
           scripts = [urljoin(home_url, src) for src in re.findall(r'<script[^>]+src=["\']([^"\']+)', html, flags=re.I)]
           bundle = ''
           for url in scripts:
-              if 'universal-search.hk01.com/static/js/' not in url:
-                  continue
-              _, text = get(url)
-              bundle += '\n' + text
+              if 'universal-search.hk01.com/static/js/' in url:
+                  _, text = fetch_text(url)
+                  bundle += '\n' + text
 
           def env(name):
-              patterns = [
-                  rf'{re.escape(name)}:["\']([^"\']+)',
-                  rf'{re.escape(name)}\\?"?:\\?["\']([^"\']+)',
-              ]
-              for pat in patterns:
-                  m = re.search(pat, bundle)
-                  if m:
-                      return m.group(1)
-              return ''
+              m = re.search(rf'{re.escape(name)}:["\']([^"\']+)', bundle)
+              return m.group(1) if m else ''
 
           app_id = env('REACT_APP_ALGOLIA_APP_ID')
           api_key = env('REACT_APP_ALGOLIA_API_KEY')
           index = env('REACT_APP_HK01_ARTICLE_INDEX_NAME')
-          print('CONFIG', {'app_id_found': bool(app_id), 'api_key_found': bool(api_key), 'index': index})
           if not app_id or not api_key or not index:
               raise SystemExit('search index config not discovered')
+          print('CONFIG', {'app_id_found': True, 'api_key_found': True, 'index': index})
 
           base = f'https://{app_id.lower()}-dsn.algolia.net/1/indexes/{urllib.parse.quote(index, safe="")}'
           headers = {
@@ -70,9 +63,9 @@ jobs:
               'Referer': SEARCH_ORIGIN + '/',
           }
 
-          def post(path, params):
-              payload = json.dumps({'params': params}, separators=(',', ':')).encode()
-              req = urllib.request.Request(base + path, data=payload, headers=headers, method='POST')
+          def request(method, path, payload=None):
+              data = None if payload is None else json.dumps(payload, separators=(',', ':')).encode()
+              req = urllib.request.Request(base + path, data=data, headers=headers, method=method)
               try:
                   with urllib.request.urlopen(req, timeout=25) as r:
                       return r.status, json.loads(r.read().decode('utf-8', 'replace'))
@@ -81,73 +74,113 @@ jobs:
                   try:
                       body = json.loads(raw)
                   except Exception:
-                      body = {'raw': raw[:1000]}
+                      body = {'raw': raw[:1200]}
                   return exc.code, body
 
-          def pick(hit):
-              keys = [
-                  'objectID', 'id', 'articleId', 'article_id', 'title', 'headline',
-                  'canonicalUrl', 'canonicalURL', 'url', 'link', 'publishUrl',
-                  'publishTime', 'publishedAt', 'publishDate', 'pubDate', 'createdAt',
-                  'modifiedAt', 'updatedAt', 'category', 'channel', 'type',
-              ]
-              out = {k: hit.get(k) for k in keys if k in hit}
-              if not out:
-                  for k in list(hit)[:20]:
-                      v = hit.get(k)
-                      if isinstance(v, (str, int, float, bool)) or v is None:
-                          out[k] = v
-              return out
+          def query(params):
+              return request('POST', '/query', {'params': urllib.parse.urlencode(params)})
 
-          probes = [
-              ('empty', ''),
-              ('2016_new_day', '香港01 新的一天'),
-              ('2016_hope', '香港01的希望'),
-              ('2016_brecht', '疏離美學 布萊希特'),
-              ('2017_election', '林鄭 783票 曾俊華 366票'),
-              ('2017_review', '2017年大事回顧 政治爭議 劇本'),
-          ]
-          for name, query in probes:
-              params = urllib.parse.urlencode({
-                  'query': query,
-                  'hitsPerPage': 10,
+          def epoch(y, m=1, d=1):
+              return int(dt.datetime(y, m, d, tzinfo=dt.timezone.utc).timestamp())
+
+          print('=== settings ACL ===')
+          status, settings = request('GET', '/settings')
+          print('SETTINGS', {'status': status})
+          if status == 200:
+              for key in ('attributesForFaceting', 'paginationLimitedTo', 'replicas', 'ranking', 'customRanking'):
+                  print(key, json.dumps(settings.get(key), ensure_ascii=False))
+          else:
+              print('SETTINGS_BODY', json.dumps(settings, ensure_ascii=False)[:1000])
+
+          print('=== annual published_at_ts counts ===')
+          for year in range(2016, 2027):
+              numeric = json.dumps([
+                  f'published_at_ts>={epoch(year)}',
+                  f'published_at_ts<{epoch(year + 1)}',
+              ], separators=(',', ':'))
+              status, body = query({
+                  'query': '',
+                  'hitsPerPage': 1,
                   'page': 0,
-                  'typoTolerance': 'false',
+                  'numericFilters': numeric,
               })
-              status, body = post('/query', params)
-              print('QUERY', name, {
+              print('YEAR', year, {
                   'status': status,
-                  'nbHits': body.get('nbHits'),
-                  'page': body.get('page'),
-                  'nbPages': body.get('nbPages'),
-                  'exhaustiveNbHits': body.get('exhaustiveNbHits'),
+                  'nbHits': body.get('nbHits') if isinstance(body, dict) else None,
+                  'nbPages': body.get('nbPages') if isinstance(body, dict) else None,
               })
-              hits = body.get('hits') if isinstance(body, dict) else None
-              if isinstance(hits, list):
-                  for hit in hits[:10]:
-                      print(' HIT', json.dumps(pick(hit), ensure_ascii=False, separators=(',', ':')))
-                  if hits:
-                      print(' HIT_KEYS', sorted(hits[0].keys()))
-              else:
-                  print(' BODY', json.dumps(body, ensure_ascii=False)[:1200])
 
-          print('=== pagination probe ===')
-          params = urllib.parse.urlencode({'query': '', 'hitsPerPage': 100, 'page': 0})
-          status, body = post('/query', params)
-          print('PAGE0', {
+          print('=== type filter probe ===')
+          numeric_2016 = json.dumps([
+              f'published_at_ts>={epoch(2016)}',
+              f'published_at_ts<{epoch(2017)}',
+          ], separators=(',', ':'))
+          for filter_expr in ('type:article', 'type:"article"'):
+              status, body = query({
+                  'query': '',
+                  'hitsPerPage': 1,
+                  'page': 0,
+                  'numericFilters': numeric_2016,
+                  'filters': filter_expr,
+              })
+              print('TYPE_FILTER', filter_expr, {
+                  'status': status,
+                  'nbHits': body.get('nbHits') if isinstance(body, dict) else None,
+                  'message': body.get('message') if isinstance(body, dict) else None,
+              })
+
+          print('=== 2016 monthly counts ===')
+          for month in range(1, 13):
+              start = int(dt.datetime(2016, month, 1, tzinfo=dt.timezone.utc).timestamp())
+              if month == 12:
+                  end = epoch(2017)
+              else:
+                  end = int(dt.datetime(2016, month + 1, 1, tzinfo=dt.timezone.utc).timestamp())
+              numeric = json.dumps([
+                  f'published_at_ts>={start}',
+                  f'published_at_ts<{end}',
+              ], separators=(',', ':'))
+              status, body = query({
+                  'query': '',
+                  'hitsPerPage': 1,
+                  'page': 0,
+                  'numericFilters': numeric,
+              })
+              print('MONTH', f'2016-{month:02d}', {
+                  'status': status,
+                  'nbHits': body.get('nbHits') if isinstance(body, dict) else None,
+              })
+
+          print('=== one-day retrieval feasibility ===')
+          start = int(dt.datetime(2016, 7, 1, tzinfo=dt.timezone.utc).timestamp())
+          end = int(dt.datetime(2016, 7, 2, tzinfo=dt.timezone.utc).timestamp())
+          numeric = json.dumps([
+              f'published_at_ts>={start}',
+              f'published_at_ts<{end}',
+          ], separators=(',', ':'))
+          status, body = query({
+              'query': '',
+              'hitsPerPage': 100,
+              'page': 0,
+              'numericFilters': numeric,
+          })
+          print('DAY', '2016-07-01', {
               'status': status,
               'nbHits': body.get('nbHits') if isinstance(body, dict) else None,
               'nbPages': body.get('nbPages') if isinstance(body, dict) else None,
-              'hits': len(body.get('hits', [])) if isinstance(body, dict) else None,
+              'returned': len(body.get('hits', [])) if isinstance(body, dict) else None,
           })
-
-          print('=== browse ACL probe ===')
-          status, body = post('/browse', 'hitsPerPage=5')
-          print('BROWSE', {
-              'status': status,
-              'nbHits': body.get('nbHits') if isinstance(body, dict) else None,
-              'hasCursor': bool(body.get('cursor')) if isinstance(body, dict) else None,
-          })
-          if not (isinstance(body, dict) and isinstance(body.get('hits'), list)):
-              print(' BROWSE_BODY', json.dumps(body, ensure_ascii=False)[:1200])
+          if isinstance(body, dict):
+              for hit in body.get('hits', [])[:8]:
+                  print(' DAY_HIT', json.dumps({
+                      'id': hit.get('id'),
+                      'title': hit.get('title'),
+                      'url': hit.get('url'),
+                      'type': hit.get('type'),
+                      'published_at': hit.get('published_at'),
+                      'published_at_ts': hit.get('published_at_ts'),
+                      'main_category': hit.get('main_category'),
+                      'lead': hit.get('lead'),
+                      'main_image': hit.get('main_image'),
+                  }, ensure_ascii=False, separators=(',', ':')))
           PY
