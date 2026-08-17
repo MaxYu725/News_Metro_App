@@ -74,6 +74,23 @@ request 200 -G \
   "${WORKER_ORIGIN}/api/search"
 jq --arg id "$latest_id" -e '.success == true and (.data | type == "array") and any(.data[]; (.id == $id) or (.link == $id))' "$tmp_body" >/dev/null
 
+echo 'Smoke: archive scope finds a known historical Bastille article'
+request 200 -G \
+  -H "Origin: ${APP_ORIGIN}" \
+  --data-urlencode 'q=婦人油麻地' \
+  --data-urlencode 'scope=all' \
+  "${WORKER_ORIGIN}/api/search"
+jq -e '.success == true and .scope == "all" and (.nextCursor | type == "string") and (.data | type == "array") and any(.data[]; .source == "巴士的報")' "$tmp_body" >/dev/null
+
+echo 'Smoke: archive scope rejects malformed cursors'
+request 400 -G \
+  -H "Origin: ${APP_ORIGIN}" \
+  --data-urlencode 'q=婦人油麻地' \
+  --data-urlencode 'scope=all' \
+  --data-urlencode 'cursor=not-a-valid-cursor' \
+  "${WORKER_ORIGIN}/api/search"
+jq -e '.success == false' "$tmp_body" >/dev/null
+
 # Force one full sync so production exercises the adaptive retention size probe.
 echo 'Smoke: controlled full sync preserves adaptive retention health'
 status=$(curl -sS --max-time 90 -D "$tmp_headers" -o "$tmp_body" -w '%{http_code}' \
