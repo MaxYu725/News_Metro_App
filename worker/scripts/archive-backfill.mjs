@@ -87,17 +87,15 @@ function sleep(ms) {
 }
 
 async function collectHk01({ target, existingRows, existingIds, stateRows, selected, selectedIds }) {
-  if (target <= 0) return { pages: 0, target: 0, generated: 0 };
+  if (target <= 0) return { pages: 0, target: 0, generated: 0, states: [] };
 
   const stateMap = new Map(stateRows.map(row => [String(row.source_key), row]));
   const globalFloor = sourceFloor(existingRows, '香港01');
   const states = new Map();
-  const initial = new Map();
+  const touched = new Set();
   for (const zone of HK01_HISTORICAL_ZONES) {
     const key = `hk01:zone:${zone.zoneId}`;
-    const row = stateMap.get(key);
-    states.set(key, stateFromRow(row, key, ''));
-    initial.set(key, !row);
+    states.set(key, stateFromRow(stateMap.get(key), key, ''));
   }
 
   const startCount = selected.length;
@@ -113,14 +111,16 @@ async function collectHk01({ target, existingRows, existingIds, stateRows, selec
       const state = states.get(key);
       if (state.exhausted) continue;
 
+      touched.add(key);
       const oldCursor = state.cursor;
       const page = await fetchHk01HistoricalPage(zone, state.cursor);
       state.pagesFetched += 1;
       pages += 1;
 
-      const floor = initial.get(key)
-        ? (sourceFloor(existingRows, '香港01', zone.category) || globalFloor)
-        : '';
+      // Archive backfill is intentionally backward-only. Even if a source has
+      // holes in the prototype sample, do not spend archive capacity on newer
+      // rows that belong in the live database.
+      const floor = sourceFloor(existingRows, '香港01', zone.category) || globalFloor;
       const candidates = eligibleNewArticles(page.articles, existingIds, selectedIds, floor);
       const remaining = target - (selected.length - startCount);
       const { taken, consumedWholePage } = takePageCandidates({
@@ -146,17 +146,21 @@ async function collectHk01({ target, existingRows, existingIds, stateRows, selec
     throw new Error(`HK01 backfill only produced ${generated}/${target} new rows within ${pages} pages`);
   }
 
-  return { pages, target, generated, states: [...states.values()] };
+  return {
+    pages,
+    target,
+    generated,
+    states: [...touched].map(key => states.get(key)),
+  };
 }
 
 async function collectBastille({ target, existingRows, existingIds, stateRows, selected, selectedIds }) {
-  if (target <= 0) return { pages: 0, target: 0, generated: 0 };
+  if (target <= 0) return { pages: 0, target: 0, generated: 0, states: [] };
 
   const key = 'bastille:rss';
   const row = stateRows.find(item => String(item.source_key) === key);
   const state = stateFromRow(row, key, '1');
-  const initialScan = !row;
-  const floor = initialScan ? sourceFloor(existingRows, '巴士的報') : '';
+  const floor = sourceFloor(existingRows, '巴士的報');
   const startCount = selected.length;
   const maxPages = Math.min(180, Math.max(80, Math.ceil(target / 10) + 80));
   let pages = 0;
