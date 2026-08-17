@@ -59,6 +59,7 @@ def main() -> int:
     metadata: dict[str, object] | None = None
     parts: list[dict[str, object]] = []
     payloads: dict[str, bytes] = {}
+    executable_candidates: list[str] = []
 
     for index, part in enumerate(message.iter_parts()):
         name = disposition_value(part, "name") or part.get_filename() or f"part-{index}"
@@ -78,6 +79,12 @@ def main() -> int:
             }
         )
 
+        if (
+            filename.lower().endswith((".js", ".mjs", ".ts"))
+            or content_type_part in {"application/javascript", "text/javascript"}
+        ):
+            executable_candidates.append(filename)
+
         if content_type_part == "application/json" or name.lower().startswith("metadata"):
             try:
                 candidate = json.loads(raw.decode("utf-8"))
@@ -88,15 +95,24 @@ def main() -> int:
             ):
                 metadata = candidate
 
-    if not isinstance(metadata, dict):
-        summary = ", ".join(
-            f"{item['name']}:{item['content_type']}" for item in parts
-        )
-        raise RuntimeError(f"Worker metadata part was not found; parts={summary}")
+    main_module: str | None = None
+    if isinstance(metadata, dict):
+        candidate = metadata.get("main_module") or metadata.get("body_part")
+        if isinstance(candidate, str) and candidate:
+            main_module = candidate
 
-    main_module = metadata.get("main_module") or metadata.get("body_part")
-    if not isinstance(main_module, str) or not main_module:
-        raise RuntimeError("Worker metadata does not declare main_module/body_part")
+    if main_module is None:
+        if len(executable_candidates) == 1:
+            main_module = executable_candidates[0]
+        elif len(parts) == 1:
+            main_module = str(parts[0]["filename"])
+        else:
+            summary = ", ".join(
+                f"{item['name']}:{item['content_type']}" for item in parts
+            )
+            raise RuntimeError(
+                f"Unable to identify Worker main module; parts={summary}"
+            )
 
     source = payloads.get(main_module)
     if source is None:
@@ -107,25 +123,9 @@ def main() -> int:
     source_path.parent.mkdir(parents=True, exist_ok=True)
     source_path.write_text(source_text, encoding="utf-8", newline="\n")
 
-    sanitized_bindings = []
-    raw_bindings = metadata.get("bindings")
-    if isinstance(raw_bindings, list):
-        for binding in raw_bindings:
-            if not isinstance(binding, dict):
-                continue
-            sanitized = {
-                key: value
-                for key, value in binding.items()
-                if key in {"name", "type", "id", "namespace_id", "bucket_name", "class_name"}
-            }
-            sanitized_bindings.append(sanitized)
-
     manifest = {
         "source": "Cloudflare Workers Scripts API",
         "main_module": main_module,
-        "compatibility_date": metadata.get("compatibility_date"),
-        "compatibility_flags": metadata.get("compatibility_flags", []),
-        "bindings": sanitized_bindings,
         "parts": parts,
         "recovered_source": {
             "path": "worker/src/index.js",
