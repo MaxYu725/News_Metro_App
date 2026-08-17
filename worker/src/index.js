@@ -7,6 +7,7 @@ import {
 } from './security.js';
 import { searchArticles } from './search.js';
 import { enforceAdaptiveRetention } from './retention.js';
+import { fetchBastilleArticles, isBastilleSource } from './sources/bastille.js';
 
 function jsonResponse(request, payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
@@ -171,15 +172,10 @@ const topicSources = {
   })),
 };
 
-async function syncCategoryToDB(category, env) {
-  const targetSources = topicSources[category];
-  if (!targetSources) return;
+async function insertArticles(items, env) {
+  if (!Array.isArray(items) || items.length === 0) return;
 
-  const resultsArray = await Promise.all(targetSources.map(sourceConfig => fetchFromSource(sourceConfig, category)));
-  const combinedNews = resultsArray.flat();
-  if (combinedNews.length === 0) return;
-
-  const statements = combinedNews.map(item =>
+  const statements = items.map(item =>
     env.DB.prepare(
       `INSERT OR IGNORE INTO articles (id, title, link, pubDate, description, category, source, imageUrl, images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
@@ -201,9 +197,55 @@ async function syncCategoryToDB(category, env) {
   }
 }
 
+async function syncCategoryToDB(category, env) {
+  const targetSources = topicSources[category];
+  if (!targetSources) return;
+
+  const resultsArray = await Promise.all(targetSources.map(sourceConfig => fetchFromSource(sourceConfig, category)));
+  await insertArticles(resultsArray.flat(), env);
+}
+
+async function syncBastilleToDB(env, requestedCategory = null) {
+  if (requestedCategory === 'video') return;
+
+  const articles = await fetchBastilleArticles();
+  const eligible = requestedCategory
+    ? articles.filter(item => item.category === requestedCategory)
+    : articles;
+
+  if (eligible.length === 0) {
+    console.warn('rss-source-empty', {
+      category: requestedCategory || 'mixed',
+      source: '巴士的報',
+      timeoutMs: 15000,
+      urlCount: 1,
+    });
+    return;
+  }
+
+  await insertArticles(eligible, env);
+}
+
 async function syncAllCategoriesAndRetention(env) {
-  await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
+  await Promise.all([
+    Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env))),
+    syncBastilleToDB(env),
+  ]);
   await enforceAdaptiveRetention(env.DB);
+}
+
+function formatArticleRow(row) {
+  let images = [];
+  try {
+    images = row.images ? JSON.parse(row.images) : [];
+  } catch {
+    images = [];
+  }
+  return {
+    ...row,
+    images,
+    isFullContentLoaded: isBastilleSource(row.source),
+  };
 }
 
 export default {
@@ -234,12 +276,13 @@ export default {
 
       const targetUrl = parseAllowedArticleUrl(url.searchParams.get('url'));
       if (!targetUrl) {
-        return jsonResponse(request, { success: false, error: '只允許 HTTPS 香港01文章 URL' }, 400);
+        return jsonResponse(request, { success: false, error: '只允許已支援新聞來源的 HTTPS 文章 URL' }, 400);
       }
 
       try {
         let fullText = '';
-        const hk01Match = targetUrl.pathname.match(/(?:^|\/)(\d+)(?:\/|$)/);
+        const isHk01Article = targetUrl.hostname === 'hk01.com' || targetUrl.hostname === 'www.hk01.com';
+        const hk01Match = isHk01Article ? targetUrl.pathname.match(/(?:^|\/)(\d+)(?:\/|$)/) : null;
 
         if (hk01Match) {
           const articleId = hk01Match[1];
@@ -397,7 +440,7 @@ export default {
 
       try {
         const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
-        const formattedResults = rows.map(row => ({ ...row, images: row.images ? JSON.parse(row.images) : [] }));
+        const formattedResults = rows.map(formatArticleRow);
         return jsonResponse(request, {
           success: true,
           count: formattedResults.length,
@@ -451,7 +494,10 @@ export default {
           if (forceSync || page === 0) {
             const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?`).bind(category).all();
             if (forceSync || checkDB[0].count === 0) {
-              await syncCategoryToDB(category, env);
+              await Promise.all([
+                syncCategoryToDB(category, env),
+                syncBastilleToDB(env, category),
+              ]);
               if (forceSync) await enforceAdaptiveRetention(env.DB);
             }
           }
@@ -460,7 +506,7 @@ export default {
         }
 
         const { results } = await env.DB.prepare(query).bind(...params).all();
-        const formattedResults = results.map(row => ({ ...row, images: row.images ? JSON.parse(row.images) : [] }));
+        const formattedResults = results.map(formatArticleRow);
 
         return jsonResponse(request, {
           success: true,

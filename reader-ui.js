@@ -147,8 +147,10 @@ function isReaderTrigger(target, tile) {
 
 function readerCategory(tile, article, state) {
     const fresh = tile.querySelector('.fresh-label')?.textContent?.trim();
-    if (fresh) return `${fresh.replace(/^●\s*/, '')} · ${state.category}`;
-    return state.category || article.category || '新聞';
+    const source = article.source || '香港01';
+    const category = state.category || article.category || '新聞';
+    if (fresh) return `${fresh.replace(/^●\s*/, '')} · ${source} · ${category}`;
+    return `${source} · ${category}`;
 }
 
 function enableMouseDragScroll(track) {

@@ -40,6 +40,7 @@ jobs:
           node --check worker/src/security.js
           node --check worker/src/search.js
           node --check worker/src/retention.js
+          node --check worker/src/sources/bastille.js
           bash -n .github/scripts/validate-search-fts.sh
           bash -n .github/scripts/validate-adaptive-retention.sh
 

@@ -1,6 +1,6 @@
 export const APP_ORIGIN = 'https://maxyu725.github.io';
 
-const ARTICLE_HOSTNAMES = new Set(['hk01.com', 'www.hk01.com']);
+const ARTICLE_HOSTNAMES = new Set(['hk01.com', 'www.hk01.com', 'bastillepost.com', 'www.bastillepost.com']);
 
 export function corsHeaders(request) {
   const headers = {

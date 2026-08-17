@@ -231,7 +231,7 @@ function renderSearchLanding() {
         DOM.newsGrid.innerHTML = `
             <div class="px-5 py-10 text-center">
                 <p class="text-sm text-white/45 font-light">搜尋新聞標題與內容</p>
-                <p class="text-xs text-white/25 mt-2 tracking-wide">來源：HK01</p>
+                <p class="text-xs text-white/25 mt-2 tracking-wide">來源：香港01 · 巴士的報</p>
             </div>
         `;
     }
@@ -915,6 +915,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const hasCachedAI = !!aiSummaryCache[news.link];
         const titleColorClass = isRead ? 'text-gray-400' : 'text-white';
         const catName = categoryMap[news.category] || news.category || '即時';
+        const sourceName = stripHtml(news.source || '香港01');
         const deck = deckText(news);
 
         const thumbHtml = news.imageUrl
@@ -927,6 +928,7 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center space-x-2">
                             <span class="text-xs font-bold tracking-wider uppercase ${currentThemeText}">${catName}</span>
+                            <span class="text-[10px] text-white/35 tracking-wider">· ${escapeHtml(sourceName)}</span>
                             <span class="feed-ai-indicator text-[10px] bg-fuchsia-950/70 text-fuchsia-300 border border-fuchsia-500/30 px-1.5 py-0.5 rounded font-bold ${hasCachedAI ? '' : 'hidden'}">✨ AI 摘要</span>
                         </div>
                         <div class="flex items-center space-x-2">
