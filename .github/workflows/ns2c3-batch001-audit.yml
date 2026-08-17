@@ -1,0 +1,52 @@
+name: NS2C3 batch 001 completion audit
+
+on:
+  push:
+    branches:
+      - feature/ns2c3-batch-002
+    paths:
+      - .github/workflows/ns2c3-batch001-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Audit completed batch and resume state
+        working-directory: worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute ARCHIVE_01 --remote --json --command "SELECT (SELECT COUNT(*) FROM articles) AS total_rows,(SELECT COUNT(*) FROM articles WHERE source='香港01') AS hk01_rows,(SELECT COUNT(*) FROM articles WHERE source='巴士的報') AS bastille_rows,(SELECT status FROM archive_backfill_runs WHERE batch_id='ns2c3-001') AS batch_status,(SELECT COUNT(*) FROM archive_backfill_run_items WHERE batch_id='ns2c3-001') AS replay_items,(SELECT COUNT(*) FROM archive_backfill_run_state WHERE batch_id='ns2c3-001') AS replay_states,(SELECT COUNT(*) FROM archive_backfill_state) AS resume_states,(SELECT COUNT(*) FROM archive_backfill_state WHERE cursor <> '') AS cursor_states,(SELECT MIN(last_pubDate) FROM archive_backfill_state WHERE last_pubDate <> '') AS oldest_resume_pubDate" > /tmp/ns2c3-batch001-audit.json
+          node <<'NODE'
+          const fs = require('fs');
+          const payload = JSON.parse(fs.readFileSync('/tmp/ns2c3-batch001-audit.json','utf8'));
+          const first = Array.isArray(payload) ? payload[0] : payload?.result?.[0];
+          const row = first?.results?.[0] || first?.result?.results?.[0];
+          if (!row) throw new Error('archive completion audit returned no row');
+          const total = Number(row.total_rows || 0);
+          const hk01 = Number(row.hk01_rows || 0);
+          const bastille = Number(row.bastille_rows || 0);
+          const replayItems = Number(row.replay_items || 0);
+          const replayStates = Number(row.replay_states || 0);
+          const resumeStates = Number(row.resume_states || 0);
+          const cursorStates = Number(row.cursor_states || 0);
+          const size = Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0);
+          if (total !== 1500) throw new Error(`expected 1500 archive rows, got ${total}`);
+          if (hk01 !== 750 || bastille !== 750) throw new Error(`source split mismatch: hk01=${hk01}, bastille=${bastille}`);
+          if (row.batch_status !== 'completed') throw new Error(`batch 001 status=${row.batch_status}`);
+          if (replayItems !== 0 || replayStates !== 0) throw new Error(`completed replay payload not cleaned: items=${replayItems}, states=${replayStates}`);
+          if (resumeStates !== 10 || cursorStates !== 10) throw new Error(`resume state mismatch: total=${resumeStates}, cursors=${cursorStates}`);
+          if (size <= 0 || size >= 300000000) throw new Error(`archive size guard invalid: ${size}`);
+          console.log(`NS2C3 batch001 checkpoint: total=${total}, hk01=${hk01}, bastille=${bastille}, status=${row.batch_status}, replay_items=${replayItems}, replay_states=${replayStates}, resume_states=${resumeStates}, cursor_states=${cursorStates}, oldest_resume=${row.oldest_resume_pubDate}, size_bytes=${size}`);
+          NODE
