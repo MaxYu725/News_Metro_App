@@ -1,5 +1,5 @@
 import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
-import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
+import { fetchNewsData, fetchSearchData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 import { initLightbox, openLightbox } from './lightbox.js';
 import { initGestures } from './gestures.js';
 import { initSettings, renderCategoryManager, getThemeClasses } from './settings.js';
@@ -56,6 +56,8 @@ const searchState = {
     query: '',
     data: [],
     page: 0,
+    cursor: '',
+    mode: 'live',
     hasMore: false
 };
 
@@ -231,7 +233,7 @@ function renderSearchLanding() {
         DOM.newsGrid.innerHTML = `
             <div class="px-5 py-10 text-center">
                 <p class="text-sm text-white/45 font-light">搜尋新聞標題與內容</p>
-                <p class="text-xs text-white/25 mt-2 tracking-wide">來源：香港01 · 巴士的報</p>
+                <p class="text-xs text-white/25 mt-2 tracking-wide">來源：香港01 · 巴士的報 · 3 個字以上搜尋歷史新聞</p>
             </div>
         `;
     }
@@ -254,7 +256,7 @@ function showSearchSection() {
         currentPage = searchState.page;
         hasMoreNews = searchState.hasMore;
         renderTiles(currentNewsData, false);
-        if (DOM.searchHint) DOM.searchHint.textContent = `「${searchState.query}」的搜尋結果`;
+        if (DOM.searchHint) DOM.searchHint.textContent = `「${searchState.query}」的搜尋結果${searchState.mode === 'archive' ? ' · 包含歷史新聞' : ''}`;
     } else {
         renderSearchLanding();
         if (DOM.searchHint) DOM.searchHint.textContent = '輸入關鍵字後按搜尋。';
@@ -836,13 +838,18 @@ async function loadSearchUI(isAppendMode = false) {
         searchState.query = '';
         searchState.data = [];
         searchState.page = 0;
+        searchState.cursor = '';
+        searchState.mode = 'live';
         searchState.hasMore = false;
         renderSearchLanding();
         if (DOM.searchHint) DOM.searchHint.textContent = '請先輸入搜尋關鍵字。';
         return;
     }
 
-    const page = isAppendMode ? searchState.page + 1 : 0;
+    const useArchive = Array.from(query).length >= 3;
+    const mode = useArchive ? 'archive' : 'live';
+    const page = isAppendMode && mode === 'live' ? searchState.page + 1 : 0;
+    const cursor = isAppendMode && mode === 'archive' ? searchState.cursor : '';
 
     if (!isAppendMode) {
         renderSkeletonTiles(6);
@@ -852,7 +859,11 @@ async function loadSearchUI(isAppendMode = false) {
         appendBottomSkeletons(3);
     }
 
-    const result = await fetchNewsData('search', page, false, query);
+    const result = await fetchSearchData(query, {
+        cursor,
+        page,
+        includeArchive: useArchive
+    });
 
     if (isAppendMode) removeBottomSkeletons();
 
@@ -860,14 +871,23 @@ async function loadSearchUI(isAppendMode = false) {
         const newBatch = result.data;
 
         searchState.query = query;
-        searchState.page = page;
+        searchState.page = mode === 'live' ? page : 0;
+        searchState.cursor = mode === 'archive' ? (result.nextCursor || '') : '';
+        searchState.mode = result.mode || mode;
         searchState.hasMore = result.hasMore;
 
         if (isAppendMode) {
+            const existingKeys = new Set(
+                searchState.data.map(item => String(item?.id || item?.link || ''))
+            );
+            const uniqueBatch = newBatch.filter(item => {
+                const key = String(item?.id || item?.link || '');
+                return key && !existingKeys.has(key);
+            });
             const startIndex = searchState.data.length;
-            searchState.data = searchState.data.concat(newBatch);
+            searchState.data = searchState.data.concat(uniqueBatch);
             currentNewsData = searchState.data;
-            renderTiles(newBatch, true, startIndex);
+            if (uniqueBatch.length > 0) renderTiles(uniqueBatch, true, startIndex);
         } else {
             searchState.data = newBatch;
             currentNewsData = searchState.data;
@@ -876,10 +896,14 @@ async function loadSearchUI(isAppendMode = false) {
 
         currentPage = searchState.page;
         hasMoreNews = searchState.hasMore;
-        if (DOM.searchHint) DOM.searchHint.textContent = `「${query}」的搜尋結果`;
+        if (DOM.searchHint) {
+            DOM.searchHint.textContent = `「${query}」的搜尋結果${searchState.mode === 'archive' ? ' · 包含歷史新聞' : ''}`;
+        }
     } else {
         searchState.query = query;
-        searchState.page = page;
+        searchState.page = mode === 'live' ? page : 0;
+        searchState.cursor = '';
+        searchState.mode = mode;
         searchState.hasMore = false;
         hasMoreNews = false;
 
@@ -889,7 +913,9 @@ async function loadSearchUI(isAppendMode = false) {
             if (DOM.newsGrid) {
                 DOM.newsGrid.innerHTML = `<p class="text-gray-400 text-center mt-10 px-5">找不到符合「${query}」的新聞。</p>`;
             }
-            if (DOM.searchHint) DOM.searchHint.textContent = '沒有搜尋結果。';
+            if (DOM.searchHint) {
+                DOM.searchHint.textContent = result.success ? '沒有搜尋結果。' : '搜尋服務暫時無法回應。';
+            }
         }
     }
 
