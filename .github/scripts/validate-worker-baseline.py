@@ -18,6 +18,7 @@ def fail(message: str) -> None:
 def main() -> int:
     source = (WORKER / "src" / "index.js").read_text("utf-8")
     security = (WORKER / "src" / "security.js").read_text("utf-8")
+    search = (WORKER / "src" / "search.js").read_text("utf-8")
     manifest = json.loads((WORKER / "recovery-manifest.json").read_text("utf-8"))
     config = json.loads((WORKER / "wrangler.jsonc").read_text("utf-8"))
 
@@ -136,6 +137,24 @@ def main() -> int:
     if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:
         fail('image archive timeout policy is missing')
 
+    # CF-W5: indexed substring search must remain on D1 FTS5 trigram.
+    fts_migration = (WORKER / "migrations" / "0001_search_fts.sql").read_text("utf-8")
+    for signal in [
+        "USING fts5",
+        "tokenize='trigram'",
+        "content='articles'",
+        "articles_fts_ai",
+        "articles_fts_ad",
+        "articles_fts_au",
+        "VALUES ('rebuild')",
+    ]:
+        if signal not in fts_migration:
+            fail(f"FTS migration signal missing: {signal}")
+    if "searchArticles" not in source or "articles_fts MATCH ?" not in search:
+        fail("Worker search route is not using the FTS search owner")
+    if "SELECT * FROM articles WHERE title LIKE ? OR description LIKE ?" in source:
+        fail("legacy unindexed search scan must not be reintroduced")
+
     retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
     if retention_sql not in source:
         fail("30-day retention must exclude the low-frequency video archive")
@@ -147,6 +166,7 @@ def main() -> int:
     print("Wrangler production resource alignment: OK")
     print("Rate limit security bindings: OK")
     print("D1 baseline schema/indexes: OK")
+    print("D1 FTS5 trigram search contract: OK")
     print("Worker route/security contract: OK")
     print("Recovery manifest retained as historical production provenance: OK")
     return 0
