@@ -6,6 +6,7 @@ set -euo pipefail
 
 API="https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}"
 AUTH=( -H "Authorization: Bearer ${CF_API_TOKEN}" -H "Content-Type: application/json" )
+WORKER_ORIGIN="https://news-proxy.maxyu0725us.workers.dev"
 
 cf_get() {
   local path="$1"
@@ -57,6 +58,22 @@ d1_query() {
   fi
 }
 
+probe_article_url() {
+  local label="$1"
+  local target="$2"
+  local out="/tmp/article-probe.json"
+  local code
+  code=$(curl -sS --max-time 15 -o "$out" -w '%{http_code}' -G \
+    --data-urlencode "url=${target}" \
+    "${WORKER_ORIGIN}/api/article-full" || true)
+  echo "${label}: http=${code}"
+  if jq -e . "$out" >/dev/null 2>&1; then
+    jq -c '{success:(.success // null), error:(.error // null), content_chars:((.content // .text // "") | tostring | length)}' "$out"
+  else
+    echo '{"json":false}'
+  fi
+}
+
 echo '## Workers inventory'
 cf_get '/workers/scripts' /tmp/workers.json
 jq -r '.result[] | [(.id // "?"),(.modified_on // "-"),(.compatibility_date // "-"),(.usage_model // "-")] | @tsv' /tmp/workers.json \
@@ -90,6 +107,20 @@ for worker in "${WORKERS[@]}"; do
     python3 .github/scripts/cloudflare-source-audit.py /tmp/worker-source.bin
   fi
 done
+
+echo
+echo '## Harmless public-edge security probes'
+probe_article_url 'article-full non-HK01 control' 'https://example.com/'
+probe_article_url 'article-full substring-bypass probe' 'https://example.com/?ref=https://www.hk01.com/'
+
+echo 'CORS preflight for summarize from unrelated origin:'
+curl -sS --max-time 10 -o /dev/null -D /tmp/cors-headers \
+  -X OPTIONS \
+  -H 'Origin: https://audit.invalid' \
+  -H 'Access-Control-Request-Method: POST' \
+  "${WORKER_ORIGIN}/api/summarize" || true
+grep -Ei '^(HTTP/|access-control-allow-origin:|access-control-allow-methods:|access-control-allow-headers:)' /tmp/cors-headers \
+  | tr -d '\r' || true
 
 echo
 echo '## D1 inventory'
