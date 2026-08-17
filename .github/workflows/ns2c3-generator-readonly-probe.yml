@@ -1,0 +1,73 @@
+name: NS2C3 formal generator read-only probe
+
+on:
+  push:
+    branches:
+      - feature/ns2c3-bastille-depth
+    paths:
+      - .github/workflows/ns2c3-generator-readonly-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Snapshot archive read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT id,source,category,pubDate FROM articles ORDER BY pubDate DESC,id DESC" \
+            > /tmp/archive-existing.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state ORDER BY source_key" \
+            > /tmp/archive-state.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT COUNT(*) AS total_rows FROM articles" \
+            > /tmp/archive-count.json
+      - name: Generate exact 500-row plan without writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          before=$(node -e "const p=require('/tmp/archive-count.json');const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];process.stdout.write(String(Number(r?.total_rows||0)))")
+          test "$before" = '1000' || { echo "Unexpected archive article count: $before" >&2; exit 1; }
+          start=$(date +%s)
+          node worker/scripts/archive-backfill.mjs \
+            --batch-id=ns2c3-readonly-probe \
+            --source=all \
+            --limit=500 \
+            --before-rows="$before" \
+            --existing=/tmp/archive-existing.json \
+            --state=/tmp/archive-state.json \
+            --out-dir=/tmp/archive-backfill-probe \
+            --report=/tmp/archive-backfill-probe/report.json
+          end=$(date +%s)
+          cat /tmp/archive-backfill-probe/report.json
+          node <<'NODE'
+          const fs = require('fs');
+          const r = JSON.parse(fs.readFileSync('/tmp/archive-backfill-probe/report.json','utf8'));
+          if (r.generated !== 500) throw new Error(`generated=${r.generated}`);
+          if (r.hk01?.generated !== 250) throw new Error(`hk01=${r.hk01?.generated}`);
+          if (r.bastille?.generated !== 250) throw new Error(`bastille=${r.bastille?.generated}`);
+          if (!r.oldest || !r.newest || !(r.oldest < '2026-07-16T22:58:41.000Z')) throw new Error(`history did not extend backward: ${r.oldest}`);
+          if (r.planChunkCount !== 10 || r.applyChunkCount !== 10) throw new Error('500-row plan chunk contract changed');
+          NODE
+          echo "Formal generator read-only runtime_seconds=$((end-start))"
+      - name: Confirm archive article rows unchanged
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute ARCHIVE_01 --remote --json --command "SELECT COUNT(*) AS total_rows FROM articles" > /tmp/archive-after.json
+          node -e "const p=require('/tmp/archive-after.json');const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];if(Number(r?.total_rows)!==1000)throw new Error('read-only probe changed archive rows')"
+          echo 'Archive remained at exactly 1000 article rows.'
