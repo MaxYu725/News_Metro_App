@@ -24,91 +24,95 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           source_path = Path('worker/src/index.js')
           source = source_path.read_text(encoding='utf-8')
 
-          old_timeout = "const timeoutId = setTimeout(() => controller.abort(), 8000);"
-          new_timeout = "const timeoutId = setTimeout(() => controller.abort(), sourceConfig.timeoutMs || 8000);"
-          if old_timeout not in source:
-              raise SystemExit('fetch timeout marker missing')
-          source = source.replace(old_timeout, new_timeout, 1)
+          if 'sourceConfig.timeoutMs || 8000' not in source:
+              source, count = re.subn(
+                  r'setTimeout\(\(\) => controller\.abort\(\),\s*8000\)',
+                  'setTimeout(() => controller.abort(), sourceConfig.timeoutMs || 8000)',
+                  source,
+                  count=1,
+              )
+              if count != 1:
+                  raise SystemExit('fetch timeout marker missing')
 
-          old_video = """  video: [259, 256, 260, 348].map(channelId => ({
-            name: '香港01',
-            urls: rssHubs.map(base => `${base}/hk01/channel/${channelId}`),
-          })),"""
-          new_video = """  video: [259, 256].map(channelId => ({
+          video_pattern = r"  video:\s*\[259,\s*256,\s*260,\s*348\]\.map\(channelId => \(\{[\s\S]*?\n  \}\)\),"
+          video_replacement = """  video: [259, 256].map(channelId => ({
             name: '香港01',
             urls: [`https://rsshub.rssforever.com/hk01/channel/${channelId}`],
             timeoutMs: 20000,
           })),"""
-          if old_video not in source:
+          source, count = re.subn(video_pattern, video_replacement, source, count=1)
+          if count != 1:
               raise SystemExit('old image channel mapping missing')
-          source = source.replace(old_video, new_video, 1)
 
-          old_warn = "console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name });"
-          new_warn = "console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name, timeoutMs: sourceConfig.timeoutMs || 8000, urlCount: sourceConfig.urls.length });"
-          if old_warn not in source:
-              raise SystemExit('rss-source-empty marker missing')
-          source = source.replace(old_warn, new_warn, 1)
+          source = source.replace(
+              "console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name });",
+              "console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name, timeoutMs: sourceConfig.timeoutMs || 8000, urlCount: sourceConfig.urls.length });",
+              1,
+          )
 
-          old_export = """export default {
-            async scheduled(event, env, ctx) {
-            ctx.waitUntil(syncAllCategoriesAndCleanup(env));
-          },
-
-          async fetch(request, env, ctx) {"""
-          new_export = """export default {
+          source = re.sub(
+              r"export default \{\s*async scheduled\(event, env, ctx\) \{\s*ctx\.waitUntil\(syncAllCategoriesAndCleanup\(env\)\);\s*\},\s*async fetch\(request, env, ctx\) \{",
+              """export default {
             async scheduled(event, env, ctx) {
               ctx.waitUntil(syncAllCategoriesAndCleanup(env));
             },
 
-            async fetch(request, env, ctx) {"""
-          if old_export in source:
-              source = source.replace(old_export, new_export, 1)
-
-          old_category_indent = """              await syncCategoryToDB(category, env);
-                        if (forceSync) await cleanUpOldArticles(env);"""
-          new_category_indent = """              await syncCategoryToDB(category, env);
-              if (forceSync) await cleanUpOldArticles(env);"""
-          if old_category_indent in source:
-              source = source.replace(old_category_indent, new_category_indent, 1)
-
+            async fetch(request, env, ctx) {""",
+              source,
+              count=1,
+          )
+          source = re.sub(
+              r"(await syncCategoryToDB\(category, env\);)\s*if \(forceSync\) await cleanUpOldArticles\(env\);",
+              r"\1\n              if (forceSync) await cleanUpOldArticles(env);",
+              source,
+              count=1,
+          )
           source_path.write_text(source, encoding='utf-8')
 
           validator_path = Path('.github/scripts/validate-worker-baseline.py')
           validator = validator_path.read_text(encoding='utf-8')
-          old_validator = """    # CF-W2: keep the image category on current HK01 subchannel feeds, not stale zone/13.
-              if '/hk01/zone/13' in source:
-                  fail('stale HK01 image aggregate feed must not be reintroduced')
-              if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
-                  fail('HK01 image subchannel feed mapping is missing')
-          """
-          # Match the real indentation without depending on comment spacing.
-          start = validator.find("    # CF-W2: keep the image category")
-          end = validator.find("\n    retention_sql =", start)
+          start = validator.find('    # CF-W2: keep the image category')
+          end = validator.find('\n    retention_sql =', start)
           if start < 0 or end < 0:
               raise SystemExit('image validator block missing')
-          new_validator = """    # CF-W4R2: image archive uses only the two live, verified RSSHub channels.
-              if '/hk01/zone/13' in source:
-                  fail('stale HK01 image aggregate feed must not be reintroduced')
-              if '[259, 256]' not in source or '/hk01/channel/${channelId}' not in source:
-                  fail('verified HK01 image channel mapping is missing')
-              if '[259, 256, 260, 348]' in source or 'channel/260' in source or 'channel/348' in source:
-                  fail('dead HK01 image channels must not be reintroduced')
-              if 'https://rsshub.rssforever.com/hk01/channel/${channelId}' not in source:
-                  fail('image archive must use the verified rssforever endpoint')
-              if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:
-                  fail('image archive timeout policy is missing')
-          """
-          # Normalize accidental extra indentation in the embedded block.
-          new_validator = new_validator.replace('\n      ', '\n  ')
-          validator = validator[:start] + new_validator.rstrip() + validator[end:]
+          block = '''    # CF-W4R2: image archive uses only the two live, verified RSSHub channels.
+          if '/hk01/zone/13' in source:
+              fail('stale HK01 image aggregate feed must not be reintroduced')
+          if '[259, 256]' not in source or '/hk01/channel/${channelId}' not in source:
+              fail('verified HK01 image channel mapping is missing')
+          if '[259, 256, 260, 348]' in source or 'channel/260' in source or 'channel/348' in source:
+              fail('dead HK01 image channels must not be reintroduced')
+          if 'https://rsshub.rssforever.com/hk01/channel/${channelId}' not in source:
+              fail('image archive must use the verified rssforever endpoint')
+          if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:
+              fail('image archive timeout policy is missing')
+          '''
+          # YAML removes the common indentation from the embedded script; restore Python block indentation explicitly.
+          block = '\n'.join(('    ' + line.lstrip()) if i == 0 else ('    ' + line.lstrip() if line.strip().startswith(('if ', "fail(")) else line) for i, line in enumerate(block.splitlines()))
+          # Build the validator block directly to avoid indentation ambiguity.
+          block = (
+              "    # CF-W4R2: image archive uses only the two live, verified RSSHub channels.\n"
+              "    if '/hk01/zone/13' in source:\n"
+              "        fail('stale HK01 image aggregate feed must not be reintroduced')\n"
+              "    if '[259, 256]' not in source or '/hk01/channel/${channelId}' not in source:\n"
+              "        fail('verified HK01 image channel mapping is missing')\n"
+              "    if '[259, 256, 260, 348]' in source or 'channel/260' in source or 'channel/348' in source:\n"
+              "        fail('dead HK01 image channels must not be reintroduced')\n"
+              "    if 'https://rsshub.rssforever.com/hk01/channel/${channelId}' not in source:\n"
+              "        fail('image archive must use the verified rssforever endpoint')\n"
+              "    if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:\n"
+              "        fail('image archive timeout policy is missing')\n"
+          )
+          validator = validator[:start] + block.rstrip() + validator[end:]
           validator_path.write_text(validator, encoding='utf-8')
 
           Path('.deploy/worker-production.txt').write_text(
-              'CF-W4R2 production retry: use verified HK01 image channels 259/256 via rssforever with archive-specific 20s timeout.\n',
+              'CF-W4R2 production retry: verified HK01 image channels 259/256 via rssforever with archive-specific 20s timeout.\n',
               encoding='utf-8',
           )
 
