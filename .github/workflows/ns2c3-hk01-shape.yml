@@ -1,0 +1,48 @@
+name: NS2C3 HK01 item shape probe
+
+on:
+  push:
+    branches:
+      - feature/ns2c3-controlled-backfill
+    paths:
+      - .github/workflows/ns2c3-hk01-shape.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect article payload shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const url = 'https://web-data.api.hk01.com/v2/feed/zone/1?offset=99999999989';
+          const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0', accept: 'application/json' } });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const json = await r.json();
+          const item = json.items?.find(x => x?.data && typeof x.data === 'object');
+          if (!item) throw new Error('No HK01 item.data object');
+          const d = item.data;
+          console.log(`item.keys=${Object.keys(item).join(',')}`);
+          console.log(`data.keys=${Object.keys(d).join(',')}`);
+          for (const [k,v] of Object.entries(d)) {
+            if (v == null) continue;
+            if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+              console.log(`data.${k}=${String(v).replace(/\s+/g,' ').slice(0,220)}`);
+            } else if (Array.isArray(v)) {
+              console.log(`data.${k}=Array(${v.length}) firstKeys=${v[0] && typeof v[0] === 'object' ? Object.keys(v[0]).join(',') : ''}`);
+            } else if (typeof v === 'object') {
+              console.log(`data.${k}=Object keys=${Object.keys(v).join(',')}`);
+              for (const [ck,cv] of Object.entries(v).slice(0,20)) {
+                if (typeof cv === 'string' || typeof cv === 'number' || typeof cv === 'boolean') {
+                  console.log(`data.${k}.${ck}=${String(cv).replace(/\s+/g,' ').slice(0,180)}`);
+                }
+              }
+            }
+          }
+          NODE
