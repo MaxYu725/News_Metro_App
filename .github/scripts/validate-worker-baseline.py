@@ -197,6 +197,7 @@ def main() -> int:
         "ARCHIVE_BACKFILL_MAX_LIMIT = 1000",
         "ARCHIVE_SHARD_STOP_BYTES = 300_000_000",
         "ARCHIVE_SHARD_POST_WRITE_MAX_BYTES = 325_000_000",
+        "BASTILLE_SEEK_MAX_PAGE = 4096",
         "https://web-data.api.hk01.com",
         "nextOffset",
         "https://www.bastillepost.com",
@@ -205,6 +206,7 @@ def main() -> int:
         "backfillApplyArticlesSql",
         "backfillApplyStateAndMarkWrittenSql",
         "backfillMarkCompletedSql",
+        "seekBastillePageBeforeFloor",
     ]:
         if signal not in archive_backfill:
             fail(f"archive backfill contract signal missing: {signal}")
@@ -238,6 +240,7 @@ def main() -> int:
         "plan-reset.sql",
         "existing snapshot incomplete",
         "args['batch-id']",
+        "seekBastillePageBeforeFloor(floor)",
     ]:
         if signal not in archive_backfill_script:
             fail(f"archive backfill generator signal missing: {signal}")

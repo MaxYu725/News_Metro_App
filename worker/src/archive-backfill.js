@@ -3,6 +3,7 @@ import { parseBastilleRss } from './sources/bastille.js';
 export const ARCHIVE_BACKFILL_MAX_LIMIT = 1000;
 export const ARCHIVE_SHARD_STOP_BYTES = 300_000_000;
 export const ARCHIVE_SHARD_POST_WRITE_MAX_BYTES = 325_000_000;
+export const BASTILLE_SEEK_MAX_PAGE = 4096;
 
 export const HK01_HISTORICAL_ZONES = [
   { zoneId: 1, category: 'local' },
@@ -161,6 +162,63 @@ export async function fetchBastilleHistoricalPage(page, fetchImpl = fetch) {
   } finally {
     clear();
   }
+}
+
+function bastillePageCrossesFloor(articles, floor) {
+  return (articles || []).some(article => {
+    const pubDate = String(article?.pubDate || '');
+    return pubDate && pubDate < floor;
+  });
+}
+
+export async function seekBastillePageBeforeFloor(
+  floor,
+  fetchPage = fetchBastilleHistoricalPage,
+) {
+  if (!floor) return { page: 1, probes: 0 };
+
+  let probes = 0;
+  const cache = new Map();
+  const load = async page => {
+    if (cache.has(page)) return cache.get(page);
+    const result = await fetchPage(page);
+    probes += 1;
+    cache.set(page, result);
+    return result;
+  };
+
+  let low = 0;
+  let high = 1;
+  while (high <= BASTILLE_SEEK_MAX_PAGE) {
+    const result = await load(high);
+    if (bastillePageCrossesFloor(result?.articles, floor)) break;
+    if (!Array.isArray(result?.articles) || result.articles.length === 0) {
+      throw new Error('Bastille history ended before archive floor');
+    }
+    low = high;
+    high *= 2;
+  }
+
+  if (high > BASTILLE_SEEK_MAX_PAGE) {
+    throw new Error(`Bastille archive floor exceeds seek limit ${BASTILLE_SEEK_MAX_PAGE}`);
+  }
+
+  let found = high;
+  let left = low + 1;
+  let right = high;
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    const result = await load(mid);
+    const articles = Array.isArray(result?.articles) ? result.articles : [];
+    if (articles.length === 0 || bastillePageCrossesFloor(articles, floor)) {
+      found = mid;
+      right = mid - 1;
+    } else {
+      left = mid + 1;
+    }
+  }
+
+  return { page: found, probes };
 }
 
 export function sqlLiteral(value) {
