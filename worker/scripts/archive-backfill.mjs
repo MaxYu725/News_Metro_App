@@ -15,6 +15,7 @@ import {
   seekBastillePageBeforeFloor,
   sqlLiteral,
 } from '../src/archive-backfill.js';
+import { hk01ContinuationFloor } from '../src/archive-backfill-policy.js';
 
 function parseArgs(argv) {
   const args = {};
@@ -123,9 +124,12 @@ async function collectHk01({ target, existingRows, existingIds, stateRows, selec
       state.pagesFetched += 1;
       pages += 1;
 
-      // Archive expansion is backward-only. The live database owns current
-      // coverage; archive capacity is reserved for extending the time horizon.
-      const floor = sourceFloor(existingRows, '香港01', zone.category) || globalFloor;
+      // Publication dates are not a reliable resume boundary because HK01 can
+      // resurface old articles in a much newer feed page. Once a nextOffset has
+      // been persisted, that cursor is the chronological owner. The pubDate
+      // floor is only used for the initial bootstrap before a cursor exists.
+      const bootstrapFloor = sourceFloor(existingRows, '香港01', zone.category) || globalFloor;
+      const floor = hk01ContinuationFloor(stateMap.get(key), bootstrapFloor);
       const candidates = eligibleNewArticles(page.articles, existingIds, selectedIds, floor);
       const remaining = target - (selected.length - startCount);
       const { taken, consumedWholePage } = takePageCandidates({
