@@ -11,21 +11,22 @@ permissions:
 jobs:
   probe-search-index:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
-      - name: Check HK01 count semantics and retrieval
+      - name: Estimate exact HK01 archive volume
         shell: bash
         run: |
           python - <<'PY'
           import datetime as dt
           import json
           import re
+          import time
           import urllib.error
           import urllib.parse
           import urllib.request
           from urllib.parse import urljoin
 
-          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-count-semantics-probe/1.0)'
+          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-volume-probe/1.0)'
           SEARCH_ORIGIN = 'https://universal-search.hk01.com'
 
           def fetch_text(url, limit=5_000_000):
@@ -61,88 +62,73 @@ jobs:
               'Origin': SEARCH_ORIGIN,
               'Referer': SEARCH_ORIGIN + '/',
           }
+          request_count = 0
 
-          def query(params):
+          def query_count(start, end):
+              global request_count
+              params = {
+                  'query': '',
+                  'hitsPerPage': 1,
+                  'page': 0,
+                  'distinct': 0,
+                  'filters': f'published_at_ts >= {start} AND published_at_ts < {end} AND type:article',
+              }
               data = json.dumps({'params': urllib.parse.urlencode(params)}, separators=(',', ':')).encode()
               req = urllib.request.Request(base + '/query', data=data, headers=headers, method='POST')
-              try:
-                  with urllib.request.urlopen(req, timeout=25) as r:
-                      return r.status, json.loads(r.read().decode('utf-8', 'replace'))
-              except urllib.error.HTTPError as exc:
-                  raw = exc.read().decode('utf-8', 'replace')
+              request_count += 1
+              for attempt in range(4):
                   try:
-                      return exc.code, json.loads(raw)
-                  except Exception:
-                      return exc.code, {'raw': raw[:1200]}
+                      with urllib.request.urlopen(req, timeout=25) as r:
+                          body = json.loads(r.read().decode('utf-8', 'replace'))
+                          return int(body.get('nbHits', 0)), bool(body.get('exhaustiveNbHits'))
+                  except urllib.error.HTTPError as exc:
+                      if exc.code == 429 and attempt < 3:
+                          time.sleep(1.0 + attempt)
+                          continue
+                      raw = exc.read().decode('utf-8', 'replace')
+                      raise RuntimeError(f'HTTP {exc.code}: {raw[:400]}')
+              raise RuntimeError('query retries exhausted')
 
-          def ep(y, m=1, d=1):
+          def exact_count(start, end, depth=0):
+              count, exhaustive = query_count(start, end)
+              if exhaustive:
+                  return count, 1, count, depth
+              if end - start <= 3600:
+                  raise RuntimeError(f'non-exhaustive one-hour interval {start}..{end}: {count}')
+              mid = start + (end - start) // 2
+              left = exact_count(start, mid, depth + 1)
+              right = exact_count(mid, end, depth + 1)
+              return (
+                  left[0] + right[0],
+                  left[1] + right[1],
+                  max(left[2], right[2]),
+                  max(left[3], right[3]),
+              )
+
+          def epoch(y, m=1, d=1):
               return int(dt.datetime(y, m, d, tzinfo=dt.timezone.utc).timestamp())
 
-          def f(start, end):
-              return f'published_at_ts >= {start} AND published_at_ts < {end} AND type:article'
-
-          ranges = [
-              ('2016-year', ep(2016), ep(2017)),
-              ('2016-Jan', ep(2016,1,1), ep(2016,2,1)),
-              ('2016-Feb', ep(2016,2,1), ep(2016,3,1)),
-              ('2016-Jul01-UTC', ep(2016,7,1), ep(2016,7,2)),
-          ]
-
           print('CONFIG', {'index': index})
-          for name, start, end in ranges:
-              for distinct in (None, 0, 1):
-                  params = {
-                      'query': '',
-                      'hitsPerPage': 1,
-                      'page': 0,
-                      'filters': f(start, end),
-                  }
-                  if distinct is not None:
-                      params['distinct'] = distinct
-                  status, body = query(params)
-                  print('COUNT', name, 'distinct=', distinct, {
-                      'status': status,
-                      'nbHits': body.get('nbHits') if isinstance(body, dict) else None,
-                      'exhaustiveNbHits': body.get('exhaustiveNbHits') if isinstance(body, dict) else None,
-                      'exhaustive': body.get('exhaustive') if isinstance(body, dict) else None,
-                      'message': body.get('message') if isinstance(body, dict) else None,
-                  })
-
-          print('=== day paging with distinct=0 ===')
-          start, end = ep(2016,7,1), ep(2016,7,2)
-          status, first = query({
-              'query': '',
-              'hitsPerPage': 100,
-              'page': 0,
-              'filters': f(start, end),
-              'distinct': 0,
-          })
-          pages = first.get('nbPages', 0) if isinstance(first, dict) else 0
-          hits = []
-          for page in range(pages):
-              if page == 0:
-                  body = first
+          grand_total = 0
+          for year in range(2016, 2027):
+              start = epoch(year)
+              if year == 2026:
+                  end_dt = dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)
+                  end_dt = dt.datetime(end_dt.year, end_dt.month, end_dt.day, tzinfo=dt.timezone.utc)
+                  end = int(end_dt.timestamp())
               else:
-                  pstatus, body = query({
-                      'query': '',
-                      'hitsPerPage': 100,
-                      'page': page,
-                      'filters': f(start, end),
-                      'distinct': 0,
-                  })
-                  if pstatus != 200:
-                      raise SystemExit(f'page failure {page}: {pstatus}')
-              hits.extend(body.get('hits', []))
-          ids = [str(x.get('id')) for x in hits if x.get('id')]
-          timestamps = [int(x.get('published_at_ts')) for x in hits if x.get('published_at_ts') is not None]
-          print('DAY_PAGE_RESULT', {
-              'status': status,
-              'nbHits': first.get('nbHits') if isinstance(first, dict) else None,
-              'nbPages': pages,
-              'gathered': len(hits),
-              'uniqueIds': len(set(ids)),
-              'minTs': min(timestamps) if timestamps else None,
-              'maxTs': max(timestamps) if timestamps else None,
-              'withinRange': bool(timestamps) and min(timestamps) >= start and max(timestamps) < end,
-          })
+                  end = epoch(year + 1)
+              before = request_count
+              count, leaf_segments, max_leaf_count, max_depth = exact_count(start, end)
+              used = request_count - before
+              grand_total += count
+              print('YEAR_EXACT', year, {
+                  'count': count,
+                  'leafSegments': leaf_segments,
+                  'maxLeafCount': max_leaf_count,
+                  'maxDepth': max_depth,
+                  'requests': used,
+              })
+          print('GRAND_TOTAL', grand_total)
+          print('REQUESTS_TOTAL', request_count)
           PY
