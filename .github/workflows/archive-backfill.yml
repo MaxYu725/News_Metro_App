@@ -1,0 +1,317 @@
+name: Archive historical backfill
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - worker/src/archive-backfill.js
+      - worker/scripts/archive-backfill.mjs
+      - worker/archive-migrations/**
+      - worker/test/archive-backfill.test.mjs
+      - .github/scripts/validate-archive-search.sh
+      - .github/scripts/archive-backfill-production-audit.sh
+      - .github/workflows/archive-backfill.yml
+      - .backfill/archive-production.txt
+  push:
+    branches:
+      - main
+    paths:
+      - .backfill/archive-production.txt
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: Unique replay-safe batch id
+        required: true
+        type: string
+      source:
+        description: Historical source scope
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - hk01
+          - bastille
+      limit:
+        description: Rows to plan (run mode accepts 500 or 1000)
+        required: true
+        default: '500'
+        type: string
+      mode:
+        description: Dry-run plans locally; run writes ARCHIVE_01
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - run
+
+concurrency:
+  group: metro-news-archive-backfill
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate backfill JavaScript and shell syntax
+        run: |
+          node --check worker/src/archive-backfill.js
+          node --check worker/scripts/archive-backfill.mjs
+          node --check worker/test/archive-backfill.test.mjs
+          bash -n .github/scripts/validate-archive-search.sh
+          bash -n .github/scripts/archive-backfill-production-audit.sh
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate archive migrations locally
+        run: bash .github/scripts/validate-archive-search.sh
+
+      - name: Run Worker regressions
+        working-directory: worker
+        run: npm test
+
+  execute:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Resolve and validate batch control
+        id: control
+        shell: bash
+        env:
+          INPUT_BATCH_ID: ${{ inputs.batch_id }}
+          INPUT_SOURCE: ${{ inputs.source }}
+          INPUT_LIMIT: ${{ inputs.limit }}
+          INPUT_MODE: ${{ inputs.mode }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == 'workflow_dispatch' ]]; then
+            batch_id=${INPUT_BATCH_ID:-}
+            source=${INPUT_SOURCE:-}
+            limit=${INPUT_LIMIT:-}
+            mode=${INPUT_MODE:-}
+          else
+            marker='.backfill/archive-production.txt'
+            test -f "$marker" || { echo '::error::Archive production marker missing'; exit 1; }
+            declare -A values=()
+            while IFS='=' read -r key value; do
+              [[ -z "$key" ]] && continue
+              case "$key" in
+                batch_id|source|limit|mode) values[$key]=$value ;;
+                *) echo "::error::Unknown archive marker key: $key"; exit 1 ;;
+              esac
+            done < "$marker"
+            batch_id=${values[batch_id]:-}
+            source=${values[source]:-}
+            limit=${values[limit]:-}
+            mode=${values[mode]:-}
+          fi
+
+          [[ "$batch_id" =~ ^[A-Za-z0-9._-]{1,80}$ ]] || { echo '::error::Invalid batch_id'; exit 1; }
+          [[ "$source" == 'all' || "$source" == 'hk01' || "$source" == 'bastille' ]] || { echo '::error::Invalid source'; exit 1; }
+          [[ "$limit" =~ ^[0-9]+$ ]] || { echo '::error::Invalid limit'; exit 1; }
+          (( limit >= 1 && limit <= 1000 )) || { echo '::error::Limit must be 1..1000'; exit 1; }
+          [[ "$mode" == 'dry-run' || "$mode" == 'run' ]] || { echo '::error::Invalid mode'; exit 1; }
+          if [[ "$mode" == 'run' && "$limit" != '500' && "$limit" != '1000' ]]; then
+            echo '::error::Production run mode accepts only 500 or 1000 rows'
+            exit 1
+          fi
+          if [[ "$GITHUB_EVENT_NAME" == 'push' && "$mode" != 'run' ]]; then
+            echo '::error::Production marker pushes must use mode=run'
+            exit 1
+          fi
+
+          echo "batch_id=$batch_id" >> "$GITHUB_OUTPUT"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "limit=$limit" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Archive control: batch=$batch_id source=$source limit=$limit mode=$mode"
+
+      - name: Validate deployment credentials
+        if: steps.control.outputs.mode == 'run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo '::error::CF_ACCOUNT_ID is missing'; exit 1; }
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo '::error::CF_API_TOKEN is missing'; exit 1; }
+
+      - name: Apply archive operational migration
+        if: steps.control.outputs.mode == 'run'
+        working-directory: worker
+        run: npx wrangler d1 migrations apply metro_news_archive_01 --remote
+
+      - name: Read existing batch status
+        if: steps.control.outputs.mode == 'run'
+        id: status
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT status,generated_rows,before_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}'" \
+            > /tmp/archive-batch-status.json
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('/tmp/archive-batch-status.json','utf8'));
+          const first = Array.isArray(p) ? p[0] : p?.result?.[0];
+          const row = first?.results?.[0] || first?.result?.results?.[0];
+          console.log(`status=${row?.status || 'absent'}`);
+          console.log(`generated=${Number(row?.generated_rows || 0)}`);
+          console.log(`before_rows=${Number(row?.before_rows || 0)}`);
+          NODE
+
+      - name: Stop completed batch replay
+        if: steps.control.outputs.mode == 'run' && steps.status.outputs.status == 'completed'
+        run: echo 'Archive batch already completed; replay is a no-op.'
+
+      - name: Snapshot archive before a new plan
+        if: steps.control.outputs.mode == 'dry-run' || steps.status.outputs.status == 'absent'
+        id: snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT COUNT(*) AS total_rows FROM articles" \
+            > /tmp/archive-before-count.json
+          node <<'NODE' > /tmp/archive-before.env
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('/tmp/archive-before-count.json','utf8'));
+          const first = Array.isArray(p) ? p[0] : p?.result?.[0];
+          const row = first?.results?.[0] || first?.result?.results?.[0];
+          const size = Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0);
+          console.log(`total=${Number(row?.total_rows || 0)}`);
+          console.log(`size=${size}`);
+          NODE
+          cat /tmp/archive-before.env >> "$GITHUB_OUTPUT"
+          source /tmp/archive-before.env
+          (( size > 0 )) || { echo '::error::Unable to observe archive size'; exit 1; }
+          (( size < 300000000 )) || { echo "::error::Archive shard start guard reached: ${size} bytes"; exit 1; }
+
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT id,source,category,pubDate FROM articles ORDER BY pubDate DESC,id DESC" \
+            > /tmp/archive-existing.json
+
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT COUNT(*) AS present FROM sqlite_master WHERE type='table' AND name='archive_backfill_state'" \
+            > /tmp/archive-state-present.json
+          if node -e "const p=require('/tmp/archive-state-present.json'); const f=Array.isArray(p)?p[0]:p?.result?.[0]; process.exit(Number(f?.results?.[0]?.present||f?.result?.results?.[0]?.present||0)===1?0:1)"; then
+            npx wrangler d1 execute ARCHIVE_01 --remote --json \
+              --command "SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state ORDER BY source_key" \
+              > /tmp/archive-state.json
+          else
+            echo '[]' > /tmp/archive-state.json
+          fi
+          echo "Archive snapshot: rows=${total}, size_bytes=${size}"
+
+      - name: Generate bounded historical plan
+        if: steps.control.outputs.mode == 'dry-run' || steps.status.outputs.status == 'absent'
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+          SOURCE: ${{ steps.control.outputs.source }}
+          LIMIT: ${{ steps.control.outputs.limit }}
+          BEFORE_ROWS: ${{ steps.snapshot.outputs.total }}
+        run: |
+          set -euo pipefail
+          node worker/scripts/archive-backfill.mjs \
+            --batch-id="$BATCH_ID" \
+            --source="$SOURCE" \
+            --limit="$LIMIT" \
+            --before-rows="$BEFORE_ROWS" \
+            --existing=/tmp/archive-existing.json \
+            --state=/tmp/archive-state.json \
+            --out-dir=/tmp/archive-backfill \
+            --report=/tmp/archive-backfill/report.json
+          cat /tmp/archive-backfill/report.json
+
+      - name: Dry-run stops before D1 writes
+        if: steps.control.outputs.mode == 'dry-run'
+        run: echo 'Archive dry-run complete; no archive D1 writes were performed.'
+
+      - name: Persist new batch plan
+        if: steps.control.outputs.mode == 'run' && steps.status.outputs.status == 'absent'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/archive-backfill/plan-reset.sql
+          shopt -s nullglob
+          files=(/tmp/archive-backfill/plan-items-*.sql)
+          (( ${#files[@]} > 0 )) || { echo '::error::No plan item chunks generated'; exit 1; }
+          for file in "${files[@]}"; do
+            echo "Persisting $(basename "$file")"
+            npx wrangler d1 execute ARCHIVE_01 --remote --file "$file"
+          done
+          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/archive-backfill/plan-state.sql
+          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/archive-backfill/plan-finalize.sql
+
+      - name: Materialize planned articles and advance resume state
+        if: steps.control.outputs.mode == 'run' && steps.status.outputs.status != 'written' && steps.status.outputs.status != 'completed'
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT status,generated_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}'" \
+            > /tmp/archive-planned-run.json
+          generated=$(node -e "const p=require('/tmp/archive-planned-run.json'); const f=Array.isArray(p)?p[0]:p?.result?.[0]; const r=f?.results?.[0]||f?.result?.results?.[0]; if(r?.status!=='planned') process.exit(2); process.stdout.write(String(Number(r.generated_rows||0)))")
+          (( generated > 0 && generated <= 1000 )) || { echo '::error::Invalid persisted generated row count'; exit 1; }
+
+          for (( start=1; start<=generated; start+=50 )); do
+            end=$(( start + 49 ))
+            (( end > generated )) && end=$generated
+            sql=$(node --input-type=module -e "import {backfillApplyArticlesSql} from './src/archive-backfill.js'; console.log(backfillApplyArticlesSql(process.argv[1],Number(process.argv[2]),Number(process.argv[3])))" "$BATCH_ID" "$start" "$end")
+            echo "Materializing ordinals ${start}-${end}"
+            npx wrangler d1 execute ARCHIVE_01 --remote --command "$sql"
+          done
+
+          state_sql=$(node --input-type=module -e "import {backfillApplyStateAndMarkWrittenSql} from './src/archive-backfill.js'; console.log(backfillApplyStateAndMarkWrittenSql(process.argv[1]))" "$BATCH_ID")
+          npx wrangler d1 execute ARCHIVE_01 --remote --command "$state_sql"
+
+      - name: Audit written archive batch
+        if: steps.control.outputs.mode == 'run' && steps.status.outputs.status != 'completed'
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: bash .github/scripts/archive-backfill-production-audit.sh "$BATCH_ID"
+
+      - name: Mark archive batch completed
+        if: steps.control.outputs.mode == 'run' && steps.status.outputs.status != 'completed'
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: |
+          set -euo pipefail
+          cd worker
+          sql=$(node --input-type=module -e "import {backfillMarkCompletedSql} from './src/archive-backfill.js'; console.log(backfillMarkCompletedSql(process.argv[1]))" "$BATCH_ID")
+          npx wrangler d1 execute ARCHIVE_01 --remote --command "$sql"
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT batch_id,source,requested_rows,generated_rows,before_rows,status,created_at,written_at,completed_at FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}'"
