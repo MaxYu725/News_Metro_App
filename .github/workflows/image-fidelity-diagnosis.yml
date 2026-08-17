@@ -13,18 +13,15 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 8
     steps:
-      - name: Locate image and compare HK01 CDN variants
-        env:
-          TARGET_FRAGMENT: wu3KNfgiQF79tDWsMvk0NKr_WPw-uGYXO12X6ztdl-s
+      - name: Compare live Metro and HK01 image representations
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import hashlib, json, os, re, sys, time, urllib.request, urllib.parse
+          import hashlib, json, re, urllib.parse, urllib.request
           from pathlib import Path
 
-          frag = os.environ['TARGET_FRAGMENT']
           api_base = 'https://news-proxy.maxyu0725us.workers.dev'
           ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36'
 
@@ -35,129 +32,105 @@ jobs:
               with urllib.request.urlopen(req, timeout=timeout) as r:
                   return r.status, dict(r.headers.items()), r.read(), r.geturl()
 
-          print('=== Locate target in production D1 API ===')
+          print('=== Pick a current Metro article carrying HK01 image URLs ===')
           hit = None
-          for page in range(0, 160):
-              url = f'{api_base}/api/news/latest?page={page}'
-              try:
-                  status, headers, body, final = get(url)
-              except Exception as e:
-                  print('page fetch error', page, repr(e))
-                  break
-              data = json.loads(body)
-              rows = data.get('data') or []
-              if not rows:
-                  print('end at page', page)
-                  break
+          for page in range(0, 12):
+              _, _, body, _ = get(f'{api_base}/api/news/latest?page={page}')
+              rows = (json.loads(body).get('data') or [])
               for row in rows:
-                  blob = json.dumps(row, ensure_ascii=False)
-                  if frag in blob:
+                  if row.get('imageUrl') and 'hk01' in (row.get('link') or ''):
                       hit = row
-                      print('FOUND page=', page)
-                      print(json.dumps(row, ensure_ascii=False, indent=2))
                       break
               if hit: break
-
           if not hit:
-              print('TARGET_NOT_FOUND_IN_PRODUCTION_API')
-              sys.exit(2)
+              raise SystemExit('NO_IMAGE_ARTICLE_FOUND')
 
-          link = hit.get('link','')
-          m = re.search(r'/(\d+)(?:/|$)', urllib.parse.urlparse(link).path)
-          if not m:
-              print('NO_ARTICLE_ID', link)
-              sys.exit(3)
-          article_id = m.group(1)
-          print('article_id=', article_id)
-
-          app_urls = []
-          for key in ('imageUrl',):
-              v = hit.get(key)
-              if isinstance(v,str) and v: app_urls.append(v)
+          print('title=', hit.get('title'))
+          print('link=', hit.get('link'))
+          print('metro_imageUrl=', hit.get('imageUrl'))
           imgs = hit.get('images')
           if isinstance(imgs, str):
               try: imgs = json.loads(imgs)
               except Exception: imgs = []
-          if isinstance(imgs, list):
-              app_urls.extend(x for x in imgs if isinstance(x,str) and x)
-          app_urls = list(dict.fromkeys(app_urls))
-          print('\n=== App image URLs containing fragment ===')
-          matching_app = [u for u in app_urls if frag in u]
-          for u in matching_app: print(u)
+          if not isinstance(imgs, list): imgs = []
+          print('metro_images_count=', len(imgs))
+          for i,u in enumerate(imgs[:8]): print(f'metro_images[{i}]=', u)
 
-          print('\n=== HK01 article API image metadata ===')
+          m = re.search(r'/(\d+)(?:/|$)', urllib.parse.urlparse(hit['link']).path)
+          if not m: raise SystemExit('NO_ARTICLE_ID')
+          article_id = m.group(1)
+          print('article_id=', article_id)
+
           official_api = f'https://web-data.api.hk01.com/v2/page/article/{article_id}'
-          try:
-              _, _, body, _ = get(official_api)
-              official = json.loads(body)
-          except Exception as e:
-              print('HK01_API_ERROR', repr(e))
-              official = None
+          _, _, official_body, _ = get(official_api)
+          official = json.loads(official_body)
 
-          found_nodes = []
-          urls = []
+          image_objects = []
+          url_entries = []
           def walk(obj, path='root'):
               if isinstance(obj, dict):
-                  # Capture image-ish objects and exact fragment hits.
-                  text = json.dumps(obj, ensure_ascii=False)
-                  if frag in text and len(text) < 12000:
-                      found_nodes.append((path, obj))
-                  for k,v in obj.items():
-                      walk(v, f'{path}.{k}')
+                  keys = {str(k).lower() for k in obj.keys()}
+                  if 'cdnurl' in keys or 'originalimage' in keys or ('originalwidth' in keys and 'originalheight' in keys):
+                      image_objects.append((path, obj))
+                  for k,v in obj.items(): walk(v, f'{path}.{k}')
               elif isinstance(obj, list):
                   for i,v in enumerate(obj): walk(v, f'{path}[{i}]')
-              elif isinstance(obj, str):
-                  if obj.startswith('http') and (frag in obj or any(t in path.lower() for t in ('image','cdn','url'))):
-                      urls.append((path,obj))
+              elif isinstance(obj, str) and obj.startswith('http'):
+                  if any(t in path.lower() for t in ('image','cdnurl')):
+                      url_entries.append((path, obj))
+          walk(official)
 
-          if official is not None:
-              walk(official)
-              for path,obj in found_nodes[:12]:
-                  print('NODE', path)
-                  print(json.dumps(obj, ensure_ascii=False, indent=2)[:10000])
+          print('\n=== HK01 API image objects (first 12) ===')
+          for path,obj in image_objects[:12]:
+              print('OBJECT_PATH', path)
+              print(json.dumps(obj, ensure_ascii=False, indent=2)[:5000])
 
-          official_matching = []
-          for path,u in urls:
-              if frag in u:
-                  official_matching.append(u)
-                  print('OFFICIAL_URL', path, u)
-          official_matching = list(dict.fromkeys(official_matching))
+          official_urls = []
+          for path,u in url_entries:
+              if u not in official_urls: official_urls.append(u)
 
-          compare_urls = list(dict.fromkeys(matching_app + official_matching))
-          print('\n=== URL equality ===')
-          print('app_matches=', len(matching_app), 'official_matches=', len(official_matching), 'unique=', len(compare_urls))
-          for i,u in enumerate(compare_urls): print(i, u)
+          app_urls = [hit.get('imageUrl')] + imgs
+          app_urls = [u for u in dict.fromkeys(app_urls) if isinstance(u,str) and u]
 
-          def fetch_variant(url, name, accept):
+          print('\n=== URL relationships ===')
+          for i,u in enumerate(app_urls[:8]):
+              print('APP', i, u)
+              print(' EXACT_IN_HK01_API=', u in official_urls)
+          print('official_image_url_count=', len(official_urls))
+          for i,u in enumerate(official_urls[:12]): print('HK01', i, u)
+
+          compare_urls = list(dict.fromkeys(app_urls[:2] + official_urls[:4]))
+
+          def fetch_variant(url, label, accept):
               try:
                   status, headers, body, final = get(url, {'Accept': accept})
-                  p = Path(name)
-                  p.write_bytes(body)
-                  print('VARIANT', name)
+                  Path(f'/tmp/{label}.bin').write_bytes(body)
+                  print('VARIANT', label)
                   print(' status=', status)
+                  print(' requested=', url)
                   print(' final=', final)
                   print(' content-type=', headers.get('Content-Type') or headers.get('content-type'))
-                  print(' content-length-header=', headers.get('Content-Length') or headers.get('content-length'))
+                  print(' content-length=', headers.get('Content-Length') or headers.get('content-length'))
                   print(' content-encoding=', headers.get('Content-Encoding') or headers.get('content-encoding'))
                   print(' vary=', headers.get('Vary') or headers.get('vary'))
                   print(' bytes=', len(body))
                   print(' sha256=', hashlib.sha256(body).hexdigest())
               except Exception as e:
-                  print('VARIANT_ERROR', name, repr(e))
+                  print('VARIANT_ERROR', label, repr(e))
 
-          print('\n=== Download representation comparison ===')
-          for idx,u in enumerate(compare_urls[:6]):
-              print('\nURL_INDEX', idx, u)
-              fetch_variant(u, f'/tmp/img{idx}-browser.bin', 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8')
-              fetch_variant(u, f'/tmp/img{idx}-generic.bin', '*/*')
-              fetch_variant(u, f'/tmp/img{idx}-jpeg.bin', 'image/jpeg,image/png,*/*;q=0.5')
+          print('\n=== CDN representation comparison ===')
+          for idx,u in enumerate(compare_urls):
+              print('\nURL_INDEX', idx)
+              fetch_variant(u, f'i{idx}-browser', 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8')
+              fetch_variant(u, f'i{idx}-generic', '*/*')
+              fetch_variant(u, f'i{idx}-jpeg', 'image/jpeg,image/png,*/*;q=0.5')
           PY
 
-      - name: Inspect downloaded image file signatures
+      - name: Inspect downloaded image signatures and dimensions
         if: always()
         run: |
           set +e
-          for f in /tmp/img*.bin; do
+          for f in /tmp/i*.bin; do
             [ -e "$f" ] || continue
             echo "--- $f"
             ls -l "$f"
