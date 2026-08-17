@@ -1,0 +1,64 @@
+name: NS2C3 Bastille depth probe
+
+on:
+  push:
+    branches:
+      - feature/ns2c3-bastille-depth
+    paths:
+      - .github/workflows/ns2c3-bastille-depth-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Read Bastille archive floor
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT COUNT(*) AS rows,MIN(pubDate) AS oldest,MAX(pubDate) AS newest FROM articles WHERE source='巴士的報'"
+      - name: Probe RSS page dates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const pages = [1,50,100,125,150,175,200,225,250,300,350,400];
+          function pick(item, tag) {
+            const m = item.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+            return (m?.[1] || '').replace(/^\s*<!\[CDATA\[/,'').replace(/\]\]>\s*$/,'').trim();
+          }
+          for (const page of pages) {
+            const url = `https://www.bastillepost.com/hongkong/feed?paged=${page}`;
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 20000);
+            try {
+              const r = await fetch(url, {
+                redirect: 'follow',
+                signal: controller.signal,
+                headers: {
+                  'user-agent': 'Mozilla/5.0',
+                  accept: 'application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.5',
+                },
+              });
+              const text = await r.text();
+              const items = [...text.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].map(m => m[1]);
+              const dates = items.map(x => pick(x,'pubDate')).filter(Boolean);
+              console.log(`page=${page} status=${r.status} items=${items.length} newest=${dates[0] || ''} oldest=${dates.at(-1) || ''}`);
+            } catch (e) {
+              console.log(`page=${page} ERROR ${e?.message || e}`);
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+          NODE
