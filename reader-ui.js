@@ -151,6 +151,86 @@ function readerCategory(tile, article, state) {
     return state.category || article.category || '新聞';
 }
 
+function enableMouseDragScroll(track) {
+    if (!track || track.children.length < 2) return;
+
+    let pointerId = null;
+    let startX = 0;
+    let startScrollLeft = 0;
+    let dragging = false;
+    let suppressNextClick = false;
+
+    track.style.cursor = 'grab';
+
+    const restoreTrackBehavior = () => {
+        track.style.cursor = 'grab';
+        track.style.scrollBehavior = '';
+        track.style.scrollSnapType = '';
+    };
+
+    track.addEventListener('pointerdown', event => {
+        if (event.pointerType !== 'mouse' || event.button !== 0 || event.isPrimary === false) return;
+
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startScrollLeft = track.scrollLeft;
+        dragging = false;
+    });
+
+    track.addEventListener('pointermove', event => {
+        if (event.pointerType !== 'mouse' || event.pointerId !== pointerId) return;
+
+        const deltaX = event.clientX - startX;
+        if (!dragging && Math.abs(deltaX) < 5) return;
+
+        if (!dragging) {
+            dragging = true;
+            track.setPointerCapture?.(pointerId);
+            track.style.cursor = 'grabbing';
+            track.style.scrollBehavior = 'auto';
+            track.style.scrollSnapType = 'none';
+        }
+
+        event.preventDefault();
+        track.scrollLeft = startScrollLeft - deltaX;
+    });
+
+    const finishDrag = (event, cancelled = false) => {
+        if (event.pointerType !== 'mouse' || event.pointerId !== pointerId) return;
+
+        const activePointerId = pointerId;
+        const wasDragging = dragging;
+        pointerId = null;
+        dragging = false;
+
+        if (track.hasPointerCapture?.(activePointerId)) {
+            track.releasePointerCapture(activePointerId);
+        }
+        restoreTrackBehavior();
+
+        if (!wasDragging) return;
+        suppressNextClick = true;
+
+        if (!cancelled && track.clientWidth > 0) {
+            const page = Math.round(track.scrollLeft / track.clientWidth);
+            requestAnimationFrame(() => {
+                track.scrollTo({ left: page * track.clientWidth, behavior: 'smooth' });
+            });
+        }
+    };
+
+    track.addEventListener('pointerup', event => finishDrag(event));
+    track.addEventListener('pointercancel', event => finishDrag(event, true));
+    track.addEventListener('dragstart', event => event.preventDefault());
+
+    track.addEventListener('click', event => {
+        if (!suppressNextClick) return;
+        suppressNextClick = false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }, true);
+}
+
 function buildReaderMedia(article) {
     const imageUrls = Array.isArray(article?.images) && article.images.length > 0
         ? article.images.filter(Boolean)
@@ -170,17 +250,19 @@ function buildReaderMedia(article) {
         img.alt = imageUrls.length > 1 ? `新聞圖片 ${index + 1}` : '新聞圖片';
         img.loading = 'eager';
         img.referrerPolicy = 'no-referrer';
+        img.draggable = false;
         img.dataset.readerLightbox = '1';
         img.dataset.full = src;
         track.appendChild(img);
     });
 
     DOM.media.appendChild(track);
+    enableMouseDragScroll(track);
 
     if (imageUrls.length > 1) {
         const count = document.createElement('div');
         count.className = 'reader-media-count';
-        count.textContent = `${imageUrls.length} 圖 · 左右滑動`;
+        count.textContent = `${imageUrls.length} 圖 · 左右滑動／拖曳`;
         DOM.media.appendChild(count);
     }
 }
