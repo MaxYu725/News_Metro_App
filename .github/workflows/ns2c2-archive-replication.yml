@@ -1,0 +1,36 @@
+name: NS2C2 archive read replication
+
+on:
+  push:
+    branches:
+      - probe/ns2c2b-search-evidence
+    paths:
+      - .github/workflows/ns2c2-archive-replication.yml
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      ARCHIVE_ID: a3db6dc1-599c-4ace-b12c-142e56c3734a
+    steps:
+      - name: Enable and verify archive read replication
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${ARCHIVE_ID}"
+          curl -sS -X PUT "$api" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"read_replication":{"mode":"auto"}}' > /tmp/update.json
+          jq -e '.success == true and .result.read_replication.mode == "auto"' /tmp/update.json >/dev/null
+          jq '{success,result:{name:.result.name,uuid:.result.uuid,file_size:.result.file_size,read_replication:.result.read_replication}}' /tmp/update.json
+          curl -sS "$api" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" > /tmp/get.json
+          jq -e '.success == true and .result.read_replication.mode == "auto"' /tmp/get.json >/dev/null
+          jq '{verified:.success,result:{name:.result.name,file_size:.result.file_size,read_replication:.result.read_replication}}' /tmp/get.json
