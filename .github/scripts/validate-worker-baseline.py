@@ -19,6 +19,7 @@ def main() -> int:
     source = (WORKER / "src" / "index.js").read_text("utf-8")
     security = (WORKER / "src" / "security.js").read_text("utf-8")
     search = (WORKER / "src" / "search.js").read_text("utf-8")
+    retention = (WORKER / "src" / "retention.js").read_text("utf-8")
     manifest = json.loads((WORKER / "recovery-manifest.json").read_text("utf-8"))
     config = json.loads((WORKER / "wrangler.jsonc").read_text("utf-8"))
 
@@ -155,18 +156,43 @@ def main() -> int:
     if "SELECT * FROM articles WHERE title LIKE ? OR description LIKE ?" in source:
         fail("legacy unindexed search scan must not be reintroduced")
 
-    retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
-    if retention_sql not in source:
-        fail("30-day retention must exclude the low-frequency video archive")
-    if "ctx.waitUntil(syncAllCategoriesAndCleanup(env));" not in source:
-        fail("scheduled ingestion must clean up only after category sync completes")
-    if "ctx.waitUntil(cleanUpOldArticles(env))" in source:
-        fail("cleanup must not race forced sync in the background")
+    # CF-W6: retention is capacity-driven, not age-driven.
+    retention_migration = (WORKER / "migrations" / "0002_adaptive_retention.sql").read_text("utf-8")
+    for signal in [
+        "retention_state",
+        "last_cleanup_size",
+        "last_cleanup_at",
+        "last_deleted_rows",
+        "last_mode",
+    ]:
+        if signal not in retention_migration:
+            fail(f"adaptive retention migration signal missing: {signal}")
+    for signal in [
+        "softLimitBytes: 375_000_000",
+        "emergencyLimitBytes: 450_000_000",
+        "databaseLimitBytes: 500_000_000",
+        "hardReserveBytes: 10_000_000",
+        "softRearmBytes: 25_000_000",
+        "emergencyRearmBytes: 10_000_000",
+        "category <> 'video'",
+        "ORDER BY pubDate ASC",
+        "UPDATE retention_state",
+        "size_after",
+    ]:
+        if signal not in retention:
+            fail(f"adaptive retention contract signal missing: {signal}")
+    if "-30 days" in source or "cleanUpOldArticles" in source:
+        fail("fixed 30-day retention must not be reintroduced")
+    if "ctx.waitUntil(syncAllCategoriesAndRetention(env));" not in source:
+        fail("scheduled ingestion must run adaptive retention after category sync")
+    if "enforceAdaptiveRetention(env.DB)" not in source:
+        fail("forced sync must use adaptive retention")
 
     print("Wrangler production resource alignment: OK")
     print("Rate limit security bindings: OK")
     print("D1 baseline schema/indexes: OK")
     print("D1 FTS5 trigram search contract: OK")
+    print("D1 adaptive capacity retention contract: OK")
     print("Worker route/security contract: OK")
     print("Recovery manifest retained as historical production provenance: OK")
     return 0

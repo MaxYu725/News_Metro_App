@@ -1,1 +1,1 @@
-CF-W5 production promotion: apply D1 FTS5 trigram migration before deploying indexed search.
+CF-W6 production promotion: replace fixed 30-day deletion with 375MB/450MB adaptive retention watermarks.

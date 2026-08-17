@@ -6,6 +6,7 @@ import {
   rateLimitKey,
 } from './security.js';
 import { searchArticles } from './search.js';
+import { enforceAdaptiveRetention } from './retention.js';
 
 function jsonResponse(request, payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
@@ -200,20 +201,14 @@ async function syncCategoryToDB(category, env) {
   }
 }
 
-async function cleanUpOldArticles(env) {
-  try {
-    await env.DB.prepare(`DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')`).run();
-  } catch {}
-}
-
-async function syncAllCategoriesAndCleanup(env) {
+async function syncAllCategoriesAndRetention(env) {
   await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
-  await cleanUpOldArticles(env);
+  await enforceAdaptiveRetention(env.DB);
 }
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+    ctx.waitUntil(syncAllCategoriesAndRetention(env));
   },
 
   async fetch(request, env, ctx) {
@@ -447,7 +442,7 @@ export default {
           if (forceSync || page === 0) {
             const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles`).all();
             if (forceSync || checkDB[0].count === 0) {
-              await syncAllCategoriesAndCleanup(env);
+              await syncAllCategoriesAndRetention(env);
             }
           }
           query = `SELECT * FROM articles ORDER BY pubDate DESC LIMIT ? OFFSET ?`;
@@ -457,7 +452,7 @@ export default {
             const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?`).bind(category).all();
             if (forceSync || checkDB[0].count === 0) {
               await syncCategoryToDB(category, env);
-              if (forceSync) await cleanUpOldArticles(env);
+              if (forceSync) await enforceAdaptiveRetention(env.DB);
             }
           }
           query = `SELECT * FROM articles WHERE category = ? ORDER BY pubDate DESC LIMIT ? OFFSET ?`;
