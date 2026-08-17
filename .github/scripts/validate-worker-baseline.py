@@ -124,11 +124,17 @@ def main() -> int:
     if "targetUrl.includes('hk01.com')" in combined:
         fail("unsafe HK01 substring allowlist must not be reintroduced")
 
-    # CF-W2: keep the image category on current HK01 subchannel feeds, not stale zone/13.
+    # CF-W4R2: image archive uses only the two live, verified RSSHub channels.
     if '/hk01/zone/13' in source:
         fail('stale HK01 image aggregate feed must not be reintroduced')
-    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
-        fail('HK01 image subchannel feed mapping is missing')
+    if '[259, 256]' not in source or '/hk01/channel/${channelId}' not in source:
+        fail('verified HK01 image channel mapping is missing')
+    if '[259, 256, 260, 348]' in source or 'channel/260' in source or 'channel/348' in source:
+        fail('dead HK01 image channels must not be reintroduced')
+    if 'https://rsshub.rssforever.com/hk01/channel/${channelId}' not in source:
+        fail('image archive must use the verified rssforever endpoint')
+    if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:
+        fail('image archive timeout policy is missing')
 
     retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
     if retention_sql not in source:
