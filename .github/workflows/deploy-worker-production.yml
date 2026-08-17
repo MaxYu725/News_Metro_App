@@ -9,8 +9,10 @@ on:
       - .github/scripts/validate-worker-baseline.py
       - .github/scripts/validate-search-fts.sh
       - .github/scripts/validate-adaptive-retention.sh
+      - .github/scripts/validate-archive-search.sh
       - .github/scripts/worker-production-smoke.sh
       - .github/scripts/worker-production-d1-audit.sh
+      - .github/scripts/worker-production-archive-audit.sh
       - .github/workflows/deploy-worker-production.yml
       - .deploy/worker-production.txt
   push:
@@ -47,8 +49,10 @@ jobs:
           node --check worker/src/sources/bastille.js
           bash -n .github/scripts/validate-search-fts.sh
           bash -n .github/scripts/validate-adaptive-retention.sh
+          bash -n .github/scripts/validate-archive-search.sh
           bash -n .github/scripts/worker-production-smoke.sh
           bash -n .github/scripts/worker-production-d1-audit.sh
+          bash -n .github/scripts/worker-production-archive-audit.sh
 
       - name: Install pinned Wrangler
         working-directory: worker
@@ -59,6 +63,9 @@ jobs:
 
       - name: Validate adaptive retention migration locally
         run: bash .github/scripts/validate-adaptive-retention.sh
+
+      - name: Validate archive D1 migration locally
+        run: bash .github/scripts/validate-archive-search.sh
 
       - name: Run Worker regressions
         working-directory: worker
@@ -72,7 +79,7 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     environment: production
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -107,9 +114,13 @@ jobs:
           echo "version_id=${previous_version}" >> "$GITHUB_OUTPUT"
           echo "Recorded current production version: ${previous_version}"
 
-      - name: Apply D1 migrations
+      - name: Apply live D1 migrations
         working-directory: worker
         run: npx wrangler d1 migrations apply metro_news_db --remote
+
+      - name: Apply archive D1 migrations
+        working-directory: worker
+        run: npx wrangler d1 migrations apply metro_news_archive_01 --remote
 
       - name: Deploy Worker
         working-directory: worker
@@ -130,7 +141,7 @@ jobs:
           npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed production smoke"
           exit 1
 
-      - name: D1 production health audit and rollback on failure
+      - name: Live D1 production health audit and rollback on failure
         env:
           PREVIOUS_VERSION: ${{ steps.previous.outputs.version_id }}
         shell: bash
@@ -140,9 +151,24 @@ jobs:
             exit 0
           fi
 
-          echo '::error::Production D1 audit failed; rolling back Worker code immediately.'
+          echo '::error::Production live D1 audit failed; rolling back Worker code immediately.'
           cd worker
-          npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed production D1 audit"
+          npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed live D1 audit"
+          exit 1
+
+      - name: Archive D1 production health audit and rollback on failure
+        env:
+          PREVIOUS_VERSION: ${{ steps.previous.outputs.version_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bash .github/scripts/worker-production-archive-audit.sh; then
+            exit 0
+          fi
+
+          echo '::error::Production archive D1 audit failed; rolling back Worker code immediately.'
+          cd worker
+          npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed archive D1 audit"
           exit 1
 
       - name: Show active deployments
