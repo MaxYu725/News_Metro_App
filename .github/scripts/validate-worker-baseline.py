@@ -122,6 +122,7 @@ def main() -> int:
     if "targetUrl.includes('hk01.com')" in combined:
         fail("unsafe HK01 substring allowlist must not be reintroduced")
 
+    # CF-W2: keep the image category on current HK01 subchannel feeds, not stale zone/13.
     if '/hk01/zone/13' in source:
         fail('stale HK01 image aggregate feed must not be reintroduced')
     if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
