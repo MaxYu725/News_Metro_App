@@ -1,0 +1,42 @@
+name: Validate Worker baseline
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - worker/**
+      - .github/scripts/validate-worker-baseline.py
+      - .github/workflows/worker-baseline.yml
+  push:
+    branches:
+      - agent/cloudflare-readonly-audit
+    paths:
+      - worker/**
+      - .github/scripts/validate-worker-baseline.py
+      - .github/workflows/worker-baseline.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate recovered source, config, and D1 schema
+        run: python3 .github/scripts/validate-worker-baseline.py
+
+      - name: Validate Worker JavaScript syntax
+        run: node --check worker/src/index.js
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Wrangler dry-run compile
+        working-directory: worker
+        run: npm run check
