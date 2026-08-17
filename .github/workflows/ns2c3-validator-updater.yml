@@ -89,7 +89,7 @@ jobs:
                   "writeBatchPlan",
                   "plan-reset.sql",
                   "existing snapshot incomplete",
-                  "--batch-id",
+                  "args['batch-id']",
               ]:
                   if signal not in archive_backfill_script:
                       fail(f"archive backfill generator signal missing: {signal}")
