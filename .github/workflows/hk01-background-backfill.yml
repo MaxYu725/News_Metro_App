@@ -1,0 +1,271 @@
+name: HK01 background archive backfill
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - worker/src/sources/hk01-search.js
+      - worker/scripts/hk01-search-backfill.mjs
+      - worker/test/hk01-search-archive.test.mjs
+      - .github/workflows/hk01-background-backfill.yml
+  push:
+    branches:
+      - main
+    paths:
+      - worker/src/sources/hk01-search.js
+      - worker/scripts/hk01-search-backfill.mjs
+      - worker/test/hk01-search-archive.test.mjs
+      - .github/workflows/hk01-background-backfill.yml
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: Controlled rows for one background cycle
+        required: true
+        default: '1000'
+        type: choice
+        options:
+          - '500'
+          - '1000'
+
+concurrency:
+  group: metro-news-archive-backfill
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate background backfill syntax
+        run: |
+          node --check worker/src/sources/hk01-search.js
+          node --check worker/scripts/hk01-search-backfill.mjs
+          node --check worker/test/hk01-search-archive.test.mjs
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run Worker regressions
+        working-directory: worker
+        run: npm test
+
+  execute:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Resolve replay-safe background batch
+        id: control
+        shell: bash
+        env:
+          INPUT_LIMIT: ${{ inputs.limit }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
+            limit=1000
+          else
+            limit=${INPUT_LIMIT:-1000}
+          fi
+          [[ "$limit" == '500' || "$limit" == '1000' ]] || { echo '::error::Background limit must be 500 or 1000'; exit 1; }
+          batch_id="hk01-auto-${GITHUB_RUN_ID}"
+          [[ "$batch_id" =~ ^[A-Za-z0-9._-]{1,80}$ ]] || { echo '::error::Invalid generated batch id'; exit 1; }
+          echo "batch_id=$batch_id" >> "$GITHUB_OUTPUT"
+          echo "limit=$limit" >> "$GITHUB_OUTPUT"
+          echo "Background control: batch=$batch_id source=hk01 limit=$limit"
+
+      - name: Validate Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo '::error::CF_ACCOUNT_ID is missing'; exit 1; }
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo '::error::CF_API_TOKEN is missing'; exit 1; }
+
+      - name: Apply archive operational migrations
+        working-directory: worker
+        run: npx wrangler d1 migrations apply metro_news_archive_01 --remote
+
+      - name: Read existing batch status
+        id: status
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT status,generated_rows,before_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}'" \
+            > /tmp/hk01-background-status.json
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('/tmp/hk01-background-status.json','utf8'));
+          const first = Array.isArray(p) ? p[0] : p?.result?.[0];
+          const row = first?.results?.[0] || first?.result?.results?.[0];
+          console.log(`status=${row?.status || 'absent'}`);
+          console.log(`generated=${Number(row?.generated_rows || 0)}`);
+          console.log(`before_rows=${Number(row?.before_rows || 0)}`);
+          NODE
+
+      - name: Replay completed cycle as no-op
+        if: steps.status.outputs.status == 'completed'
+        run: echo 'Background batch already completed; workflow rerun is a no-op.'
+
+      - name: Snapshot archive and capacity gate
+        if: steps.status.outputs.status == 'absent'
+        id: snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT COUNT(*) AS total_rows FROM articles" \
+            > /tmp/hk01-background-before.json
+          node <<'NODE' > /tmp/hk01-background-before.env
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('/tmp/hk01-background-before.json','utf8'));
+          const first = Array.isArray(p) ? p[0] : p?.result?.[0];
+          const row = first?.results?.[0] || first?.result?.results?.[0];
+          console.log(`total=${Number(row?.total_rows || 0)}`);
+          console.log(`size=${Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0)}`);
+          NODE
+          cat /tmp/hk01-background-before.env >> "$GITHUB_OUTPUT"
+          source /tmp/hk01-background-before.env
+          (( size > 0 )) || { echo '::error::Unable to observe archive size'; exit 1; }
+          if (( size >= 300000000 )); then
+            echo 'halted=true' >> "$GITHUB_OUTPUT"
+            echo "::notice::Background backfill paused at archive start guard: ${size} bytes"
+            exit 0
+          fi
+          echo 'halted=false' >> "$GITHUB_OUTPUT"
+
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC" \
+            > /tmp/hk01-background-existing.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state WHERE source_key='hk01:search'" \
+            > /tmp/hk01-background-state.json
+          echo "Background snapshot: rows=${total}, size_bytes=${size}"
+
+      - name: Generate HK01 universal-search plan
+        if: steps.status.outputs.status == 'absent' && steps.snapshot.outputs.halted != 'true'
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+          LIMIT: ${{ steps.control.outputs.limit }}
+          BEFORE_ROWS: ${{ steps.snapshot.outputs.total }}
+        run: |
+          set -euo pipefail
+          node worker/scripts/hk01-search-backfill.mjs \
+            --batch-id="$BATCH_ID" \
+            --limit="$LIMIT" \
+            --before-rows="$BEFORE_ROWS" \
+            --existing=/tmp/hk01-background-existing.json \
+            --state=/tmp/hk01-background-state.json \
+            --out-dir=/tmp/hk01-background-plan \
+            --report=/tmp/hk01-background-plan/report.json
+          cat /tmp/hk01-background-plan/report.json
+
+      - name: Persist new background plan
+        if: steps.status.outputs.status == 'absent' && steps.snapshot.outputs.halted != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/hk01-background-plan/plan-reset.sql
+          shopt -s nullglob
+          files=(/tmp/hk01-background-plan/plan-items-*.sql)
+          (( ${#files[@]} > 0 )) || { echo '::error::No background plan item chunks generated'; exit 1; }
+          for file in "${files[@]}"; do
+            echo "Persisting $(basename "$file")"
+            npx wrangler d1 execute ARCHIVE_01 --remote --file "$file"
+          done
+          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/hk01-background-plan/plan-state.sql
+          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/hk01-background-plan/plan-finalize.sql
+
+      - name: Materialize planned HK01 articles
+        if: steps.status.outputs.status != 'written' && steps.status.outputs.status != 'completed' && steps.snapshot.outputs.halted != 'true'
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT status,generated_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}'" \
+            > /tmp/hk01-background-planned.json
+          generated=$(node -e "const p=require('/tmp/hk01-background-planned.json'); const f=Array.isArray(p)?p[0]:p?.result?.[0]; const r=f?.results?.[0]||f?.result?.results?.[0]; if(r?.status!=='planned') process.exit(2); process.stdout.write(String(Number(r.generated_rows||0)))")
+          (( generated > 0 && generated <= 1000 )) || { echo '::error::Invalid persisted generated row count'; exit 1; }
+
+          for (( start=1; start<=generated; start+=50 )); do
+            end=$(( start + 49 ))
+            (( end > generated )) && end=$generated
+            sql=$(node --input-type=module -e "import {backfillApplyArticlesSql} from './src/archive-backfill.js'; console.log(backfillApplyArticlesSql(process.argv[1],Number(process.argv[2]),Number(process.argv[3])))" "$BATCH_ID" "$start" "$end")
+            npx wrangler d1 execute ARCHIVE_01 --remote --command "$sql"
+          done
+
+          state_sql=$(node --input-type=module -e "import {backfillApplyStateAndMarkWrittenSql} from './src/archive-backfill.js'; console.log(backfillApplyStateAndMarkWrittenSql(process.argv[1]))" "$BATCH_ID")
+          npx wrangler d1 execute ARCHIVE_01 --remote --command "$state_sql"
+
+      - name: Audit written background batch
+        if: steps.status.outputs.status != 'completed' && steps.snapshot.outputs.halted != 'true'
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: bash .github/scripts/archive-backfill-production-audit.sh "$BATCH_ID"
+
+      - name: Mark background batch completed
+        if: steps.status.outputs.status != 'completed' && steps.snapshot.outputs.halted != 'true'
+        shell: bash
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+        run: |
+          set -euo pipefail
+          cd worker
+          sql=$(node --input-type=module -e "import {backfillMarkCompletedSql} from './src/archive-backfill.js'; console.log(backfillMarkCompletedSql(process.argv[1]))" "$BATCH_ID")
+          npx wrangler d1 execute ARCHIVE_01 --remote --command "$sql"
+
+      - name: Publish compact health summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT COUNT(*) AS total_rows,SUM(CASE WHEN source='香港01' THEN 1 ELSE 0 END) AS hk01_rows,MIN(CASE WHEN source='香港01' THEN pubDate END) AS hk01_oldest FROM articles" \
+            > /tmp/hk01-background-health.json || true
+          node <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const fs = require('fs');
+          let row = {};
+          try {
+            const p = JSON.parse(fs.readFileSync('/tmp/hk01-background-health.json','utf8'));
+            const first = Array.isArray(p) ? p[0] : p?.result?.[0];
+            row = first?.results?.[0] || first?.result?.results?.[0] || {};
+          } catch {}
+          console.log('## HK01 background archive');
+          console.log(`- batch: ${process.env.BATCH_ID || 'unknown'}`);
+          console.log(`- total rows: ${Number(row.total_rows || 0)}`);
+          console.log(`- HK01 rows: ${Number(row.hk01_rows || 0)}`);
+          console.log(`- HK01 oldest: ${row.hk01_oldest || 'unknown'}`);
+          NODE
+        env:
+          BATCH_ID: ${{ steps.control.outputs.batch_id }}
