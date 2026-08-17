@@ -20,6 +20,7 @@ def main() -> int:
     security = (WORKER / "src" / "security.js").read_text("utf-8")
     search = (WORKER / "src" / "search.js").read_text("utf-8")
     retention = (WORKER / "src" / "retention.js").read_text("utf-8")
+    bastille = (WORKER / "src" / "sources" / "bastille.js").read_text("utf-8")
     manifest = json.loads((WORKER / "recovery-manifest.json").read_text("utf-8"))
     config = json.loads((WORKER / "wrangler.jsonc").read_text("utf-8"))
 
@@ -125,6 +126,26 @@ def main() -> int:
         fail("wildcard CORS must not be reintroduced")
     if "targetUrl.includes('hk01.com')" in combined:
         fail("unsafe HK01 substring allowlist must not be reintroduced")
+
+    # NS2B: second source must stay source-specific and use the existing schema.
+    for signal in [
+        "BASTILLE_SOURCE_NAME = '巴士的報'",
+        "https://www.bastillepost.com/hongkong/feed",
+        "parseBastilleRss",
+        "resolveBastilleCategory",
+        "content:encoded",
+    ]:
+        if signal not in bastille:
+            fail(f"Bastille provider signal missing: {signal}")
+    for signal in [
+        "fetchBastilleArticles",
+        "syncBastilleToDB",
+        "isFullContentLoaded: isBastilleSource(row.source)",
+    ]:
+        if signal not in source:
+            fail(f"Bastille integration signal missing: {signal}")
+    if "bastillepost.com" not in security:
+        fail("Bastille article hostname allowlist is missing")
 
     # CF-W4R2: image archive uses only the two live, verified RSSHub channels.
     if '/hk01/zone/13' in source:

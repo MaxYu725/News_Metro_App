@@ -10,14 +10,17 @@ import {
   rateLimitKey,
 } from '../src/security.js';
 
-test('article URL allowlist accepts only HTTPS HK01 hosts', () => {
+test('article URL allowlist accepts only supported HTTPS publisher hosts', () => {
   assert.equal(parseAllowedArticleUrl('https://www.hk01.com/article/123')?.hostname, 'www.hk01.com');
   assert.equal(parseAllowedArticleUrl('https://hk01.com/123')?.hostname, 'hk01.com');
+  assert.equal(parseAllowedArticleUrl('https://www.bastillepost.com/hongkong/article/123-test')?.hostname, 'www.bastillepost.com');
+  assert.equal(parseAllowedArticleUrl('https://bastillepost.com/hongkong/article/123-test')?.hostname, 'bastillepost.com');
 
   for (const value of [
     'https://example.com/',
     'https://example.com/?next=https://www.hk01.com/123',
     'https://hk01.com.evil.example/123',
+    'https://bastillepost.com.evil.example/123',
     'http://www.hk01.com/123',
     'https://user@www.hk01.com/123',
     'javascript:alert(1)',
