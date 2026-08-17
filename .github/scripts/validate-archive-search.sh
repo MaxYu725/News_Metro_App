@@ -64,7 +64,7 @@ for (const [table, names] of Object.entries(expected)) {
 }
 NODE
 
-npx wrangler d1 execute metro_news_archive_01 --local --persist-to "$state" --command "INSERT INTO archive_backfill_state (source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted,updated_at) VALUES ('test','123',1,10,'2026-07-01T00:00:00.000Z',0,'2026-08-17T00:00:00.000Z') ON CONFLICT(source_key) DO UPDATE SET cursor='124',pages_fetched=2" >/dev/null
+npx wrangler d1 execute metro_news_archive_01 --local --persist-to "$state" --command "INSERT INTO archive_backfill_state (source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted,updated_at) VALUES ('test','123',1,10,'2026-07-01T00:00:00.000Z',0,'2026-08-17T00:00:00.000Z'); INSERT INTO archive_backfill_state (source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted,updated_at) VALUES ('test','124',2,10,'2026-07-01T00:00:00.000Z',0,'2026-08-17T00:01:00.000Z') ON CONFLICT(source_key) DO UPDATE SET cursor=excluded.cursor,pages_fetched=excluded.pages_fetched,updated_at=excluded.updated_at;" >/dev/null
 npx wrangler d1 execute metro_news_archive_01 --local --persist-to "$state" --json --command "SELECT cursor,pages_fetched FROM archive_backfill_state WHERE source_key='test'" >/tmp/ns2c3-state-upsert.json
 node - <<'NODE'
 const fs = require('fs');
