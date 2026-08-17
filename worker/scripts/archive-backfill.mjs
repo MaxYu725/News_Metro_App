@@ -15,7 +15,11 @@ import {
   seekBastillePageBeforeFloor,
   sqlLiteral,
 } from '../src/archive-backfill.js';
-import { hk01ContinuationFloor } from '../src/archive-backfill-policy.js';
+import {
+  allSourceBastilleTarget,
+  allSourceHk01Target,
+  hk01ContinuationFloor,
+} from '../src/archive-backfill-policy.js';
 
 function parseArgs(argv) {
   const args = {};
@@ -93,8 +97,16 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function collectHk01({ target, existingRows, existingIds, stateRows, selected, selectedIds }) {
-  if (target <= 0) return { pages: 0, target: 0, generated: 0, states: [] };
+async function collectHk01({
+  target,
+  existingRows,
+  existingIds,
+  stateRows,
+  selected,
+  selectedIds,
+  allowPartial = false,
+}) {
+  if (target <= 0) return { pages: 0, target: 0, generated: 0, states: [], partial: false };
 
   const stateMap = new Map(stateRows.map(row => [String(row.source_key), row]));
   const globalFloor = sourceFloor(existingRows, '香港01');
@@ -151,7 +163,8 @@ async function collectHk01({ target, existingRows, existingIds, stateRows, selec
   }
 
   const generated = selected.length - startCount;
-  if (generated < target) {
+  const partial = generated < target;
+  if (partial && !allowPartial) {
     throw new Error(`HK01 backfill only produced ${generated}/${target} new rows within ${pages} pages`);
   }
 
@@ -159,6 +172,7 @@ async function collectHk01({ target, existingRows, existingIds, stateRows, selec
     pages,
     target,
     generated,
+    partial,
     states: [...touched].map(key => states.get(key)),
   };
 }
@@ -174,14 +188,13 @@ async function collectBastille({ target, existingRows, existingIds, stateRows, s
   const maxPages = Math.min(180, Math.max(80, Math.ceil(target / 10) + 80));
   let pages = 0;
 
+  if (!row && floor) {
+    const seek = await seekBastillePageBeforeFloor(floor);
+    state.cursor = String(seek.page);
+    state.pagesFetched += seek.probes;
+    pages += seek.probes;
+  }
 
-    if (!row && floor) {
-      const seek = await seekBastillePageBeforeFloor(floor);
-      state.cursor = String(seek.page);
-      state.pagesFetched += seek.probes;
-      pages += seek.probes;
-    }
-    
   while (selected.length - startCount < target && pages < maxPages && !state.exhausted) {
     const pageNumber = Number.parseInt(state.cursor || '1', 10);
     if (!Number.isInteger(pageNumber) || pageNumber < 1) throw new Error('invalid Bastille resume cursor');
@@ -306,9 +319,7 @@ const existingIds = new Set(existingRows.map(row => String(row?.id || '')).filte
 const selected = [];
 const selectedIds = new Set();
 
-const hkTarget = source === 'hk01' ? limit : source === 'all' ? Math.ceil(limit / 2) : 0;
-const bastilleTarget = source === 'bastille' ? limit : source === 'all' ? limit - hkTarget : 0;
-
+const hkTarget = source === 'hk01' ? limit : source === 'all' ? allSourceHk01Target(limit) : 0;
 const hk = await collectHk01({
   target: hkTarget,
   existingRows,
@@ -316,7 +327,14 @@ const hk = await collectHk01({
   stateRows,
   selected,
   selectedIds,
+  allowPartial: source === 'all',
 });
+
+const bastilleTarget = source === 'bastille'
+  ? limit
+  : source === 'all'
+    ? allSourceBastilleTarget(limit, hk.generated)
+    : 0;
 const bastille = await collectBastille({
   target: bastilleTarget,
   existingRows,
@@ -340,14 +358,25 @@ const planFiles = writeBatchPlan({
 });
 
 const dates = selected.map(item => item.pubDate).filter(Boolean).sort();
+const spilloverRows = source === 'all' ? Math.max(0, hkTarget - hk.generated) : 0;
 const report = {
   batchId,
   source,
   requested: limit,
   generated: selected.length,
   beforeRows,
-  hk01: { generated: hk.generated || 0, pages: hk.pages || 0 },
-  bastille: { generated: bastille.generated || 0, pages: bastille.pages || 0 },
+  hk01: {
+    target: hk.target || 0,
+    generated: hk.generated || 0,
+    pages: hk.pages || 0,
+    partial: Boolean(hk.partial),
+  },
+  bastille: {
+    target: bastille.target || 0,
+    generated: bastille.generated || 0,
+    pages: bastille.pages || 0,
+  },
+  spilloverRows,
   oldest: dates[0] || '',
   newest: dates.at(-1) || '',
   planChunkCount: planFiles.planItemFiles.length,
