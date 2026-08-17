@@ -1,0 +1,118 @@
+name: NS2C2B1 format route
+
+on:
+  push:
+    branches:
+      - feature/ns2c2-archive-search
+    paths:
+      - .github/workflows/ns2c2b1-format.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ns2c2-archive-search
+      - name: Normalize search route
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('worker/src/index.js')
+          s=p.read_text('utf-8')
+          start=s.index("    if (url.pathname === '/api/search') {")
+          end=s.index("    if (url.pathname.startsWith('/api/news/')) {", start)
+          route="""    if (url.pathname === '/api/search') {
+            if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
+
+            const query = (url.searchParams.get('q') || '').trim();
+            const scope = (url.searchParams.get('scope') || 'live').trim();
+            const limit = 20;
+
+            if (query.length > 100 || !['live', 'all'].includes(scope)) {
+              return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+            }
+
+            if (scope === 'all') {
+              if (!query) {
+                return jsonResponse(request, { success: true, count: 0, scope, hasMore: false, nextCursor: '', data: [] });
+              }
+              if (!isArchiveEligibleQuery(query)) {
+                return jsonResponse(request, { success: false, error: '歷史搜尋至少需要 3 個字元' }, 400);
+              }
+
+              let cursor;
+              try {
+                cursor = decodeSearchCursor(url.searchParams.get('cursor') || '');
+              } catch {
+                return jsonResponse(request, { success: false, error: '搜尋游標無效' }, 400);
+              }
+
+              try {
+                const archiveSession = env.ARCHIVE_01.withSession('first-unconstrained');
+                const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
+                  [env.DB, archiveSession],
+                  query,
+                  cursor,
+                  limit,
+                );
+                const formattedResults = rows.map(formatArticleRow);
+                return jsonResponse(request, {
+                  success: true,
+                  count: formattedResults.length,
+                  scope,
+                  hasMore,
+                  nextCursor,
+                  timestamp: new Date().toISOString(),
+                  data: formattedResults,
+                });
+              } catch {
+                return jsonResponse(request, { success: false, error: '搜尋歷史資料時發生錯誤' }, 500);
+              }
+            }
+
+            const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
+            if (!Number.isInteger(page) || page < 0 || page > 500) {
+              return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+            }
+
+            if (!query) {
+              return jsonResponse(request, { success: true, count: 0, page, hasMore: false, data: [] });
+            }
+
+            try {
+              const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
+              const formattedResults = rows.map(formatArticleRow);
+              return jsonResponse(request, {
+                success: true,
+                count: formattedResults.length,
+                page,
+                hasMore,
+                timestamp: new Date().toISOString(),
+                data: formattedResults,
+              });
+            } catch {
+              return jsonResponse(request, { success: false, error: '搜尋資料庫時發生錯誤' }, 500);
+            }
+          }
+
+"""
+          p.write_text(s[:start]+route+s[end:],'utf-8')
+          PY
+          node --check worker/src/index.js
+          cd worker && npm test
+      - name: Commit formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add worker/src/index.js
+          git commit -m 'NS2C2B1: normalize archive search route formatting'
+          git push origin HEAD:feature/ns2c2-archive-search
