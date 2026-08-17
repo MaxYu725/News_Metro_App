@@ -1,0 +1,80 @@
+name: Exact article image diagnosis
+
+on:
+  push:
+    branches:
+      - agent/image-fidelity-diagnosis
+    paths:
+      - .github/workflows/exact-article-image-diagnosis.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Compare article 60380674 image URLs
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, urllib.request, urllib.parse, hashlib
+
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151 Safari/537.36'
+          def get(url):
+              req=urllib.request.Request(url, headers={'User-Agent':UA})
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return r.status, dict(r.headers.items()), r.read(), r.geturl()
+
+          target='60380674'
+          api='https://news-proxy.maxyu0725us.workers.dev'
+          hit=None
+          for page in range(0,140):
+              _,_,body,_=get(f'{api}/api/news/latest?page={page}')
+              rows=(json.loads(body).get('data') or [])
+              if not rows: break
+              for row in rows:
+                  if target in (row.get('link') or ''):
+                      hit=row; break
+              if hit: break
+
+          print('=== METRO D1 ROW ===')
+          print(json.dumps(hit, ensure_ascii=False, indent=2) if hit else 'NOT_FOUND')
+
+          _,_,body,_=get(f'https://web-data.api.hk01.com/v2/page/article/{target}')
+          data=json.loads(body)
+          article=data.get('article') or data.get('data',{}).get('articleData') or data.get('data') or {}
+          print('\n=== HK01 IMAGE SUMMARY ===')
+          for key in ('mainImage','originalImage'):
+              print(key, json.dumps(article.get(key), ensure_ascii=False))
+          blocks=article.get('blocks') or []
+          for i,b in enumerate(blocks):
+              if b.get('blockType')=='image' and b.get('image'):
+                  print('block',i,'image',json.dumps(b['image'], ensure_ascii=False))
+              if b.get('blockType')=='gallery':
+                  for j,img in enumerate(b.get('images') or []):
+                      print('block',i,'gallery',j,json.dumps(img, ensure_ascii=False))
+
+          urls=[]
+          if hit:
+              if hit.get('imageUrl'): urls.append(('metro-main',hit['imageUrl']))
+              imgs=hit.get('images')
+              if isinstance(imgs,str):
+                  try: imgs=json.loads(imgs)
+                  except: imgs=[]
+              for i,u in enumerate(imgs or []): urls.append((f'metro-{i}',u))
+          for key in ('mainImage','originalImage'):
+              u=(article.get(key) or {}).get('cdnUrl')
+              if u: urls.append((f'hk01-{key}',u))
+          seen=set()
+          print('\n=== UNIQUE URL DOWNLOADS ===')
+          for label,u in urls:
+              if u in seen: continue
+              seen.add(u)
+              try:
+                  _,h,b,final=get(u)
+                  print(label, 'bytes=',len(b),'type=',h.get('Content-Type'),'url=',u,'sha=',hashlib.sha256(b).hexdigest())
+              except Exception as e:
+                  print(label,'ERROR',repr(e),'url=',u)
+          PY
