@@ -1,0 +1,89 @@
+name: NS2B Bastille fetch diagnosis
+
+on:
+  push:
+    branches:
+      - hotfix/ns2b-bastille-fetch
+    paths:
+      - .github/workflows/ns2b-bastille-fetch-diagnosis.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      PROBE_NAME: metro-news-ns2b-fetch-diagnosis
+      PROBE_URL: https://metro-news-ns2b-fetch-diagnosis.maxyu0725us.workers.dev
+    steps:
+      - name: Validate credentials
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+
+      - name: Write isolated diagnosis Worker
+        run: |
+          cat > /tmp/ns2b-fetch-diagnosis.js <<'EOF'
+          const FEED = 'https://www.bastillepost.com/hongkong/feed';
+
+          async function attempt(name, ua, redirect) {
+            try {
+              const response = await fetch(FEED, {
+                redirect,
+                headers: {
+                  'User-Agent': ua,
+                  'Accept': 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5',
+                  'Accept-Language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
+                },
+              });
+              const text = await response.text();
+              return {
+                name,
+                ok: response.ok,
+                status: response.status,
+                url: response.url,
+                type: response.headers.get('content-type') || '',
+                bytes: new TextEncoder().encode(text).byteLength,
+                itemCount: (text.match(/<item(?:\s|>)/gi) || []).length,
+                prefix: text.slice(0, 120),
+              };
+            } catch (error) {
+              return { name, error: String(error) };
+            }
+          }
+
+          export default {
+            async fetch() {
+              const results = [];
+              results.push(await attempt('production-exact', 'MetroNews/1.0', 'error'));
+              results.push(await attempt('mozilla-error', 'Mozilla/5.0', 'error'));
+              results.push(await attempt('probe-ua-error', 'MetroNews-NS2A-Probe/1.0', 'error'));
+              results.push(await attempt('production-follow', 'MetroNews/1.0', 'follow'));
+              results.push(await attempt('mozilla-follow', 'Mozilla/5.0', 'follow'));
+              return Response.json({ results });
+            }
+          };
+          EOF
+
+      - name: Deploy isolated diagnosis Worker
+        run: |
+          npm exec --yes wrangler@4.118.0 -- deploy /tmp/ns2b-fetch-diagnosis.js \
+            --name "$PROBE_NAME" \
+            --compatibility-date 2026-08-17
+
+      - name: Run diagnosis
+        run: |
+          set -euo pipefail
+          sleep 2
+          curl -sS --retry 2 --retry-delay 1 "$PROBE_URL" | tee /tmp/result.json
+          jq . /tmp/result.json
+
+      - name: Remove isolated diagnosis Worker
+        if: always()
+        run: npm exec --yes wrangler@4.118.0 -- delete "$PROBE_NAME" --force || true
