@@ -83,11 +83,11 @@ test('extractBastilleCategories handles CDATA and plain category nodes', () => {
   assert.deepEqual(categories, ['兩岸', '熱門']);
 });
 
-test('Bastille fetch owner uses the verified feed and fails closed on upstream errors', async () => {
+test('Bastille fetch owner uses verified feed and Cloudflare-compatible redirect policy', async () => {
   let requestedUrl = '';
   const rows = await fetchBastilleArticles(async (url, init) => {
     requestedUrl = url;
-    assert.equal(init.redirect, 'error');
+    assert.equal(init.redirect, 'follow');
     assert.match(init.headers.Accept, /rss\+xml/);
     return new Response(SAMPLE_FEED, { status: 200 });
   });
@@ -98,4 +98,13 @@ test('Bastille fetch owner uses the verified feed and fails closed on upstream e
 
   const failed = await fetchBastilleArticles(async () => new Response('blocked', { status: 403 }));
   assert.deepEqual(failed, []);
+});
+
+test('Bastille fetch owner rejects a cross-host final response URL', async () => {
+  const redirected = await fetchBastilleArticles(async () => ({
+    ok: true,
+    url: 'https://evil.example/feed',
+    text: async () => SAMPLE_FEED,
+  }));
+  assert.deepEqual(redirected, []);
 });

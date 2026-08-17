@@ -130,8 +130,20 @@ jobs:
           npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed production smoke"
           exit 1
 
-      - name: Read-only D1 production health audit
-        run: bash .github/scripts/worker-production-d1-audit.sh
+      - name: D1 production health audit and rollback on failure
+        env:
+          PREVIOUS_VERSION: ${{ steps.previous.outputs.version_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if bash .github/scripts/worker-production-d1-audit.sh; then
+            exit 0
+          fi
+
+          echo '::error::Production D1 audit failed; rolling back Worker code immediately.'
+          cd worker
+          npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed production D1 audit"
+          exit 1
 
       - name: Show active deployments
         working-directory: worker

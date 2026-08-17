@@ -2,6 +2,8 @@ export const BASTILLE_SOURCE_NAME = '巴士的報';
 export const BASTILLE_FEED_URL = 'https://www.bastillepost.com/hongkong/feed';
 export const BASTILLE_TIMEOUT_MS = 15_000;
 
+const BASTILLE_HOSTNAMES = new Set(['bastillepost.com', 'www.bastillepost.com']);
+
 const CATEGORY_GROUPS = [
   ['tech', new Set(['bastech'])],
   ['sports', new Set(['體育'])],
@@ -143,7 +145,10 @@ export async function fetchBastilleArticles(fetchImpl = fetch) {
   try {
     const response = await fetchImpl(BASTILLE_FEED_URL, {
       signal: controller.signal,
-      redirect: 'error',
+      // Bastille's public site is Worker-backed. Cloudflare Worker subrequests
+      // using redirect:'error' hit error 1042; the same fixed feed is verified
+      // with redirect:'follow'. Validate the final host before trusting content.
+      redirect: 'follow',
       headers: {
         'User-Agent': 'MetroNews/1.0',
         'Accept': 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5',
@@ -151,6 +156,14 @@ export async function fetchBastilleArticles(fetchImpl = fetch) {
       },
     });
     if (!response.ok) return [];
+
+    try {
+      const finalUrl = new URL(response.url || BASTILLE_FEED_URL);
+      if (finalUrl.protocol !== 'https:' || !BASTILLE_HOSTNAMES.has(finalUrl.hostname)) return [];
+    } catch {
+      return [];
+    }
+
     return parseBastilleRss(await response.text());
   } catch {
     return [];
