@@ -1,4 +1,4 @@
-name: CF-W4 D1 link inventory probe
+name: CF-W4 production sync race probe
 
 on:
   push:
@@ -13,81 +13,38 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 4
     steps:
-      - name: Compare image feed links with paginated public production inventory
+      - name: Observe video row count around one controlled production sync
         shell: node {0}
         run: |
-          const RSS_BASE = 'https://rsshub.rssforever.com';
           const WORKER = 'https://news-proxy.maxyu0725us.workers.dev';
-          const paths = ['/hk01/channel/259', '/hk01/channel/256'];
+          const APP_ORIGIN = 'https://maxyu725.github.io';
 
-          function parseItems(xml) {
-            const rows = [];
-            for (const match of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
-              const content = match[1];
-              const title = (content.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/) || content.match(/<title>([\s\S]*?)<\/title>/))?.[1]?.trim() || '';
-              const link = content.match(/<link>([\s\S]*?)<\/link>/)?.[1]?.trim() || '';
-              const pubDate = content.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() || '';
-              if (title && link) rows.push({ title, link, pubDate });
-            }
-            return rows;
+          async function videoCount(label) {
+            const response = await fetch(`${WORKER}/api/news/video?page=0`, {
+              headers: { Origin: APP_ORIGIN },
+              signal: AbortSignal.timeout(15000),
+            });
+            const payload = await response.json();
+            const count = Array.isArray(payload.data) ? payload.data.length : -1;
+            const dates = (payload.data || []).slice(0, 3).map(row => row.pubDate);
+            console.log(`${label}: http=${response.status} pageCount=${count} hasMore=${payload.hasMore} sampleDates=${JSON.stringify(dates)}`);
+            return count;
           }
 
-          const feedItems = [];
-          for (const path of paths) {
-            const response = await fetch(RSS_BASE + path, { signal: AbortSignal.timeout(15000) });
-            const xml = await response.text();
-            for (const item of parseItems(xml)) feedItems.push({ path, ...item });
+          await videoCount('before-sync');
+
+          const started = Date.now();
+          const syncResponse = await fetch(`${WORKER}/api/news/latest?page=0&sync=1`, {
+            headers: { Origin: APP_ORIGIN },
+            signal: AbortSignal.timeout(90000),
+          });
+          const syncPayload = await syncResponse.json();
+          console.log(`sync: http=${syncResponse.status} success=${syncPayload.success} elapsedMs=${Date.now() - started}`);
+
+          await videoCount('after-sync-0s');
+          for (const seconds of [2, 5, 10, 20]) {
+            await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+            await videoCount(`after-additional-${seconds}s`);
           }
-
-          const dbRows = [];
-          let page = 0;
-          while (page <= 500) {
-            const batchPages = Array.from({ length: 6 }, (_, index) => page + index);
-            const payloads = await Promise.all(batchPages.map(async currentPage => {
-              const response = await fetch(`${WORKER}/api/news/latest?page=${currentPage}`, { signal: AbortSignal.timeout(12000) });
-              if (!response.ok) throw new Error(`latest page ${currentPage} returned ${response.status}`);
-              return { currentPage, payload: await response.json() };
-            }));
-
-            let done = false;
-            for (const { currentPage, payload } of payloads.sort((a, b) => a.currentPage - b.currentPage)) {
-              if (!payload.success || !Array.isArray(payload.data)) throw new Error(`invalid latest payload at page ${currentPage}`);
-              dbRows.push(...payload.data);
-              if (payload.data.length < 20 || payload.hasMore === false) {
-                done = true;
-                break;
-              }
-            }
-            if (done) break;
-            page += 6;
-          }
-
-          const byLink = new Map(dbRows.map(row => [row.link || row.id, row]));
-          const categoryCounts = {};
-          for (const row of dbRows) categoryCounts[row.category] = (categoryCounts[row.category] || 0) + 1;
-
-          let found = 0;
-          const foundCategories = {};
-          for (const item of feedItems) {
-            const row = byLink.get(item.link);
-            if (row) {
-              found += 1;
-              foundCategories[row.category] = (foundCategories[row.category] || 0) + 1;
-            }
-            console.log(JSON.stringify({
-              feed: item.path,
-              title: item.title.slice(0, 90),
-              link: item.link,
-              feedPubDate: item.pubDate,
-              inProductionD1: Boolean(row),
-              dbCategory: row?.category || null,
-              dbPubDate: row?.pubDate || null,
-            }));
-          }
-
-          console.log(`\nproductionRowsRead=${dbRows.length}`);
-          console.log(`productionCategoryCounts=${JSON.stringify(categoryCounts)}`);
-          console.log(`feedItems=${feedItems.length} exactFeedLinksInProductionD1=${found}`);
-          console.log(`collisionCategories=${JSON.stringify(foundCategories)}`);
