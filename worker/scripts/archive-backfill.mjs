@@ -12,6 +12,7 @@ import {
   backfillRunStateInsertSql,
   fetchBastilleHistoricalPage,
   fetchHk01HistoricalPage,
+  seekBastillePageBeforeFloor,
   sqlLiteral,
 } from '../src/archive-backfill.js';
 
@@ -169,6 +170,14 @@ async function collectBastille({ target, existingRows, existingIds, stateRows, s
   const maxPages = Math.min(180, Math.max(80, Math.ceil(target / 10) + 80));
   let pages = 0;
 
+
+    if (!row && floor) {
+      const seek = await seekBastillePageBeforeFloor(floor);
+      state.cursor = String(seek.page);
+      state.pagesFetched += seek.probes;
+      pages += seek.probes;
+    }
+    
   while (selected.length - startCount < target && pages < maxPages && !state.exhausted) {
     const pageNumber = Number.parseInt(state.cursor || '1', 10);
     if (!Number.isInteger(pageNumber) || pageNumber < 1) throw new Error('invalid Bastille resume cursor');
