@@ -1,0 +1,225 @@
+name: NS2C2B1 integration updater
+
+on:
+  push:
+    branches:
+      - feature/ns2c2-archive-search
+    paths:
+      - .github/workflows/ns2c2b1-updater.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ns2c2-archive-search
+      - name: Patch Worker archive search route and validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          index = Path('worker/src/index.js')
+          text = index.read_text('utf-8')
+          text = text.replace(
+              "import { searchArticles } from './search.js';",
+              "import {\n  decodeSearchCursor,\n  isArchiveEligibleQuery,\n  searchArticles,\n  searchArticlesAcrossDatabases,\n} from './search.js';",
+          )
+          old = '''    if (url.pathname === '/api/search') {
+              if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
+
+              const query = (url.searchParams.get('q') || '').trim();
+              const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
+              const limit = 20;
+
+              if (query.length > 100 || !Number.isInteger(page) || page < 0 || page > 500) {
+                return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+              }
+
+              if (!query) {
+                return jsonResponse(request, { success: true, count: 0, page, hasMore: false, data: [] });
+              }
+
+              try {
+                const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
+                const formattedResults = rows.map(formatArticleRow);
+                return jsonResponse(request, {
+                  success: true,
+                  count: formattedResults.length,
+                  page,
+                  hasMore,
+                  timestamp: new Date().toISOString(),
+                  data: formattedResults,
+                });
+              } catch {
+                return jsonResponse(request, { success: false, error: '搜尋資料庫時發生錯誤' }, 500);
+              }
+            }
+          '''
+          new = '''    if (url.pathname === '/api/search') {
+              if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
+
+              const query = (url.searchParams.get('q') || '').trim();
+              const scope = (url.searchParams.get('scope') || 'live').trim();
+              const limit = 20;
+
+              if (query.length > 100 || !['live', 'all'].includes(scope)) {
+                return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+              }
+
+              if (scope === 'all') {
+                if (!query) {
+                  return jsonResponse(request, { success: true, count: 0, scope, hasMore: false, nextCursor: '', data: [] });
+                }
+                if (!isArchiveEligibleQuery(query)) {
+                  return jsonResponse(request, { success: false, error: '歷史搜尋至少需要 3 個字元' }, 400);
+                }
+
+                let cursor;
+                try {
+                  cursor = decodeSearchCursor(url.searchParams.get('cursor') || '');
+                } catch {
+                  return jsonResponse(request, { success: false, error: '搜尋游標無效' }, 400);
+                }
+
+                try {
+                  const archiveSession = env.ARCHIVE_01.withSession('first-unconstrained');
+                  const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
+                    [env.DB, archiveSession],
+                    query,
+                    cursor,
+                    limit,
+                  );
+                  const formattedResults = rows.map(formatArticleRow);
+                  return jsonResponse(request, {
+                    success: true,
+                    count: formattedResults.length,
+                    scope,
+                    hasMore,
+                    nextCursor,
+                    timestamp: new Date().toISOString(),
+                    data: formattedResults,
+                  });
+                } catch {
+                  return jsonResponse(request, { success: false, error: '搜尋歷史資料時發生錯誤' }, 500);
+                }
+              }
+
+              const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
+              if (!Number.isInteger(page) || page < 0 || page > 500) {
+                return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+              }
+
+              if (!query) {
+                return jsonResponse(request, { success: true, count: 0, page, hasMore: false, data: [] });
+              }
+
+              try {
+                const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
+                const formattedResults = rows.map(formatArticleRow);
+                return jsonResponse(request, {
+                  success: true,
+                  count: formattedResults.length,
+                  page,
+                  hasMore,
+                  timestamp: new Date().toISOString(),
+                  data: formattedResults,
+                });
+              } catch {
+                return jsonResponse(request, { success: false, error: '搜尋資料庫時發生錯誤' }, 500);
+              }
+            }
+          '''
+          if old not in text:
+              raise SystemExit('search route contract not found')
+          text = text.replace(old, new)
+          index.write_text(text, 'utf-8')
+
+          validator = Path('.github/scripts/validate-worker-baseline.py')
+          v = validator.read_text('utf-8')
+          old_d1 = '''    d1 = config.get("d1_databases", [])
+              if len(d1) != 1:
+                  fail("expected exactly one D1 binding")
+              if d1[0].get("binding") != "DB":
+                  fail("D1 binding name is not DB")
+              if d1[0].get("database_id") != binding_map["DB"].get("id"):
+                  fail("D1 database_id does not match recovered production binding")
+              if d1[0].get("database_name") != "metro_news_db":
+                  fail("D1 database_name is not metro_news_db")
+              if d1[0].get("migrations_dir") != "migrations":
+                  fail("D1 migrations_dir is not migrations")
+          '''
+          new_d1 = '''    d1 = config.get("d1_databases", [])
+              d1_map = {item.get("binding"): item for item in d1}
+              if set(d1_map) != {"DB", "ARCHIVE_01"}:
+                  fail(f"expected live + archive D1 bindings, got {sorted(d1_map)}")
+              live_d1 = d1_map["DB"]
+              if live_d1.get("database_id") != binding_map["DB"].get("id"):
+                  fail("live D1 database_id does not match recovered production binding")
+              if live_d1.get("database_name") != "metro_news_db" or live_d1.get("migrations_dir") != "migrations":
+                  fail("live D1 name/migrations_dir mismatch")
+              archive_d1 = d1_map["ARCHIVE_01"]
+              if archive_d1.get("database_id") != "a3db6dc1-599c-4ace-b12c-142e56c3734a":
+                  fail("archive D1 database_id mismatch")
+              if archive_d1.get("database_name") != "metro_news_archive_01" or archive_d1.get("migrations_dir") != "archive-migrations":
+                  fail("archive D1 name/migrations_dir mismatch")
+          '''
+          if old_d1 not in v:
+              raise SystemExit('validator D1 block not found')
+          v = v.replace(old_d1, new_d1)
+          anchor = '''    # CF-W5: indexed substring search must remain on D1 FTS5 trigram.
+          '''
+          addition = '''    # NS2C2B1: archive search is read-only, cursor-based, and replica-aware.
+              archive_migration = (WORKER / "archive-migrations" / "0000_archive_baseline.sql").read_text("utf-8")
+              for signal in [
+                  "CREATE TABLE IF NOT EXISTS articles",
+                  "USING fts5",
+                  "tokenize='trigram'",
+                  "idx_archive_pubDate",
+                  "idx_archive_source_pubDate",
+                  "articles_fts_ai",
+                  "articles_fts_ad",
+                  "articles_fts_au",
+              ]:
+                  if signal not in archive_migration:
+                      fail(f"archive migration signal missing: {signal}")
+              if "images TEXT" in archive_migration:
+                  fail("archive schema must remain lean and omit full images JSON")
+              for signal in [
+                  "searchArticlesAcrossDatabases",
+                  "decodeSearchCursor",
+                  "scope === 'all'",
+                  "env.ARCHIVE_01.withSession('first-unconstrained')",
+              ]:
+                  if signal not in source:
+                      fail(f"archive search integration signal missing: {signal}")
+              if "ARCHIVE_01.prepare" in source or "ARCHIVE_01.batch" in source:
+                  fail("production Worker must not write directly to archive during NS2C2B1")
+
+          '''
+          if anchor not in v:
+              raise SystemExit('validator archive anchor not found')
+          v = v.replace(anchor, addition + anchor)
+          validator.write_text(v, 'utf-8')
+          PY
+
+          node --check worker/src/index.js
+          node --check worker/src/search.js
+          python3 .github/scripts/validate-worker-baseline.py
+          cd worker && npm test
+
+      - name: Commit integration patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add worker/src/index.js .github/scripts/validate-worker-baseline.py
+          git commit -m 'NS2C2B1: integrate replica-aware archive search'
+          git push origin HEAD:feature/ns2c2-archive-search
