@@ -8,6 +8,7 @@ on:
       - worker/**
       - .github/scripts/validate-worker-baseline.py
       - .github/scripts/worker-production-smoke.sh
+      - .github/scripts/worker-production-d1-audit.sh
       - .github/workflows/deploy-worker-production.yml
       - .deploy/worker-production.txt
   push:
@@ -40,6 +41,7 @@ jobs:
           node --check worker/src/index.js
           node --check worker/src/security.js
           bash -n .github/scripts/worker-production-smoke.sh
+          bash -n .github/scripts/worker-production-d1-audit.sh
 
       - name: Install pinned Wrangler
         working-directory: worker
@@ -108,8 +110,11 @@ jobs:
 
           echo '::error::Production smoke failed; rolling back Worker code immediately.'
           cd worker
-          npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed CF-W3 production smoke"
+          npx wrangler rollback "$PREVIOUS_VERSION" --message "Automatic rollback after failed production smoke"
           exit 1
+
+      - name: Read-only D1 production health audit
+        run: bash .github/scripts/worker-production-d1-audit.sh
 
       - name: Show active deployments
         working-directory: worker

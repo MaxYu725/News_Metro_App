@@ -67,4 +67,19 @@ request 200 -G \
   "${WORKER_ORIGIN}/api/search"
 jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
 
+echo 'Smoke: image archive remains populated'
+request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/video?page=0"
+jq -e '.success == true and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null
+
+echo 'Smoke: controlled full sync applies retention policy'
+status=$(curl -sS --max-time 90 -D "$tmp_headers" -o "$tmp_body" -w '%{http_code}' \
+  -H "Origin: ${APP_ORIGIN}" \
+  "${WORKER_ORIGIN}/api/news/latest?page=0&sync=1")
+if [[ "$status" != '200' ]]; then
+  echo "Expected force-sync HTTP 200, received ${status}" >&2
+  cat "$tmp_body" >&2 || true
+  exit 1
+fi
+jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
+
 echo 'Production Worker smoke tests: PASS'

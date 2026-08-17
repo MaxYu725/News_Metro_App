@@ -28,6 +28,8 @@ def main() -> int:
         fail("compatibility_date does not match recovered production settings")
     if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):
         fail("compatibility_flags do not match recovered production settings")
+    if config.get("preview_urls") is not False:
+        fail("preview_urls must be explicitly disabled")
 
     binding_map = {item["name"]: item for item in settings.get("bindings", [])}
     if set(binding_map) != {"AI", "API_KEY", "DB"}:
@@ -127,6 +129,14 @@ def main() -> int:
         fail('stale HK01 image aggregate feed must not be reintroduced')
     if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
         fail('HK01 image subchannel feed mapping is missing')
+
+    retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
+    if retention_sql not in source:
+        fail("30-day retention must exclude the low-frequency video archive")
+    if "ctx.waitUntil(syncAllCategoriesAndCleanup(env));" not in source:
+        fail("scheduled ingestion must clean up only after category sync completes")
+    if "ctx.waitUntil(cleanUpOldArticles(env))" in source:
+        fail("cleanup must not race forced sync in the background")
 
     print("Wrangler production resource alignment: OK")
     print("Rate limit security bindings: OK")
