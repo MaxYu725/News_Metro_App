@@ -1,1 +1,1 @@
-NS2B-R1 production promotion: use Cloudflare-compatible redirect follow for the fixed Bastille RSS feed, validate final publisher host, and rollback Worker code when the post-sync D1 audit fails.
+NS2C2B1 production promotion: bind metro_news_archive_01, apply source-controlled lean archive FTS schema, expose opt-in scope=all cursor search using D1 read-replica sessions, and gate deployment with archive smoke/audit.

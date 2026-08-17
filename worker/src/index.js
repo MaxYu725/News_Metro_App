@@ -5,7 +5,12 @@ import {
   parseAllowedArticleUrl,
   rateLimitKey,
 } from './security.js';
-import { searchArticles } from './search.js';
+import {
+  decodeSearchCursor,
+  isArchiveEligibleQuery,
+  searchArticles,
+  searchArticlesAcrossDatabases,
+} from './search.js';
 import { enforceAdaptiveRetention } from './retention.js';
 import { fetchBastilleArticles, isBastilleSource } from './sources/bastille.js';
 
@@ -424,35 +429,78 @@ export default {
     }
 
     if (url.pathname === '/api/search') {
-      if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
+    if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
 
-      const query = (url.searchParams.get('q') || '').trim();
-      const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
-      const limit = 20;
+    const query = (url.searchParams.get('q') || '').trim();
+    const scope = (url.searchParams.get('scope') || 'live').trim();
+    const limit = 20;
 
-      if (query.length > 100 || !Number.isInteger(page) || page < 0 || page > 500) {
-        return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+    if (query.length > 100 || !['live', 'all'].includes(scope)) {
+      return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+    }
+
+    if (scope === 'all') {
+      if (!query) {
+        return jsonResponse(request, { success: true, count: 0, scope, hasMore: false, nextCursor: '', data: [] });
+      }
+      if (!isArchiveEligibleQuery(query)) {
+        return jsonResponse(request, { success: false, error: '歷史搜尋至少需要 3 個字元' }, 400);
       }
 
-      if (!query) {
-        return jsonResponse(request, { success: true, count: 0, page, hasMore: false, data: [] });
+      let cursor;
+      try {
+        cursor = decodeSearchCursor(url.searchParams.get('cursor') || '');
+      } catch {
+        return jsonResponse(request, { success: false, error: '搜尋游標無效' }, 400);
       }
 
       try {
-        const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
+        const archiveSession = env.ARCHIVE_01.withSession('first-unconstrained');
+        const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
+          [env.DB, archiveSession],
+          query,
+          cursor,
+          limit,
+        );
         const formattedResults = rows.map(formatArticleRow);
         return jsonResponse(request, {
           success: true,
           count: formattedResults.length,
-          page,
+          scope,
           hasMore,
+          nextCursor,
           timestamp: new Date().toISOString(),
           data: formattedResults,
         });
       } catch {
-        return jsonResponse(request, { success: false, error: '搜尋資料庫時發生錯誤' }, 500);
+        return jsonResponse(request, { success: false, error: '搜尋歷史資料時發生錯誤' }, 500);
       }
     }
+
+    const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
+    if (!Number.isInteger(page) || page < 0 || page > 500) {
+      return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
+    }
+
+    if (!query) {
+      return jsonResponse(request, { success: true, count: 0, page, hasMore: false, data: [] });
+    }
+
+    try {
+      const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
+      const formattedResults = rows.map(formatArticleRow);
+      return jsonResponse(request, {
+        success: true,
+        count: formattedResults.length,
+        page,
+        hasMore,
+        timestamp: new Date().toISOString(),
+        data: formattedResults,
+      });
+    } catch {
+      return jsonResponse(request, { success: false, error: '搜尋資料庫時發生錯誤' }, 500);
+    }
+  }
 
     if (url.pathname.startsWith('/api/news/')) {
       if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
