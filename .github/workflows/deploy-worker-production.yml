@@ -35,10 +35,11 @@ jobs:
       - name: Validate Worker contract
         run: python3 .github/scripts/validate-worker-baseline.py
 
-      - name: Validate JavaScript syntax
+      - name: Validate JavaScript and smoke script syntax
         run: |
           node --check worker/src/index.js
           node --check worker/src/security.js
+          bash -n .github/scripts/worker-production-smoke.sh
 
       - name: Install pinned Wrangler
         working-directory: worker
