@@ -1,0 +1,47 @@
+name: NS2C2 HK01 pagination probe
+
+on:
+  push:
+    branches:
+      - probe/ns2c2b-search-evidence
+    paths:
+      - .github/workflows/ns2c2-hk01-pagination.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Follow HK01 nextOffset chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base='https://web-data.api.hk01.com/v2/feed/zone/1';
+          const headers={'User-Agent':'Mozilla/5.0','Accept':'application/json'};
+          let offset=null;
+          const pages=[];
+          for(let p=1;p<=4;p++){
+            const url=offset==null?base:`${base}?offset=${encodeURIComponent(offset)}`;
+            const r=await fetch(url,{headers});
+            if(!r.ok) throw new Error(`page ${p} HTTP ${r.status}`);
+            const j=await r.json();
+            const items=Array.isArray(j?.items)?j.items:[];
+            if(items.length===0) throw new Error(`page ${p} empty`);
+            const ids=items.map(x=>x?.data?.articleId).filter(Boolean);
+            const times=items.map(x=>Number(x?.data?.publishTime||0)).filter(Boolean);
+            const rec={page:p,requestOffset:offset,itemCount:items.length,nextOffset:j?.nextOffset,firstId:ids[0],lastId:ids.at(-1),newestPublishTime:Math.max(...times),oldestPublishTime:Math.min(...times),firstTitle:items[0]?.data?.title,lastTitle:items.at(-1)?.data?.title};
+            pages.push(rec);
+            offset=j?.nextOffset;
+            if(offset==null) break;
+          }
+          for(let i=1;i<pages.length;i++){
+            const prev=new Set([pages[i-1].firstId,pages[i-1].lastId]);
+            if(prev.has(pages[i].firstId) && prev.has(pages[i].lastId)) throw new Error(`pagination did not advance at page ${i+1}`);
+            if(!(pages[i].newestPublishTime <= pages[i-1].newestPublishTime)) throw new Error(`page ${i+1} is not older`);
+          }
+          console.log(JSON.stringify({pages,distinctFirstIds:new Set(pages.map(x=>x.firstId)).size,distinctLastIds:new Set(pages.map(x=>x.lastId)).size},null,2));
+          NODE
