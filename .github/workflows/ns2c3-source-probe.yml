@@ -1,0 +1,166 @@
+name: NS2C3 historical source probe
+
+on:
+  push:
+    branches:
+      - feature/ns2c3-controlled-backfill
+    paths:
+      - .github/workflows/ns2c3-source-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Probe HK01 nextOffset contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const base = 'https://web-data.api.hk01.com/v2/feed/zone/1';
+          async function get(url) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            try {
+              const r = await fetch(url, {
+                signal: controller.signal,
+                headers: {
+                  'user-agent': 'Mozilla/5.0',
+                  accept: 'application/json,text/plain,*/*',
+                  'accept-language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
+                },
+              });
+              const text = await r.text();
+              console.log(`HK01 HTTP ${r.status} bytes=${text.length} url=${url}`);
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return JSON.parse(text);
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+          function findArray(value, path = '$', depth = 0) {
+            if (depth > 4 || value == null) return [];
+            if (Array.isArray(value)) return [{ path, value }];
+            if (typeof value !== 'object') return [];
+            const out = [];
+            for (const [k,v] of Object.entries(value)) out.push(...findArray(v, `${path}.${k}`, depth + 1));
+            return out;
+          }
+          function findKey(value, wanted, path = '$', depth = 0) {
+            if (depth > 5 || value == null || typeof value !== 'object') return [];
+            const out = [];
+            for (const [k,v] of Object.entries(value)) {
+              const p = `${path}.${k}`;
+              if (k === wanted) out.push({ path: p, value: v });
+              out.push(...findKey(v, wanted, p, depth + 1));
+            }
+            return out;
+          }
+          function summarize(json, label) {
+            const arrays = findArray(json).sort((a,b) => b.value.length - a.value.length);
+            const candidate = arrays.find(x => x.value.length && x.value.some(v => v && typeof v === 'object')) || arrays[0];
+            const offsets = findKey(json, 'nextOffset');
+            console.log(`${label} topKeys=${Object.keys(json || {}).join(',')}`);
+            console.log(`${label} arrays=${arrays.slice(0,5).map(x => `${x.path}:${x.value.length}`).join(' | ')}`);
+            console.log(`${label} nextOffsets=${offsets.slice(0,5).map(x => `${x.path}=${x.value}`).join(' | ')}`);
+            if (candidate?.value?.[0] && typeof candidate.value[0] === 'object') {
+              const first = candidate.value[0];
+              console.log(`${label} itemPath=${candidate.path} itemKeys=${Object.keys(first).slice(0,30).join(',')}`);
+              for (const key of ['id','articleId','title','link','url','publishDate','pubDate','createTime','lastModified']) {
+                if (first[key] != null) console.log(`${label} first.${key}=${String(first[key]).slice(0,160)}`);
+              }
+            }
+            return { candidate, offsets };
+          }
+          const p1 = await get(base);
+          const s1 = summarize(p1, 'HK01-P1');
+          const offset = s1.offsets.find(x => x.value != null)?.value;
+          if (offset == null) throw new Error('HK01 nextOffset missing');
+          const p2 = await get(`${base}?offset=${encodeURIComponent(offset)}`);
+          const s2 = summarize(p2, 'HK01-P2');
+          const ids = arr => (arr?.value || []).slice(0,20).map(v => String(v?.id ?? v?.articleId ?? v?.link ?? v?.url ?? v?.title ?? '')).filter(Boolean);
+          const a = new Set(ids(s1.candidate));
+          const b = ids(s2.candidate);
+          const overlap = b.filter(x => a.has(x));
+          console.log(`HK01 page overlap=${overlap.length}/${Math.max(1,b.length)}`);
+          if (!s2.offsets.some(x => x.value != null)) throw new Error('HK01 second nextOffset missing');
+          if (b.length && overlap.length === b.length) throw new Error('HK01 offset did not advance');
+          NODE
+
+      - name: Probe Bastille pagination candidates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const candidates = [
+            ['rss-query', n => `https://www.bastillepost.com/hongkong/feed?paged=${n}`],
+            ['rss-path', n => `https://www.bastillepost.com/hongkong/feed/page/${n}`],
+            ['wp-json', n => `https://www.bastillepost.com/hongkong/wp-json/wp/v2/posts?per_page=20&page=${n}&_fields=id,date,link,title,excerpt,categories,featured_media`],
+          ];
+          async function fetchText(url) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 20000);
+            try {
+              const r = await fetch(url, {
+                redirect: 'follow',
+                signal: controller.signal,
+                headers: {
+                  'user-agent': 'Mozilla/5.0',
+                  accept: 'application/rss+xml,application/json,text/xml;q=0.9,*/*;q=0.5',
+                  'accept-language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
+                },
+              });
+              return { status: r.status, url: r.url, type: r.headers.get('content-type') || '', text: await r.text() };
+            } finally {
+              clearTimeout(timer);
+            }
+          }
+          function rssSummary(text) {
+            const items = [...text.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].map(m => m[1]);
+            const pick = (item, tag) => {
+              const m = item.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+              return (m?.[1] || '').replace(/^\s*<!\[CDATA\[/,'').replace(/\]\]>\s*$/,'').trim();
+            };
+            return {
+              count: items.length,
+              ids: items.map(x => pick(x,'guid') || pick(x,'link') || pick(x,'title')).filter(Boolean),
+              dates: items.map(x => pick(x,'pubDate')).filter(Boolean),
+            };
+          }
+          function jsonSummary(text) {
+            try {
+              const j = JSON.parse(text);
+              if (!Array.isArray(j)) return { count: 0, ids: [], dates: [] };
+              return {
+                count: j.length,
+                ids: j.map(x => String(x?.id ?? x?.link ?? '')).filter(Boolean),
+                dates: j.map(x => x?.date).filter(Boolean),
+              };
+            } catch { return { count: 0, ids: [], dates: [] }; }
+          }
+          let winner = null;
+          for (const [name, urlFor] of candidates) {
+            try {
+              const p1 = await fetchText(urlFor(1));
+              const p2 = await fetchText(urlFor(2));
+              const isJson = p1.type.includes('json') || p1.text.trim().startsWith('[');
+              const s1 = isJson ? jsonSummary(p1.text) : rssSummary(p1.text);
+              const s2 = isJson ? jsonSummary(p2.text) : rssSummary(p2.text);
+              const set1 = new Set(s1.ids);
+              const overlap = s2.ids.filter(x => set1.has(x)).length;
+              console.log(`BASTILLE ${name} p1=${p1.status}/${s1.count} p2=${p2.status}/${s2.count} overlap=${overlap}/${Math.max(1,s2.ids.length)} type=${p1.type} final1=${p1.url}`);
+              console.log(`BASTILLE ${name} dates1=${s1.dates.slice(0,2).join(' | ')} dates2=${s2.dates.slice(0,2).join(' | ')}`);
+              const distinct = p1.status === 200 && p2.status === 200 && s1.count > 0 && s2.count > 0 && overlap < s2.ids.length;
+              if (distinct && !winner) winner = name;
+            } catch (e) {
+              console.log(`BASTILLE ${name} ERROR ${e?.message || e}`);
+            }
+          }
+          console.log(`BASTILLE winner=${winner || 'none'}`);
+          if (!winner) throw new Error('No Bastille historical pagination candidate advanced');
+          NODE
