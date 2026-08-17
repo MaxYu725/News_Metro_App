@@ -1,1 +1,1 @@
-CF-W4 production cleanup: disable preview URLs, deterministic retention, low-frequency video archive exemption, D1 health audit.
+CF-W4R1 production retry: deploy CF-W4 retention cleanup with controlled sync before image archive depth verification.
