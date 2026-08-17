@@ -25,37 +25,33 @@ jobs:
         run: |
           from pathlib import Path
 
-          def replace_once(path, old, new):
+          def change(path, old, new, label):
               p = Path(path)
               text = p.read_text(encoding='utf-8')
               if old not in text:
-                  raise SystemExit(f'expected block not found in {path}')
+                  raise SystemExit(f'{label}: expected text not found in {path}')
               p.write_text(text.replace(old, new, 1), encoding='utf-8')
 
-          replace_once(
-              'worker/wrangler.jsonc',
-              '  "compatibility_flags": [],\n',
-              '  "compatibility_flags": [],\n  "preview_urls": false,\n',
-          )
+          change('worker/wrangler.jsonc',
+                 '  "compatibility_flags": [],\n',
+                 '  "compatibility_flags": [],\n  "preview_urls": false,\n',
+                 'preview urls')
 
-          replace_once(
-              'worker/src/index.js',
-              """async function cleanUpOldArticles(env) {
+          change('worker/src/index.js',
+                 "DELETE FROM articles WHERE datetime(pubDate) < datetime('now', '-30 days')",
+                 "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')",
+                 'video retention exemption')
+
+          change('worker/src/index.js',
+                 """async function cleanUpOldArticles(env) {
             try {
-              await env.DB.prepare(`DELETE FROM articles WHERE datetime(pubDate) < datetime('now', '-30 days')`).run();
+              await env.DB.prepare(`DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')`).run();
             } catch {}
           }
 
           export default {
-            async scheduled(event, env, ctx) {
-              const catKeys = Object.keys(topicSources);
-              ctx.waitUntil(Promise.all([
-                ...catKeys.map(cat => syncCategoryToDB(cat, env)),
-                cleanUpOldArticles(env),
-              ]));
-            },
           """,
-              """async function cleanUpOldArticles(env) {
+                 """async function cleanUpOldArticles(env) {
             try {
               await env.DB.prepare(`DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')`).run();
             } catch {}
@@ -67,67 +63,63 @@ jobs:
           }
 
           export default {
-            async scheduled(event, env, ctx) {
-              ctx.waitUntil(syncAllCategoriesAndCleanup(env));
-            },
           """,
-          )
+                 'sync helper')
 
-          replace_once(
-              'worker/src/index.js',
-              """            if (forceSync || checkDB[0].count === 0) {
-                          if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
-                          await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
-                        }
+          change('worker/src/index.js',
+                 """  async scheduled(event, env, ctx) {
+            const catKeys = Object.keys(topicSources);
+            ctx.waitUntil(Promise.all([
+              ...catKeys.map(cat => syncCategoryToDB(cat, env)),
+              cleanUpOldArticles(env),
+            ]));
+          },
           """,
-              """            if (forceSync || checkDB[0].count === 0) {
-                          await syncAllCategoriesAndCleanup(env);
-                        }
+                 """  async scheduled(event, env, ctx) {
+            ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+          },
           """,
-          )
+                 'scheduled ordering')
 
-          replace_once(
-              'worker/src/index.js',
-              """            if (forceSync || checkDB[0].count === 0) {
-                          if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
-                          await syncCategoryToDB(category, env);
-                        }
+          change('worker/src/index.js',
+                 """              if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
+                  await Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env)));
           """,
-              """            if (forceSync || checkDB[0].count === 0) {
-                          await syncCategoryToDB(category, env);
-                          if (forceSync) await cleanUpOldArticles(env);
-                        }
+                 """              await syncAllCategoriesAndCleanup(env);
           """,
-          )
+                 'latest force sync ordering')
 
-          replace_once(
-              '.github/scripts/validate-worker-baseline.py',
-              '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n',
-              '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n    if config.get("preview_urls") is not False:\n        fail("preview_urls must be explicitly disabled")\n',
-          )
-
-          replace_once(
-              '.github/scripts/validate-worker-baseline.py',
-              """    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
-                  fail('HK01 image subchannel feed mapping is missing')
+          change('worker/src/index.js',
+                 """              if (forceSync) ctx.waitUntil(cleanUpOldArticles(env));
+                  await syncCategoryToDB(category, env);
           """,
-              """    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
-                  fail('HK01 image subchannel feed mapping is missing')
+                 """              await syncCategoryToDB(category, env);
+                  if (forceSync) await cleanUpOldArticles(env);
+          """,
+                 'category force sync ordering')
 
-              retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
+          change('.github/scripts/validate-worker-baseline.py',
+                 '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n',
+                 '    if config.get("compatibility_flags", []) != settings.get("compatibility_flags", []):\n        fail("compatibility_flags do not match recovered production settings")\n    if config.get("preview_urls") is not False:\n        fail("preview_urls must be explicitly disabled")\n',
+                 'validator preview urls')
+
+          change('.github/scripts/validate-worker-baseline.py',
+                 "    print(\"Wrangler production resource alignment: OK\")\n",
+                 """    retention_sql = "DELETE FROM articles WHERE category <> 'video' AND datetime(pubDate) < datetime('now', '-30 days')"
               if retention_sql not in source:
                   fail('30-day retention must exclude the low-frequency video archive')
               if "ctx.waitUntil(syncAllCategoriesAndCleanup(env));" not in source:
                   fail('scheduled ingestion must clean up only after category sync completes')
               if "ctx.waitUntil(cleanUpOldArticles(env))" in source:
                   fail('cleanup must not race forced sync in the background')
-          """,
-          )
 
-          replace_once(
-              '.github/scripts/worker-production-smoke.sh',
-              "echo 'Production Worker smoke tests: PASS'\n",
-              """echo 'Smoke: image archive remains populated'
+              print("Wrangler production resource alignment: OK")
+          """,
+                 'validator retention')
+
+          change('.github/scripts/worker-production-smoke.sh',
+                 "echo 'Production Worker smoke tests: PASS'\n",
+                 """echo 'Smoke: image archive remains populated'
           request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/video?page=0"
           jq -e '.success == true and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null
 
@@ -144,37 +136,27 @@ jobs:
 
           echo 'Production Worker smoke tests: PASS'
           """,
+                 'production video/sync smoke')
+
+          change('.github/workflows/deploy-worker-production.yml',
+                 '      - .github/scripts/worker-production-smoke.sh\n',
+                 '      - .github/scripts/worker-production-smoke.sh\n      - .github/scripts/worker-production-d1-audit.sh\n',
+                 'workflow d1 path')
+
+          change('.github/workflows/deploy-worker-production.yml',
+                 '          bash -n .github/scripts/worker-production-smoke.sh\n',
+                 '          bash -n .github/scripts/worker-production-smoke.sh\n          bash -n .github/scripts/worker-production-d1-audit.sh\n',
+                 'workflow d1 syntax')
+
+          change('.github/workflows/deploy-worker-production.yml',
+                 '      - name: Show active deployments\n        working-directory: worker\n        run: npx wrangler deployments list\n',
+                 '      - name: Read-only D1 production health audit\n        run: bash .github/scripts/worker-production-d1-audit.sh\n\n      - name: Show active deployments\n        working-directory: worker\n        run: npx wrangler deployments list\n',
+                 'workflow d1 audit')
+
+          Path('.deploy/worker-production.txt').write_text(
+              'CF-W4 production cleanup: disable preview URLs, deterministic retention, low-frequency video archive exemption, D1 health audit.\n',
+              encoding='utf-8',
           )
-
-          replace_once(
-              '.github/workflows/deploy-worker-production.yml',
-              '      - .github/scripts/worker-production-smoke.sh\n',
-              '      - .github/scripts/worker-production-smoke.sh\n      - .github/scripts/worker-production-d1-audit.sh\n',
-          )
-
-          replace_once(
-              '.github/workflows/deploy-worker-production.yml',
-              '          bash -n .github/scripts/worker-production-smoke.sh\n',
-              '          bash -n .github/scripts/worker-production-smoke.sh\n          bash -n .github/scripts/worker-production-d1-audit.sh\n',
-          )
-
-          replace_once(
-              '.github/workflows/deploy-worker-production.yml',
-              """      - name: Show active deployments
-                working-directory: worker
-                run: npx wrangler deployments list
-          """,
-              """      - name: Read-only D1 production health audit
-                run: bash .github/scripts/worker-production-d1-audit.sh
-
-              - name: Show active deployments
-                working-directory: worker
-                run: npx wrangler deployments list
-          """,
-          )
-
-          marker = Path('.deploy/worker-production.txt')
-          marker.write_text('CF-W4 production cleanup: disable preview URLs, deterministic retention, low-frequency video archive exemption, D1 health audit.\n', encoding='utf-8')
 
       - name: Commit CF-W4 changes and remove one-shot updater
         shell: bash
