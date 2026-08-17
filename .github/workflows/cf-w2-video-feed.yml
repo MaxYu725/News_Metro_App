@@ -1,0 +1,57 @@
+name: CF-W2 update image feed
+
+on:
+  push:
+    branches:
+      - agent/cf-w2-worker-security
+    paths:
+      - .github/workflows/cf-w2-video-feed.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout CF-W2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/cf-w2-worker-security
+
+      - name: Replace stale aggregate image feed with active subchannels
+        shell: python
+        run: |
+          from pathlib import Path
+
+          source_path = Path('worker/src/index.js')
+          source = source_path.read_text(encoding='utf-8')
+          old = "  video: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/13`) }],"
+          new = """  video: [259, 256, 260, 348].map(channelId => ({
+            name: '香港01',
+            urls: rssHubs.map(base => `${base}/hk01/channel/${channelId}`),
+          })),"""
+          if old not in source:
+              raise SystemExit('expected zone/13 image-feed mapping not found')
+          source = source.replace(old, new, 1)
+          source_path.write_text(source, encoding='utf-8')
+
+          validator_path = Path('.github/scripts/validate-worker-baseline.py')
+          validator = validator_path.read_text(encoding='utf-8')
+          marker = "    if \"targetUrl.includes('hk01.com')\" in combined:\n        fail(\"unsafe HK01 substring allowlist must not be reintroduced\")\n"
+          addition = marker + "\n    if '/hk01/zone/13' in source:\n        fail('stale HK01 image aggregate feed must not be reintroduced')\n    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:\n        fail('HK01 image subchannel feed mapping is missing')\n"
+          if marker not in validator:
+              raise SystemExit('validator insertion marker not found')
+          validator = validator.replace(marker, addition, 1)
+          validator_path.write_text(validator, encoding='utf-8')
+
+      - name: Commit feed mapping
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/src/index.js .github/scripts/validate-worker-baseline.py
+          git commit -m "CF-W2: refresh HK01 image feed channels"
+          git push origin HEAD:agent/cf-w2-worker-security
