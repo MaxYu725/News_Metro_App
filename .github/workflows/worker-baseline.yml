@@ -10,6 +10,7 @@ on:
       - .github/scripts/validate-search-fts.sh
       - .github/scripts/validate-adaptive-retention.sh
       - .github/scripts/validate-archive-search.sh
+      - .github/scripts/validate-archive-backfill.sh
       - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/worker-baseline.yml
       - .github/workflows/archive-backfill.yml
@@ -22,6 +23,7 @@ on:
       - .github/scripts/validate-search-fts.sh
       - .github/scripts/validate-adaptive-retention.sh
       - .github/scripts/validate-archive-search.sh
+      - .github/scripts/validate-archive-backfill.sh
       - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/worker-baseline.yml
       - .github/workflows/archive-backfill.yml
@@ -32,7 +34,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +55,7 @@ jobs:
           bash -n .github/scripts/validate-search-fts.sh
           bash -n .github/scripts/validate-adaptive-retention.sh
           bash -n .github/scripts/validate-archive-search.sh
+          bash -n .github/scripts/validate-archive-backfill.sh
           bash -n .github/scripts/archive-backfill-production-audit.sh
 
       - name: Install pinned Wrangler
@@ -67,6 +70,9 @@ jobs:
 
       - name: Validate archive D1 migration locally
         run: bash .github/scripts/validate-archive-search.sh
+
+      - name: Validate replayable archive backfill lifecycle locally
+        run: bash .github/scripts/validate-archive-backfill.sh
 
       - name: Run Worker tests
         working-directory: worker
