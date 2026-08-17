@@ -14,6 +14,12 @@
       "database_name": "metro_news_db",
       "database_id": "f8b597e9-8976-4f56-806e-51c9faa68a68",
       "migrations_dir": "migrations"
+    },
+    {
+      "binding": "ARCHIVE_01",
+      "database_name": "metro_news_archive_01",
+      "database_id": "a3db6dc1-599c-4ace-b12c-142e56c3734a",
+      "migrations_dir": "archive-migrations"
     }
   ],
   "ratelimits": [
