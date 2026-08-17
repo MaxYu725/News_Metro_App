@@ -82,7 +82,6 @@ jobs:
           seen_maps = set()
           q = deque((root, 0, root) for root in ROOTS)
           all_urls = []
-          map_summaries = []
           max_maps = 300
 
           while q and len(seen_maps) < max_maps:
@@ -98,7 +97,6 @@ jobs:
                   continue
 
               print('SITEMAP', {'url': url, 'final': final, 'kind': kind, 'entries': len(locs), 'bytes': len(data), 'depth': depth})
-              map_summaries.append((url, kind, len(locs), len(data), depth))
               if kind == 'sitemapindex':
                   for child in locs:
                       if child.startswith('https://www.hk01.com/') and child not in seen_maps:
@@ -142,13 +140,98 @@ jobs:
           print('=== lowest numeric article IDs discovered ===')
           for row in sorted(article_rows)[:30]:
               print(row[0], row[1], 'lastmod=', row[2], 'map=', row[3])
+          PY
 
-          print('=== sample oldest lastmod values ===')
-          dated = [(lastmod, loc, srcmap) for loc, (lastmod, srcmap) in unique.items() if lastmod]
-          for lastmod, loc, srcmap in sorted(dated)[:30]:
-              print(lastmod, loc, 'map=', srcmap)
+      - name: Inspect HK01 universal search bundle
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re
+          import urllib.request
+          from urllib.parse import urljoin, urlparse
 
-          print('=== sample newest lastmod values ===')
-          for lastmod, loc, srcmap in sorted(dated, reverse=True)[:20]:
-              print(lastmod, loc, 'map=', srcmap)
+          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-search-probe/1.0)'
+          ORIGIN = 'https://universal-search.hk01.com/'
+
+          def fetch(url, limit=15_000_000):
+              req = urllib.request.Request(url, headers={
+                  'User-Agent': UA,
+                  'Accept': '*/*',
+                  'Accept-Language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
+              })
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  data = r.read(limit + 1)
+                  return r.geturl(), r.headers.get('content-type', ''), data[:limit]
+
+          final, ctype, raw = fetch(ORIGIN, 2_000_000)
+          html = raw.decode('utf-8', 'replace')
+          print('SEARCH_HOME', {'final': final, 'content_type': ctype, 'bytes': len(raw)})
+          scripts = []
+          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)', html, flags=re.I):
+              u = urljoin(final, src)
+              if u not in scripts:
+                  scripts.append(u)
+          print('SCRIPT_COUNT', len(scripts))
+          for u in scripts:
+              print('SCRIPT', u)
+
+          url_hits = set()
+          host_hits = set()
+          path_hits = set()
+          bundle_texts = []
+          for u in scripts[:20]:
+              try:
+                  bfinal, bctype, braw = fetch(u)
+                  text = braw.decode('utf-8', 'replace')
+                  bundle_texts.append((bfinal, text))
+                  print('BUNDLE', {'url': bfinal, 'content_type': bctype, 'bytes': len(braw)})
+              except Exception as exc:
+                  print('BUNDLE_ERROR', u, repr(exc))
+                  continue
+
+              for hit in re.findall(r'https?://[^"\'\\\s<>]{4,300}', text):
+                  if any(k in hit.lower() for k in ('hk01', 'search', 'api', 'elastic', 'algolia')):
+                      url_hits.add(hit[:300])
+                      try:
+                          host_hits.add(urlparse(hit).hostname or '')
+                      except Exception:
+                          pass
+              for hit in re.findall(r'["\']([^"\']{1,220})["\']', text):
+                  low = hit.lower()
+                  if ('search' in low or 'query' in low) and ('/' in hit or 'api' in low):
+                      if len(hit) <= 220:
+                          path_hits.add(hit)
+
+          print('=== URL/HOST hits ===')
+          for h in sorted(x for x in host_hits if x):
+              print('HOST', h)
+          for u in sorted(url_hits)[:200]:
+              print('URL', u)
+
+          print('=== search-like string hits ===')
+          ranked = sorted(path_hits, key=lambda s: (0 if 'api' in s.lower() else 1, len(s), s))
+          for s in ranked[:300]:
+              print('STR', s)
+
+          print('=== context around likely API tokens ===')
+          needles = ('search-api', 'universal-search', '/search', 'keyword', 'query=', 'algolia', 'elastic', 'graphql')
+          shown = 0
+          for bfinal, text in bundle_texts:
+              low = text.lower()
+              for needle in needles:
+                  start = 0
+                  while shown < 120:
+                      idx = low.find(needle.lower(), start)
+                      if idx < 0:
+                          break
+                      a = max(0, idx - 240)
+                      z = min(len(text), idx + 420)
+                      snippet = text[a:z].replace('\n', ' ')
+                      print('CTX', bfinal, needle, snippet)
+                      shown += 1
+                      start = idx + len(needle)
+                  if shown >= 120:
+                      break
+              if shown >= 120:
+                  break
           PY
