@@ -128,7 +128,7 @@ async function fetchFromSource(sourceConfig, categoryName) {
   for (const sourceUrl of sourceConfig.urls) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), sourceConfig.timeoutMs || 8000);
       const response = await fetch(sourceUrl, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } });
       clearTimeout(timeoutId);
       if (response.ok) {
@@ -139,7 +139,7 @@ async function fetchFromSource(sourceConfig, categoryName) {
     } catch {}
   }
 
-  console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name });
+  console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name, timeoutMs: sourceConfig.timeoutMs || 8000, urlCount: sourceConfig.urls.length });
   return [];
 }
 
@@ -162,10 +162,11 @@ const topicSources = {
   life: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/8`) }],
   community: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/10`) }],
   tech: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/11`) }],
-  video: [259, 256, 260, 348].map(channelId => ({
-    name: '香港01',
-    urls: rssHubs.map(base => `${base}/hk01/channel/${channelId}`),
-  })),
+  video: [259, 256].map(channelId => ({
+  name: '香港01',
+  urls: [`https://rsshub.rssforever.com/hk01/channel/${channelId}`],
+  timeoutMs: 20000,
+})),
 };
 
 async function syncCategoryToDB(category, env) {
@@ -211,10 +212,10 @@ async function syncAllCategoriesAndCleanup(env) {
 
 export default {
   async scheduled(event, env, ctx) {
-  ctx.waitUntil(syncAllCategoriesAndCleanup(env));
-},
+    ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+  },
 
-async fetch(request, env, ctx) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       if (!isTrustedAppRequest(request)) {
         return textResponse(request, 'Forbidden', 403);
@@ -459,7 +460,7 @@ async fetch(request, env, ctx) {
             const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?`).bind(category).all();
             if (forceSync || checkDB[0].count === 0) {
               await syncCategoryToDB(category, env);
-                if (forceSync) await cleanUpOldArticles(env);
+              if (forceSync) await cleanUpOldArticles(env);
             }
           }
           query = `SELECT * FROM articles WHERE category = ? ORDER BY pubDate DESC LIMIT ? OFFSET ?`;

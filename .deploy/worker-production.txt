@@ -1,1 +1,1 @@
-CF-W4R1 production retry: deploy CF-W4 retention cleanup with controlled sync before image archive depth verification.
+CF-W4R2 production retry: verified HK01 image channels 259/256 via rssforever with archive-specific 20s timeout.
