@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v25-image-quality';
+const SHELL_CACHE = 'metro-news-shell-v26-hd-gesture';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -124,7 +124,7 @@ self.addEventListener('fetch', event => {
     if (request.method !== 'GET') return;
 
     const url = new URL(request.url);
-    const isApiRequest = url.hostname === 'news-proxy.maxyu0725us.workers.dev'
+    const isApiRequest = url.hostname === 'news-proxy.maxyu725us.workers.dev'
         || url.pathname.includes('/api/');
 
     if (isApiRequest) return;
