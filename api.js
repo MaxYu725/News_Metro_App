@@ -58,6 +58,39 @@ function fallbackNewsResult(categoryId, page, searchQuery, error, append = false
     return { success: false, data: [], hasMore: false, error: message };
 }
 
+function searchCodePointLength(value) {
+    return Array.from(String(value || '')).length;
+}
+
+function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live' } = {}) {
+    const message = errorMessage(error, '暫時無法連接搜尋服務');
+    const cached = !append ? getCachedFeed('search', searchQuery) : null;
+
+    if (cached?.data?.length) {
+        emitDataState({
+            context: 'search',
+            status: 'stale',
+            error: message,
+            cachedAt: cached.savedAt,
+            query: searchQuery,
+            append
+        });
+        return {
+            success: true,
+            data: cached.data,
+            hasMore: false,
+            nextCursor: '',
+            mode,
+            stale: true,
+            cachedAt: cached.savedAt,
+            error: message
+        };
+    }
+
+    emitDataState({ context: 'search', status: 'error', error: message, query: searchQuery, append });
+    return { success: false, data: [], hasMore: false, nextCursor: '', mode, error: message };
+}
+
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
     let url;
     if (categoryId === 'search') {
@@ -105,6 +138,57 @@ export async function fetchNewsData(categoryId, page, forceSync = false, searchQ
         );
     } catch (error) {
         return fallbackNewsResult(categoryId, page, searchQuery, error, page > 0);
+    }
+}
+
+export async function fetchSearchData(searchQuery, { cursor = '', page = 0, includeArchive = true } = {}) {
+    const query = String(searchQuery || '').trim();
+    const useArchive = includeArchive && searchCodePointLength(query) >= 3;
+    const mode = useArchive ? 'archive' : 'live';
+    const append = useArchive ? !!cursor : page > 0;
+    const params = new URLSearchParams({ q: query });
+
+    if (useArchive) {
+        params.set('scope', 'all');
+        if (cursor) params.set('cursor', cursor);
+    } else {
+        params.set('page', String(page));
+    }
+
+    try {
+        const response = await fetch(`${SEARCH_API_URL}?${params.toString()}`);
+        let result;
+        try {
+            result = await response.json();
+        } catch {
+            throw new Error(`搜尋服務回應格式錯誤 (${response.status || 'unknown'})`);
+        }
+
+        if (!response.ok || !result.success) {
+            return fallbackSearchResult(
+                query,
+                result?.error || `搜尋服務暫時無法回應 (${response.status})`,
+                { append, mode }
+            );
+        }
+
+        const updatedAt = Date.now();
+        const data = Array.isArray(result.data) ? result.data : [];
+        if (!append && data.length > 0) {
+            saveCachedFeed('search', query, data, !!result.hasMore);
+        }
+        emitDataState({ context: 'search', status: 'ok', query, append, updatedAt });
+        return {
+            success: true,
+            data,
+            hasMore: !!result.hasMore,
+            nextCursor: useArchive ? String(result.nextCursor || '') : '',
+            mode,
+            page,
+            updatedAt
+        };
+    } catch (error) {
+        return fallbackSearchResult(query, error, { append, mode });
     }
 }
 
