@@ -34,15 +34,15 @@ jobs:
           bash -n .github/scripts/worker-production-d1-audit.sh
           python3 .github/scripts/validate-worker-baseline.py
 
-      - name: Commit generated patch
+      - name: Commit generated non-workflow patch
         run: |
           set -euo pipefail
+          git restore .github/workflows/worker-baseline.yml .github/workflows/deploy-worker-production.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add worker/src/index.js worker/src/retention.js worker/migrations/0002_adaptive_retention.sql worker/test/retention.test.mjs \
             .github/scripts/validate-worker-baseline.py .github/scripts/validate-adaptive-retention.sh \
             .github/scripts/worker-production-smoke.sh .github/scripts/worker-production-d1-audit.sh \
-            .github/workflows/worker-baseline.yml .github/workflows/deploy-worker-production.yml \
             .deploy/worker-production.txt
           git commit -m "CF-W6: add adaptive D1 retention policy"
           git push origin HEAD:agent/cf-w6-adaptive-retention
