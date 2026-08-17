@@ -130,6 +130,8 @@ function decorateTile(tile) {
     if (!tile.querySelector('.tile-preview')) return false;
 
     tile.classList.add('feed-card');
+    tile.style.setProperty('border-left-color', 'var(--metro-accent-color, #22d3ee)', 'important');
+    tile.style.setProperty('border-left-width', '3px', 'important');
     createDeck(tile);
     decorateFreshState(tile);
     return true;
