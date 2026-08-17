@@ -6,9 +6,11 @@ on:
       - main
     paths:
       - worker/src/archive-backfill.js
+      - worker/src/archive-backfill-policy.js
       - worker/scripts/archive-backfill.mjs
       - worker/archive-migrations/**
       - worker/test/archive-backfill.test.mjs
+      - worker/test/archive-backfill-policy.test.mjs
       - .github/scripts/validate-archive-search.sh
       - .github/scripts/validate-archive-backfill.sh
       - .github/scripts/archive-backfill-production-audit.sh
@@ -66,8 +68,10 @@ jobs:
       - name: Validate backfill JavaScript and shell syntax
         run: |
           node --check worker/src/archive-backfill.js
+          node --check worker/src/archive-backfill-policy.js
           node --check worker/scripts/archive-backfill.mjs
           node --check worker/test/archive-backfill.test.mjs
+          node --check worker/test/archive-backfill-policy.test.mjs
           bash -n .github/scripts/validate-archive-search.sh
           bash -n .github/scripts/validate-archive-backfill.sh
           bash -n .github/scripts/archive-backfill-production-audit.sh
