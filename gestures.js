@@ -64,6 +64,12 @@ export function initGestures({
         event.stopImmediatePropagation();
     }, true);
 
+    // Native browser image dragging competes with swipe / pull gestures and
+    // produces a ghost image. Images remain clickable; only drag-and-drop is disabled.
+    mainContainer?.addEventListener('dragstart', event => {
+        if (event.target instanceof HTMLImageElement) event.preventDefault();
+    });
+
     document.addEventListener('touchstart', e => {
         touchStartX = e.changedTouches[0].screenX;
         touchStartY = e.changedTouches[0].screenY;
