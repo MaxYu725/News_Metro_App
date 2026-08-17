@@ -23,8 +23,13 @@ def get_content_type(headers_text: str) -> str:
     return matches[-1].strip()
 
 
-def safe_name(value: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._") or "part"
+def disposition_value(part, key: str) -> str | None:
+    value = part.get_param(key, header="content-disposition")
+    if isinstance(value, str) and value:
+        return value
+    header = str(part.get("Content-Disposition", ""))
+    match = re.search(rf"(?:^|;)\s*{re.escape(key)}=\"([^\"]+)\"", header, re.I)
+    return match.group(1) if match else None
 
 
 def main() -> int:
@@ -51,13 +56,13 @@ def main() -> int:
     if not message.is_multipart():
         raise RuntimeError(f"Expected multipart Worker bundle, got {content_type}")
 
-    metadata = None
+    metadata: dict[str, object] | None = None
     parts: list[dict[str, object]] = []
     payloads: dict[str, bytes] = {}
 
     for index, part in enumerate(message.iter_parts()):
-        name = part.get_param("name", header="content-disposition") or part.get_filename() or f"part-{index}"
-        filename = part.get_filename() or name
+        name = disposition_value(part, "name") or part.get_filename() or f"part-{index}"
+        filename = disposition_value(part, "filename") or part.get_filename() or name
         raw = part.get_payload(decode=True) or b""
         content_type_part = part.get_content_type()
 
@@ -73,18 +78,25 @@ def main() -> int:
             }
         )
 
-        if name == "metadata" or filename == "metadata":
+        if content_type_part == "application/json" or name.lower().startswith("metadata"):
             try:
-                metadata = json.loads(raw.decode("utf-8"))
-            except Exception as exc:  # pragma: no cover - recovery guard
-                raise RuntimeError("Unable to decode Worker metadata JSON") from exc
+                candidate = json.loads(raw.decode("utf-8"))
+            except Exception:
+                candidate = None
+            if isinstance(candidate, dict) and (
+                "main_module" in candidate or "body_part" in candidate or "bindings" in candidate
+            ):
+                metadata = candidate
 
     if not isinstance(metadata, dict):
-        raise RuntimeError("Worker metadata part was not found")
+        summary = ", ".join(
+            f"{item['name']}:{item['content_type']}" for item in parts
+        )
+        raise RuntimeError(f"Worker metadata part was not found; parts={summary}")
 
-    main_module = metadata.get("main_module")
+    main_module = metadata.get("main_module") or metadata.get("body_part")
     if not isinstance(main_module, str) or not main_module:
-        raise RuntimeError("Worker metadata does not declare main_module")
+        raise RuntimeError("Worker metadata does not declare main_module/body_part")
 
     source = payloads.get(main_module)
     if source is None:
@@ -96,15 +108,17 @@ def main() -> int:
     source_path.write_text(source_text, encoding="utf-8", newline="\n")
 
     sanitized_bindings = []
-    for binding in metadata.get("bindings", []) if isinstance(metadata.get("bindings"), list) else []:
-        if not isinstance(binding, dict):
-            continue
-        sanitized = {
-            key: value
-            for key, value in binding.items()
-            if key in {"name", "type", "id", "namespace_id", "bucket_name", "class_name"}
-        }
-        sanitized_bindings.append(sanitized)
+    raw_bindings = metadata.get("bindings")
+    if isinstance(raw_bindings, list):
+        for binding in raw_bindings:
+            if not isinstance(binding, dict):
+                continue
+            sanitized = {
+                key: value
+                for key, value in binding.items()
+                if key in {"name", "type", "id", "namespace_id", "bucket_name", "class_name"}
+            }
+            sanitized_bindings.append(sanitized)
 
     manifest = {
         "source": "Cloudflare Workers Scripts API",
