@@ -163,9 +163,9 @@ const topicSources = {
   community: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/10`) }],
   tech: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/11`) }],
   video: [259, 256, 260, 348].map(channelId => ({
-  name: '香港01',
-  urls: rssHubs.map(base => `${base}/hk01/channel/${channelId}`),
-})),
+    name: '香港01',
+    urls: rssHubs.map(base => `${base}/hk01/channel/${channelId}`),
+  })),
 };
 
 async function syncCategoryToDB(category, env) {
