@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v20-mui6c2';
+const SHELL_CACHE = 'metro-news-shell-v21-mui6c3';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [

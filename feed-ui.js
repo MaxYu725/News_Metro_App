@@ -132,6 +132,12 @@ function decorateTile(tile) {
     tile.classList.add('feed-card');
     tile.style.setProperty('border-left-color', 'var(--metro-accent-color, #22d3ee)', 'important');
     tile.style.setProperty('border-left-width', '3px', 'important');
+
+    const titleText = tile.querySelector('.news-title')?.textContent?.trim() || '新聞';
+    tile.tabIndex = 0;
+    tile.setAttribute('role', 'button');
+    tile.setAttribute('aria-label', `閱讀新聞：${titleText}`);
+
     createDeck(tile);
     decorateFreshState(tile);
     return true;
@@ -158,11 +164,27 @@ function scheduleDecorate() {
     requestAnimationFrame(decorateFeed);
 }
 
+function installFeedKeyboardInteraction(grid) {
+    if (!grid || grid.dataset.feedKeyboardReady === '1') return;
+    grid.dataset.feedKeyboardReady = '1';
+
+    grid.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const tile = event.target.closest('.metro-tile.feed-card');
+        if (!tile || event.target !== tile) return;
+
+        event.preventDefault();
+        tile.click();
+    });
+}
+
 function observeFeed() {
     const grid = document.getElementById('news-grid');
     const navMenu = document.getElementById('nav-menu');
     const bottomNav = document.getElementById('bottom-nav');
     if (!grid) return;
+
+    installFeedKeyboardInteraction(grid);
 
     const gridObserver = new MutationObserver(scheduleDecorate);
     gridObserver.observe(grid, { childList: true, subtree: true });
