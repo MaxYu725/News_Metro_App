@@ -1,0 +1,100 @@
+name: CF-W4 RSS upstream probe
+
+on:
+  push:
+    branches:
+      - agent/cf-w4r2-upstream-diagnosis
+    paths:
+      - .github/workflows/cf-w4-rss-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Probe configured HK01 RSSHub routes
+        shell: python
+        run: |
+          import concurrent.futures
+          import os
+          import re
+          import subprocess
+          import tempfile
+
+          mirrors = [
+              'https://rsshub.rssforever.com',
+              'https://rsshub.liubing.me',
+              'https://rsshub.pseudoyu.com',
+              'https://rsshub.mxd.me',
+              'https://rss.shab.fun',
+              'https://rsshub.app',
+          ]
+          paths = [
+              '/hk01/zone/1',
+              '/hk01/zone/13',
+              '/hk01/channel/259',
+              '/hk01/channel/256',
+              '/hk01/channel/260',
+              '/hk01/channel/348',
+              '/hk01/latest',
+              '/hk01/hot',
+          ]
+
+          def compact(value, limit=90):
+              value = re.sub(r'\s+', ' ', value or '').strip()
+              return value[:limit]
+
+          def probe(pair):
+              mirror, path = pair
+              url = mirror + path
+              with tempfile.TemporaryDirectory() as tmp:
+                  body = os.path.join(tmp, 'body')
+                  headers = os.path.join(tmp, 'headers')
+                  cmd = [
+                      'curl', '-sS', '-L', '--max-redirs', '3',
+                      '--connect-timeout', '5', '--max-time', '12',
+                      '-A', 'Mozilla/5.0 MetroNews-CF-W4-RSS-Probe/1.0',
+                      '-D', headers, '-o', body,
+                      '-w', '%{http_code}\t%{content_type}\t%{size_download}',
+                      url,
+                  ]
+                  try:
+                      proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                  except subprocess.TimeoutExpired:
+                      return mirror, path, 'TIMEOUT', '-', 0, 0, '-', '-'
+
+                  status_line = (proc.stdout or '').strip().split('\t')
+                  status = status_line[0] if status_line else 'ERR'
+                  content_type = status_line[1] if len(status_line) > 1 and status_line[1] else '-'
+                  size = status_line[2] if len(status_line) > 2 else '0'
+
+                  try:
+                      data = open(body, 'rb').read(2_000_000).decode('utf-8', errors='replace')
+                  except OSError:
+                      data = ''
+
+                  items = len(re.findall(r'<item(?:\s|>)', data, flags=re.I))
+                  dates = re.findall(r'<pubDate>(.*?)</pubDate>', data, flags=re.I | re.S)
+                  links = re.findall(r'<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>', data, flags=re.I | re.S)
+                  first_date = compact(dates[0]) if dates else '-'
+                  first_link = compact(links[1] if len(links) > 1 else (links[0] if links else '-'))
+                  return mirror, path, status, compact(content_type, 40), size, items, first_date, first_link
+
+          pairs = [(m, p) for m in mirrors for p in paths]
+          results = []
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+              for result in pool.map(probe, pairs):
+                  results.append(result)
+
+          print('mirror\tpath\thttp\tcontent-type\tbytes\titems\tfirst-pubDate\tfirst-item-link')
+          for row in results:
+              print('\t'.join(map(str, row)))
+
+          print('\nSummary by path (successful feeds with item counts):')
+          for path in paths:
+              rows = [r for r in results if r[1] == path]
+              healthy = [(r[0], r[5], r[2]) for r in rows if str(r[2]).startswith('2') and int(r[5]) > 0]
+              print(f'{path}: {healthy if healthy else "NO_NONEMPTY_FEED"}')
