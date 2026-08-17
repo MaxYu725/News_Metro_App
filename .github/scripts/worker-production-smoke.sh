@@ -74,10 +74,8 @@ request 200 -G \
   "${WORKER_ORIGIN}/api/search"
 jq --arg id "$latest_id" -e '.success == true and (.data | type == "array") and any(.data[]; (.id == $id) or (.link == $id))' "$tmp_body" >/dev/null
 
-# Rebuild archive rows under the new retention policy before asserting archive depth.
-# The previous production version could legitimately leave only the newest video row
-# after its concurrent sync/cleanup race, so checking video first creates a false failure.
-echo 'Smoke: controlled full sync applies retention policy'
+# Force one full sync so production exercises the adaptive retention size probe.
+echo 'Smoke: controlled full sync preserves adaptive retention health'
 status=$(curl -sS --max-time 90 -D "$tmp_headers" -o "$tmp_body" -w '%{http_code}' \
   -H "Origin: ${APP_ORIGIN}" \
   "${WORKER_ORIGIN}/api/news/latest?page=0&sync=1")
