@@ -7,6 +7,12 @@ import {
   ARCHIVE_SHARD_STOP_BYTES,
   HK01_HISTORICAL_ZONES,
   articleInsertSql,
+  backfillApplyArticlesSql,
+  backfillApplyStateAndMarkWrittenSql,
+  backfillMarkCompletedSql,
+  backfillPlanItemInsertSql,
+  backfillRunFinalizeSql,
+  backfillRunStateInsertSql,
   backfillStateUpsertSql,
   bastilleHistoricalPageUrl,
   fetchBastilleHistoricalPage,
@@ -28,6 +34,7 @@ test('HK01 historical URL uses explicit nextOffset cursor', () => {
     hk01HistoricalPageUrl(1, '1786953829'),
     'https://web-data.api.hk01.com/v2/feed/zone/1?offset=1786953829',
   );
+  assert.throws(() => hk01HistoricalPageUrl(0), /invalid HK01 zone/);
 });
 
 test('HK01 historical parser maps feed metadata into lean archive schema', () => {
@@ -65,11 +72,22 @@ test('HK01 historical parser maps feed metadata into lean archive schema', () =>
   });
 });
 
-test('HK01 historical parser rejects non-publisher article URLs', () => {
-  const result = parseHk01HistoricalPage({
+test('HK01 historical parser rejects non-publisher article and image URLs', () => {
+  const invalidArticle = parseHk01HistoricalPage({
     items: [{ data: { type: 'article', canonicalUrl: 'https://evil.example/article/1', title: 'x', publishTime: 1786957208 } }],
   }, 'local');
-  assert.deepEqual(result.articles, []);
+  assert.deepEqual(invalidArticle.articles, []);
+
+  const invalidImage = parseHk01HistoricalPage({
+    items: [{ data: {
+      type: 'article',
+      canonicalUrl: 'https://www.hk01.com/article/1',
+      title: 'x',
+      publishTime: 1786957208,
+      mainImage: { cdnUrl: 'https://evil.example/a.jpg' },
+    } }],
+  }, 'local');
+  assert.equal(invalidImage.articles[0].imageUrl, '');
 });
 
 test('Bastille historical pagination keeps the verified RSS query contract', () => {
@@ -112,7 +130,7 @@ test('Bastille historical fetch validates final publisher host and reuses RSS pa
 });
 
 test('archive SQL remains lean, idempotent and quote-safe', () => {
-  const sql = articleInsertSql({
+  const article = {
     id: "https://example.test/o'hare",
     title: "O'Hare 新聞",
     link: "https://example.test/o'hare",
@@ -121,13 +139,19 @@ test('archive SQL remains lean, idempotent and quote-safe', () => {
     category: 'global',
     source: 'test',
     imageUrl: '',
-  });
+  };
+  const sql = articleInsertSql(article);
   assert.match(sql, /^INSERT OR IGNORE INTO articles/);
   assert.match(sql, /O''Hare/);
   assert.doesNotMatch(sql, /images/);
+
+  const plan = backfillPlanItemInsertSql('ns2c3-001', 1, article);
+  assert.match(plan, /archive_backfill_run_items/);
+  assert.match(plan, /ns2c3-001/);
+  assert.match(plan, /,1,/);
 });
 
-test('resume state SQL advances only through explicit upsert', () => {
+test('resume state SQL uses numeric literals and explicit upsert', () => {
   const sql = backfillStateUpsertSql({
     sourceKey: 'hk01:zone:1',
     cursor: '1786953829',
@@ -135,8 +159,46 @@ test('resume state SQL advances only through explicit upsert', () => {
     rowsInserted: 80,
     lastPubDate: '2026-07-01T00:00:00.000Z',
     exhausted: false,
-  });
+  }, '2026-08-17T00:00:00.000Z');
   assert.match(sql, /archive_backfill_state/);
   assert.match(sql, /ON CONFLICT\(source_key\) DO UPDATE/);
-  assert.match(sql, /1786953829/);
+  assert.match(sql, /'1786953829',12,80/);
+});
+
+test('batch plan lifecycle is replayable and status-gated', () => {
+  const state = {
+    sourceKey: 'bastille:rss',
+    cursor: '52',
+    pagesFetched: 51,
+    rowsInserted: 500,
+    lastPubDate: '2026-07-01T00:00:00.000Z',
+    exhausted: false,
+  };
+  assert.match(backfillRunStateInsertSql('ns2c3-001', state), /archive_backfill_run_state/);
+
+  const finalize = backfillRunFinalizeSql({
+    batchId: 'ns2c3-001',
+    source: 'all',
+    requestedRows: 500,
+    generatedRows: 500,
+    beforeRows: 1000,
+    now: '2026-08-17T00:00:00.000Z',
+  });
+  assert.match(finalize, /status,created_at/);
+  assert.match(finalize, /'planned'/);
+  assert.match(finalize, /,500,500,1000,/);
+
+  const apply = backfillApplyArticlesSql('ns2c3-001', 1, 50);
+  assert.match(apply, /^INSERT OR IGNORE INTO articles/);
+  assert.match(apply, /archive_backfill_run_items/);
+  assert.match(apply, /ordinal BETWEEN 1 AND 50/);
+
+  const written = backfillApplyStateAndMarkWrittenSql('ns2c3-001', '2026-08-17T01:00:00.000Z');
+  assert.match(written, /archive_backfill_state/);
+  assert.match(written, /status='written'/);
+  assert.match(written, /status='planned'/);
+
+  const completed = backfillMarkCompletedSql('ns2c3-001', '2026-08-17T02:00:00.000Z');
+  assert.match(completed, /status='completed'/);
+  assert.match(completed, /status='written'/);
 });
