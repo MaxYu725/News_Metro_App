@@ -1,0 +1,38 @@
+name: NS2B production API probe
+
+on:
+  push:
+    branches:
+      - probe/ns2b-production-api
+    paths:
+      - .github/workflows/ns2b-production-api-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify public API exposes Bastille rows
+        run: |
+          set -euo pipefail
+          found=0
+          for page in 0 1 2 3 4 5; do
+            curl -sS --retry 2 --retry-delay 1 "https://news-proxy.maxyu0725us.workers.dev/api/news/latest?page=${page}" > "/tmp/page-${page}.json"
+            jq -e '.success == true' "/tmp/page-${page}.json" >/dev/null
+            row=$(jq -c '.data[]? | select(.source == "巴士的報")' "/tmp/page-${page}.json" | head -n 1 || true)
+            if [ -n "$row" ]; then
+              echo "$row" | jq '{title,source,category,isFullContentLoaded,link,descriptionChars:(.description|length),imageCount:(.images|length)}'
+              echo "$row" | jq -e '.source == "巴士的報" and .isFullContentLoaded == true and (.description | length) > 100' >/dev/null
+              found=1
+              break
+            fi
+          done
+          test "$found" = 1
+
+      - name: Verify HK01 remains present
+        run: |
+          curl -sS --retry 2 --retry-delay 1 "https://news-proxy.maxyu0725us.workers.dev/api/news/latest?page=0" \
+            | jq -e '.data[] | select(.source == "香港01")' >/dev/null
