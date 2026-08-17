@@ -46,8 +46,10 @@ function scaleAt(nextScale, clientX, clientY) {
     const dy = clientY - (rect.top + rect.height / 2);
     const scaleRatio = clampedScale / currentScale;
 
-    posX -= dx * (scaleRatio - 1);
-    posY -= dy * (scaleRatio - 1);
+    // Preserve the content point under the mouse cursor even after the image
+    // has already been panned away from the stage centre.
+    posX = (posX * scaleRatio) - (dx * (scaleRatio - 1));
+    posY = (posY * scaleRatio) - (dy * (scaleRatio - 1));
     currentScale = clampedScale;
 
     if (currentScale === 1) {
