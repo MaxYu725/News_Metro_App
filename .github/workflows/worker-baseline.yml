@@ -10,7 +10,9 @@ on:
       - .github/scripts/validate-search-fts.sh
       - .github/scripts/validate-adaptive-retention.sh
       - .github/scripts/validate-archive-search.sh
+      - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/worker-baseline.yml
+      - .github/workflows/archive-backfill.yml
   push:
     branches:
       - agent/**
@@ -20,7 +22,9 @@ on:
       - .github/scripts/validate-search-fts.sh
       - .github/scripts/validate-adaptive-retention.sh
       - .github/scripts/validate-archive-search.sh
+      - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/worker-baseline.yml
+      - .github/workflows/archive-backfill.yml
 
 permissions:
   contents: read
@@ -43,9 +47,13 @@ jobs:
           node --check worker/src/search.js
           node --check worker/src/retention.js
           node --check worker/src/sources/bastille.js
+          node --check worker/src/archive-backfill.js
+          node --check worker/scripts/archive-backfill.mjs
+          node --check worker/test/archive-backfill.test.mjs
           bash -n .github/scripts/validate-search-fts.sh
           bash -n .github/scripts/validate-adaptive-retention.sh
           bash -n .github/scripts/validate-archive-search.sh
+          bash -n .github/scripts/archive-backfill-production-audit.sh
 
       - name: Install pinned Wrangler
         working-directory: worker
