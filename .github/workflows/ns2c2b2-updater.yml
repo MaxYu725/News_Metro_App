@@ -1,0 +1,178 @@
+name: NS2C2B2 search UI updater
+
+on:
+  push:
+    branches:
+      - feature/ns2c2-search-ui
+    paths:
+      - .github/workflows/ns2c2b2-updater.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ns2c2-search-ui
+
+      - name: Patch explicit search state to archive cursor mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app.js')
+          text = path.read_text('utf-8')
+
+          old_import = "import { fetchNewsData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';"
+          new_import = "import { fetchNewsData, fetchSearchData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';"
+          if old_import not in text:
+              raise SystemExit('api import marker not found')
+          text = text.replace(old_import, new_import, 1)
+
+          old_state = """const searchState = {
+              query: '',
+              data: [],
+              page: 0,
+              hasMore: false
+          };"""
+          new_state = """const searchState = {
+              query: '',
+              data: [],
+              page: 0,
+              cursor: '',
+              mode: 'live',
+              hasMore: false
+          };"""
+          if old_state not in text:
+              raise SystemExit('search state marker not found')
+          text = text.replace(old_state, new_state, 1)
+
+          old_landing = '<p class="text-xs text-white/25 mt-2 tracking-wide">來源：香港01 · 巴士的報</p>'
+          new_landing = '<p class="text-xs text-white/25 mt-2 tracking-wide">來源：香港01 · 巴士的報 · 3 個字以上搜尋歷史新聞</p>'
+          if old_landing not in text:
+              raise SystemExit('search landing marker not found')
+          text = text.replace(old_landing, new_landing, 1)
+
+          old_hint = "if (DOM.searchHint) DOM.searchHint.textContent = `「${searchState.query}」的搜尋結果`;"
+          new_hint = "if (DOM.searchHint) DOM.searchHint.textContent = `「${searchState.query}」的搜尋結果${searchState.mode === 'archive' ? ' · 包含歷史新聞' : ''}`;"
+          if old_hint not in text:
+              raise SystemExit('search restored hint marker not found')
+          text = text.replace(old_hint, new_hint, 1)
+
+          start = text.index('async function loadSearchUI(isAppendMode = false) {')
+          end = text.index('\nfunction renderTiles(', start)
+          replacement = r'''async function loadSearchUI(isAppendMode = false) {
+              const query = isAppendMode
+                  ? searchState.query
+                  : (DOM.searchInput?.value.trim() || '');
+
+              if (!query) {
+                  searchState.query = '';
+                  searchState.data = [];
+                  searchState.page = 0;
+                  searchState.cursor = '';
+                  searchState.mode = 'live';
+                  searchState.hasMore = false;
+                  renderSearchLanding();
+                  if (DOM.searchHint) DOM.searchHint.textContent = '請先輸入搜尋關鍵字。';
+                  return;
+              }
+
+              const useArchive = Array.from(query).length >= 3;
+              const mode = useArchive ? 'archive' : 'live';
+              const page = isAppendMode && mode === 'live' ? searchState.page + 1 : 0;
+              const cursor = isAppendMode && mode === 'archive' ? searchState.cursor : '';
+
+              if (!isAppendMode) {
+                  renderSkeletonTiles(6);
+                  if (DOM.searchHint) DOM.searchHint.textContent = `正在搜尋「${query}」…`;
+              } else {
+                  isLoadingMore = true;
+                  appendBottomSkeletons(3);
+              }
+
+              const result = await fetchSearchData(query, {
+                  cursor,
+                  page,
+                  includeArchive: useArchive
+              });
+
+              if (isAppendMode) removeBottomSkeletons();
+
+              if (result.success && result.data.length > 0) {
+                  const newBatch = result.data;
+
+                  searchState.query = query;
+                  searchState.page = mode === 'live' ? page : 0;
+                  searchState.cursor = mode === 'archive' ? (result.nextCursor || '') : '';
+                  searchState.mode = result.mode || mode;
+                  searchState.hasMore = result.hasMore;
+
+                  if (isAppendMode) {
+                      const existingKeys = new Set(
+                          searchState.data.map(item => String(item?.id || item?.link || ''))
+                      );
+                      const uniqueBatch = newBatch.filter(item => {
+                          const key = String(item?.id || item?.link || '');
+                          return key && !existingKeys.has(key);
+                      });
+                      const startIndex = searchState.data.length;
+                      searchState.data = searchState.data.concat(uniqueBatch);
+                      currentNewsData = searchState.data;
+                      if (uniqueBatch.length > 0) renderTiles(uniqueBatch, true, startIndex);
+                  } else {
+                      searchState.data = newBatch;
+                      currentNewsData = searchState.data;
+                      renderTiles(currentNewsData, false);
+                  }
+
+                  currentPage = searchState.page;
+                  hasMoreNews = searchState.hasMore;
+                  if (DOM.searchHint) {
+                      DOM.searchHint.textContent = `「${query}」的搜尋結果${searchState.mode === 'archive' ? ' · 包含歷史新聞' : ''}`;
+                  }
+              } else {
+                  searchState.query = query;
+                  searchState.page = mode === 'live' ? page : 0;
+                  searchState.cursor = '';
+                  searchState.mode = mode;
+                  searchState.hasMore = false;
+                  hasMoreNews = false;
+
+                  if (!isAppendMode) {
+                      searchState.data = [];
+                      currentNewsData = [];
+                      if (DOM.newsGrid) {
+                          DOM.newsGrid.innerHTML = `<p class="text-gray-400 text-center mt-10 px-5">找不到符合「${query}」的新聞。</p>`;
+                      }
+                      if (DOM.searchHint) {
+                          DOM.searchHint.textContent = result.success ? '沒有搜尋結果。' : '搜尋服務暫時無法回應。';
+                      }
+                  }
+              }
+
+              isLoadingMore = false;
+          }
+          '''
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text, 'utf-8')
+          PY
+
+          node --check api.js
+          node --check app.js
+
+      - name: Commit search UI integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.js
+          git commit -m 'NS2C2B2: use archive cursor search in explicit search view'
+          git push origin HEAD:feature/ns2c2-search-ui
