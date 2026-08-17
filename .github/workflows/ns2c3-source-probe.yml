@@ -63,14 +63,16 @@ jobs:
           }
           function summarize(json, label) {
             const arrays = findArray(json).sort((a,b) => b.value.length - a.value.length);
-            const candidate = arrays.find(x => x.value.length && x.value.some(v => v && typeof v === 'object')) || arrays[0];
+            const candidate = Array.isArray(json?.items)
+              ? { path: '$.items', value: json.items }
+              : (arrays.find(x => x.value.length && x.value.some(v => v && typeof v === 'object')) || arrays[0]);
             const offsets = findKey(json, 'nextOffset');
             console.log(`${label} topKeys=${Object.keys(json || {}).join(',')}`);
             console.log(`${label} arrays=${arrays.slice(0,5).map(x => `${x.path}:${x.value.length}`).join(' | ')}`);
             console.log(`${label} nextOffsets=${offsets.slice(0,5).map(x => `${x.path}=${x.value}`).join(' | ')}`);
             if (candidate?.value?.[0] && typeof candidate.value[0] === 'object') {
               const first = candidate.value[0];
-              console.log(`${label} itemPath=${candidate.path} itemKeys=${Object.keys(first).slice(0,30).join(',')}`);
+              console.log(`${label} itemPath=${candidate.path} itemKeys=${Object.keys(first).slice(0,40).join(',')}`);
               for (const key of ['id','articleId','title','link','url','publishDate','pubDate','createTime','lastModified']) {
                 if (first[key] != null) console.log(`${label} first.${key}=${String(first[key]).slice(0,160)}`);
               }
@@ -93,6 +95,7 @@ jobs:
           NODE
 
       - name: Probe Bastille pagination candidates
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
