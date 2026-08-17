@@ -1,0 +1,127 @@
+name: Diagnostic HK01 search index legacy probe
+
+on:
+  push:
+    branches:
+      - diagnostic/hk01-legacy-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe-search-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Query HK01 public search index for legacy records
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from urllib.parse import urljoin
+
+          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-search-index-probe/1.0)'
+
+          def get(url, limit=5_000_000):
+              req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': '*/*'})
+              with urllib.request.urlopen(req, timeout=25) as r:
+                  return r.geturl(), r.read(limit).decode('utf-8', 'replace')
+
+          home_url, html = get('https://universal-search.hk01.com/', 1_000_000)
+          scripts = [urljoin(home_url, src) for src in re.findall(r'<script[^>]+src=["\']([^"\']+)', html, flags=re.I)]
+          bundle = ''
+          for url in scripts:
+              if 'universal-search.hk01.com/static/js/' not in url:
+                  continue
+              _, text = get(url)
+              bundle += '\n' + text
+
+          def env(name):
+              patterns = [
+                  rf'{re.escape(name)}:["\']([^"\']+)',
+                  rf'{re.escape(name)}\\?"?:\\?["\']([^"\']+)',
+              ]
+              for pat in patterns:
+                  m = re.search(pat, bundle)
+                  if m:
+                      return m.group(1)
+              return ''
+
+          app_id = env('REACT_APP_ALGOLIA_APP_ID')
+          api_key = env('REACT_APP_ALGOLIA_API_KEY')
+          index = env('REACT_APP_HK01_ARTICLE_INDEX_NAME')
+          print('CONFIG', {'app_id_found': bool(app_id), 'api_key_found': bool(api_key), 'index': index})
+          if not app_id or not api_key or not index:
+              raise SystemExit('search index config not discovered')
+
+          base = f'https://{app_id.lower()}-dsn.algolia.net/1/indexes/{urllib.parse.quote(index, safe="")}'
+          headers = {
+              'X-Algolia-Application-Id': app_id,
+              'X-Algolia-API-Key': api_key,
+              'Content-Type': 'application/json',
+              'User-Agent': UA,
+          }
+
+          def post(path, params):
+              payload = json.dumps({'params': params}, separators=(',', ':')).encode()
+              req = urllib.request.Request(base + path, data=payload, headers=headers, method='POST')
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as r:
+                      return r.status, json.loads(r.read().decode('utf-8', 'replace'))
+              except urllib.error.HTTPError as exc:
+                  raw = exc.read().decode('utf-8', 'replace')
+                  try:
+                      body = json.loads(raw)
+                  except Exception:
+                      body = {'raw': raw[:1000]}
+                  return exc.code, body
+
+          def pick(hit):
+              keys = [
+                  'objectID', 'id', 'articleId', 'article_id', 'title', 'headline',
+                  'canonicalUrl', 'canonicalURL', 'url', 'link', 'publishUrl',
+                  'publishTime', 'publishedAt', 'publishDate', 'pubDate', 'createdAt',
+                  'modifiedAt', 'updatedAt', 'category', 'channel', 'type',
+              ]
+              out = {k: hit.get(k) for k in keys if k in hit}
+              if not out:
+                  for k in list(hit)[:16]:
+                      v = hit.get(k)
+                      if isinstance(v, (str, int, float, bool)) or v is None:
+                          out[k] = v
+              return out
+
+          probes = [
+              ('empty', ''),
+              ('2016_new_day', '香港01 新的一天'),
+              ('2016_hope', '香港01的希望'),
+              ('2016_brecht', '疏離美學 布萊希特'),
+              ('2017_election', '林鄭 783票 曾俊華 366票'),
+              ('2017_review', '2017年大事回顧 政治爭議 劇本'),
+          ]
+          for name, query in probes:
+              params = urllib.parse.urlencode({'query': query, 'hitsPerPage': 10, 'page': 0, 'typoTolerance': 'false'})
+              status, body = post('/query', params)
+              print('QUERY', name, {'status': status, 'nbHits': body.get('nbHits'), 'page': body.get('page'), 'nbPages': body.get('nbPages')})
+              hits = body.get('hits') if isinstance(body, dict) else None
+              if isinstance(hits, list):
+                  for hit in hits[:10]:
+                      print(' HIT', json.dumps(pick(hit), ensure_ascii=False, separators=(',', ':')))
+                  if hits:
+                      print(' HIT_KEYS', sorted(hits[0].keys()))
+              else:
+                  print(' BODY', json.dumps(body, ensure_ascii=False)[:1200])
+
+          print('=== browse ACL probe ===')
+          status, body = post('/browse', 'hitsPerPage=5')
+          print('BROWSE', {'status': status, 'nbHits': body.get('nbHits') if isinstance(body, dict) else None, 'hasCursor': bool(body.get('cursor')) if isinstance(body, dict) else None})
+          if isinstance(body, dict) and isinstance(body.get('hits'), list):
+              for hit in body['hits'][:5]:
+                  print(' BROWSE_HIT', json.dumps(pick(hit), ensure_ascii=False, separators=(',', ':')))
+          else:
+              print(' BROWSE_BODY', json.dumps(body, ensure_ascii=False)[:1200])
+          PY
