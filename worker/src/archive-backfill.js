@@ -104,7 +104,7 @@ export async function fetchHk01HistoricalPage(zone, cursor = '', fetchImpl = fet
       signal,
       redirect: 'error',
       headers: {
-        'User-Agent': 'MetroNewsArchive/1.0',
+        'User-Agent': 'Mozilla/5.0',
         Accept: 'application/json,text/plain,*/*',
         'Accept-Language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
       },
@@ -131,7 +131,7 @@ export async function fetchBastilleHistoricalPage(page, fetchImpl = fetch) {
       signal,
       redirect: 'follow',
       headers: {
-        'User-Agent': 'MetroNewsArchive/1.0',
+        'User-Agent': 'Mozilla/5.0',
         Accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5',
         'Accept-Language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
       },
@@ -245,5 +245,6 @@ export function backfillApplyStateAndMarkWrittenSql(batchId, now = new Date().to
 }
 
 export function backfillMarkCompletedSql(batchId, now = new Date().toISOString()) {
-  return `UPDATE archive_backfill_runs SET status='completed',completed_at=${sqlLiteral(now)} WHERE batch_id=${sqlLiteral(batchId)} AND status='written';`;
+  const id = sqlLiteral(batchId);
+  return `UPDATE archive_backfill_runs SET status='completed',completed_at=${sqlLiteral(now)} WHERE batch_id=${id} AND status='written';\nDELETE FROM archive_backfill_run_items WHERE batch_id=${id};\nDELETE FROM archive_backfill_run_state WHERE batch_id=${id};`;
 }
