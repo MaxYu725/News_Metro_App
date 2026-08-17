@@ -56,16 +56,23 @@ jq -e '.success == false' "$tmp_body" >/dev/null
 
 echo 'Smoke: latest news remains readable'
 request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/latest?page=0"
-jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
+jq -e '.success == true and (.data | type == "array") and (.data | length > 0)' "$tmp_body" >/dev/null
 grep -Fqi "access-control-allow-origin: ${APP_ORIGIN}" "$tmp_headers"
+latest_id=$(jq -r '.data[0].id // .data[0].link // empty' "$tmp_body")
+latest_title=$(jq -r '.data[0].title // empty' "$tmp_body")
+search_probe=$(printf '%s' "$latest_title" | python3 -c 'import sys; print("".join(list(sys.stdin.read())[:6]))')
+if [[ -z "$latest_id" || ${#search_probe} -lt 3 ]]; then
+  echo 'Unable to derive FTS smoke probe from latest article' >&2
+  exit 1
+fi
 
-echo 'Smoke: search remains readable'
+echo 'Smoke: FTS5 trigram search finds a live article'
 request 200 -G \
   -H "Origin: ${APP_ORIGIN}" \
-  --data-urlencode 'q=香港' \
+  --data-urlencode "q=${search_probe}" \
   --data-urlencode 'page=0' \
   "${WORKER_ORIGIN}/api/search"
-jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
+jq --arg id "$latest_id" -e '.success == true and (.data | type == "array") and any(.data[]; (.id == $id) or (.link == $id))' "$tmp_body" >/dev/null
 
 # Rebuild archive rows under the new retention policy before asserting archive depth.
 # The previous production version could legitimately leave only the newest video row

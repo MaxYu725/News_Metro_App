@@ -5,6 +5,7 @@ import {
   parseAllowedArticleUrl,
   rateLimitKey,
 } from './security.js';
+import { searchArticles } from './search.js';
 
 function jsonResponse(request, payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
@@ -399,18 +400,14 @@ export default {
         return jsonResponse(request, { success: true, count: 0, page, hasMore: false, data: [] });
       }
 
-      const offset = page * limit;
       try {
-        const { results } = await env.DB
-          .prepare(`SELECT * FROM articles WHERE title LIKE ? OR description LIKE ? ORDER BY pubDate DESC LIMIT ? OFFSET ?`)
-          .bind(`%${query}%`, `%${query}%`, limit, offset)
-          .all();
-        const formattedResults = results.map(row => ({ ...row, images: row.images ? JSON.parse(row.images) : [] }));
+        const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
+        const formattedResults = rows.map(row => ({ ...row, images: row.images ? JSON.parse(row.images) : [] }));
         return jsonResponse(request, {
           success: true,
           count: formattedResults.length,
           page,
-          hasMore: formattedResults.length === limit,
+          hasMore,
           timestamp: new Date().toISOString(),
           data: formattedResults,
         });

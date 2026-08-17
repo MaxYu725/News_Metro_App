@@ -1,1 +1,1 @@
-CF-W4R2 production retry: verified HK01 image channels 259/256 via rssforever with archive-specific 20s timeout.
+CF-W5 production promotion: apply D1 FTS5 trigram migration before deploying indexed search.
