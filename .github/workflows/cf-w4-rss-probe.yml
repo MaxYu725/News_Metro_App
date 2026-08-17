@@ -1,4 +1,4 @@
-name: CF-W4 D1 collision probe
+name: CF-W4 D1 link inventory probe
 
 on:
   push:
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Compare live image feed links with public production D1 search
+      - name: Compare image feed links with paginated public production inventory
         shell: node {0}
         run: |
           const RSS_BASE = 'https://rsshub.rssforever.com';
@@ -34,14 +34,6 @@ jobs:
             return rows;
           }
 
-          function searchTerm(title) {
-            return title
-              .replace(/[【】「」『』（）()｜|·．。！？：:、,.]/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim()
-              .slice(0, 36);
-          }
-
           const feedItems = [];
           for (const path of paths) {
             const response = await fetch(RSS_BASE + path, { signal: AbortSignal.timeout(15000) });
@@ -49,48 +41,53 @@ jobs:
             for (const item of parseItems(xml)) feedItems.push({ path, ...item });
           }
 
-          async function check(item) {
-            const q = searchTerm(item.title);
-            const url = `${WORKER}/api/search?q=${encodeURIComponent(q)}&page=0`;
-            try {
-              const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
-              const payload = await response.json();
-              const exact = (payload.data || []).find(row => row.link === item.link || row.id === item.link);
-              return {
-                ...item,
-                q,
-                http: response.status,
-                exact: exact ? { category: exact.category, pubDate: exact.pubDate, title: exact.title } : null,
-                resultCount: Array.isArray(payload.data) ? payload.data.length : -1,
-              };
-            } catch (error) {
-              return { ...item, q, http: 'ERR', exact: null, resultCount: -1, error: String(error) };
+          const dbRows = [];
+          let page = 0;
+          while (page <= 500) {
+            const batchPages = Array.from({ length: 6 }, (_, index) => page + index);
+            const payloads = await Promise.all(batchPages.map(async currentPage => {
+              const response = await fetch(`${WORKER}/api/news/latest?page=${currentPage}`, { signal: AbortSignal.timeout(12000) });
+              if (!response.ok) throw new Error(`latest page ${currentPage} returned ${response.status}`);
+              return { currentPage, payload: await response.json() };
+            }));
+
+            let done = false;
+            for (const { currentPage, payload } of payloads.sort((a, b) => a.currentPage - b.currentPage)) {
+              if (!payload.success || !Array.isArray(payload.data)) throw new Error(`invalid latest payload at page ${currentPage}`);
+              dbRows.push(...payload.data);
+              if (payload.data.length < 20 || payload.hasMore === false) {
+                done = true;
+                break;
+              }
             }
+            if (done) break;
+            page += 6;
           }
 
-          const results = [];
-          for (let i = 0; i < feedItems.length; i += 8) {
-            results.push(...await Promise.all(feedItems.slice(i, i + 8).map(check)));
-          }
+          const byLink = new Map(dbRows.map(row => [row.link || row.id, row]));
+          const categoryCounts = {};
+          for (const row of dbRows) categoryCounts[row.category] = (categoryCounts[row.category] || 0) + 1;
 
-          const counts = new Map();
-          let exactFound = 0;
-          for (const result of results) {
-            if (result.exact) {
-              exactFound += 1;
-              counts.set(result.exact.category, (counts.get(result.exact.category) || 0) + 1);
+          let found = 0;
+          const foundCategories = {};
+          for (const item of feedItems) {
+            const row = byLink.get(item.link);
+            if (row) {
+              found += 1;
+              foundCategories[row.category] = (foundCategories[row.category] || 0) + 1;
             }
             console.log(JSON.stringify({
-              feed: result.path,
-              title: result.title.slice(0, 80),
-              link: result.link,
-              feedPubDate: result.pubDate,
-              searchHttp: result.http,
-              exactCategory: result.exact?.category || null,
-              dbPubDate: result.exact?.pubDate || null,
-              searchResultCount: result.resultCount,
+              feed: item.path,
+              title: item.title.slice(0, 90),
+              link: item.link,
+              feedPubDate: item.pubDate,
+              inProductionD1: Boolean(row),
+              dbCategory: row?.category || null,
+              dbPubDate: row?.pubDate || null,
             }));
           }
 
-          console.log(`\nfeedItems=${feedItems.length} exactLinksAlreadyInD1=${exactFound}`);
-          console.log(`existingCategories=${JSON.stringify(Object.fromEntries([...counts.entries()].sort()))}`);
+          console.log(`\nproductionRowsRead=${dbRows.length}`);
+          console.log(`productionCategoryCounts=${JSON.stringify(categoryCounts)}`);
+          console.log(`feedItems=${feedItems.length} exactFeedLinksInProductionD1=${found}`);
+          console.log(`collisionCategories=${JSON.stringify(foundCategories)}`);
