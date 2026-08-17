@@ -94,6 +94,7 @@ function htmlToText(html) {
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<[^>]*>?/g, '')
     .replace(/[\t\r ]+/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
     .replace(/\n\s*\n+/g, '\n\n')
     .trim();
 }
