@@ -10,6 +10,7 @@ on:
       - worker/archive-migrations/**
       - worker/test/archive-backfill.test.mjs
       - .github/scripts/validate-archive-search.sh
+      - .github/scripts/validate-archive-backfill.sh
       - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/archive-backfill.yml
       - .backfill/archive-production.txt
@@ -57,7 +58,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,6 +69,7 @@ jobs:
           node --check worker/scripts/archive-backfill.mjs
           node --check worker/test/archive-backfill.test.mjs
           bash -n .github/scripts/validate-archive-search.sh
+          bash -n .github/scripts/validate-archive-backfill.sh
           bash -n .github/scripts/archive-backfill-production-audit.sh
 
       - name: Install pinned Wrangler
@@ -76,6 +78,9 @@ jobs:
 
       - name: Validate archive migrations locally
         run: bash .github/scripts/validate-archive-search.sh
+
+      - name: Validate replayable batch lifecycle locally
+        run: bash .github/scripts/validate-archive-backfill.sh
 
       - name: Run Worker regressions
         working-directory: worker
@@ -151,8 +156,7 @@ jobs:
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "Archive control: batch=$batch_id source=$source limit=$limit mode=$mode"
 
-      - name: Validate deployment credentials
-        if: steps.control.outputs.mode == 'run'
+      - name: Validate Cloudflare credentials
         shell: bash
         run: |
           set -euo pipefail
