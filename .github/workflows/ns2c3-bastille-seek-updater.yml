@@ -112,17 +112,17 @@ jobs:
                   raise SystemExit('generator import anchor missing')
               script = script.replace(old_import, new_import, 1)
 
-          old_block = '''  const floor = sourceFloor(existingRows, '巴士的報');
-              const startCount = selected.length;
-              const maxPages = Math.min(180, Math.max(80, Math.ceil(target / 10) + 80));
-              let pages = 0;
-
-              while (selected.length - startCount < target && pages < maxPages && !state.exhausted) {
-          '''
-          new_block = '''  const floor = sourceFloor(existingRows, '巴士的報');
-              const startCount = selected.length;
-              const maxPages = Math.min(180, Math.max(80, Math.ceil(target / 10) + 80));
-              let pages = 0;
+          if "const seek = await seekBastillePageBeforeFloor(floor);" not in script:
+              function_start = script.find("async function collectBastille(")
+              if function_start < 0:
+                  raise SystemExit('collectBastille marker missing')
+              pages_marker = "  let pages = 0;\n"
+              pages_pos = script.find(pages_marker, function_start)
+              while_pos = script.find("  while (selected.length - startCount < target", pages_pos)
+              if pages_pos < 0 or while_pos < 0:
+                  raise SystemExit('collectBastille pages/while markers missing')
+              insert_pos = pages_pos + len(pages_marker)
+              seek_block = """
 
               if (!row && floor) {
                 const seek = await seekBastillePageBeforeFloor(floor);
@@ -130,42 +130,41 @@ jobs:
                 state.pagesFetched += seek.probes;
                 pages += seek.probes;
               }
-
-              while (selected.length - startCount < target && pages < maxPages && !state.exhausted) {
-          '''
-          if old_block not in script:
-              raise SystemExit('generator Bastille block anchor missing')
-          script = script.replace(old_block, new_block, 1)
+              """
+              script = script[:insert_pos] + seek_block + script[insert_pos:]
           script_path.write_text(script, 'utf-8')
 
           validator_path = Path('.github/scripts/validate-worker-baseline.py')
           validator = validator_path.read_text('utf-8')
-          old_signal = '''                "ARCHIVE_SHARD_POST_WRITE_MAX_BYTES = 325_000_000",
-          '''
-          new_signal = old_signal + '''                "BASTILLE_SEEK_MAX_PAGE = 4096",
-          '''
+          old_signal = '                "ARCHIVE_SHARD_POST_WRITE_MAX_BYTES = 325_000_000",\n'
           if "BASTILLE_SEEK_MAX_PAGE = 4096" not in validator:
               if old_signal not in validator:
                   raise SystemExit('validator constant anchor missing')
-              validator = validator.replace(old_signal, new_signal, 1)
+              validator = validator.replace(
+                  old_signal,
+                  old_signal + '                "BASTILLE_SEEK_MAX_PAGE = 4096",\n',
+                  1,
+              )
 
-          old_helper_signal = '''                "backfillMarkCompletedSql",
-          '''
-          new_helper_signal = old_helper_signal + '''                "seekBastillePageBeforeFloor",
-          '''
+          old_helper_signal = '                "backfillMarkCompletedSql",\n'
           if '"seekBastillePageBeforeFloor"' not in validator:
               if old_helper_signal not in validator:
                   raise SystemExit('validator helper anchor missing')
-              validator = validator.replace(old_helper_signal, new_helper_signal, 1)
+              validator = validator.replace(
+                  old_helper_signal,
+                  old_helper_signal + '                "seekBastillePageBeforeFloor",\n',
+                  1,
+              )
 
-          old_generator_signal = '''                "args['batch-id']",
-          '''
-          new_generator_signal = old_generator_signal + '''                "seekBastillePageBeforeFloor(floor)",
-          '''
+          old_generator_signal = '                "args[\'batch-id\']",\n'
           if '"seekBastillePageBeforeFloor(floor)"' not in validator:
               if old_generator_signal not in validator:
                   raise SystemExit('validator generator anchor missing')
-              validator = validator.replace(old_generator_signal, new_generator_signal, 1)
+              validator = validator.replace(
+                  old_generator_signal,
+                  old_generator_signal + '                "seekBastillePageBeforeFloor(floor)",\n',
+                  1,
+              )
           validator_path.write_text(validator, 'utf-8')
           PY
 
