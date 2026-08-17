@@ -24,45 +24,23 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           index = Path('worker/src/index.js')
           text = index.read_text('utf-8')
-          text = text.replace(
-              "import { searchArticles } from './search.js';",
-              "import {\n  decodeSearchCursor,\n  isArchiveEligibleQuery,\n  searchArticles,\n  searchArticlesAcrossDatabases,\n} from './search.js';",
-          )
-          old = '''    if (url.pathname === '/api/search') {
-              if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
+          old_import = "import { searchArticles } from './search.js';"
+          new_import = "import {\n  decodeSearchCursor,\n  isArchiveEligibleQuery,\n  searchArticles,\n  searchArticlesAcrossDatabases,\n} from './search.js';"
+          if old_import not in text:
+              raise SystemExit('search import contract not found')
+          text = text.replace(old_import, new_import, 1)
 
-              const query = (url.searchParams.get('q') || '').trim();
-              const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
-              const limit = 20;
-
-              if (query.length > 100 || !Number.isInteger(page) || page < 0 || page > 500) {
-                return jsonResponse(request, { success: false, error: '搜尋參數無效' }, 400);
-              }
-
-              if (!query) {
-                return jsonResponse(request, { success: true, count: 0, page, hasMore: false, data: [] });
-              }
-
-              try {
-                const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
-                const formattedResults = rows.map(formatArticleRow);
-                return jsonResponse(request, {
-                  success: true,
-                  count: formattedResults.length,
-                  page,
-                  hasMore,
-                  timestamp: new Date().toISOString(),
-                  data: formattedResults,
-                });
-              } catch {
-                return jsonResponse(request, { success: false, error: '搜尋資料庫時發生錯誤' }, 500);
-              }
-            }
-          '''
-          new = '''    if (url.pathname === '/api/search') {
+          start_marker = "    if (url.pathname === '/api/search') {"
+          end_marker = "    if (url.pathname.startsWith('/api/news/')) {"
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('search route markers not found')
+          route = '''    if (url.pathname === '/api/search') {
               if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
 
               const query = (url.searchParams.get('q') || '').trim();
@@ -135,26 +113,14 @@ jobs:
                 return jsonResponse(request, { success: false, error: '搜尋資料庫時發生錯誤' }, 500);
               }
             }
+
           '''
-          if old not in text:
-              raise SystemExit('search route contract not found')
-          text = text.replace(old, new)
+          text = text[:start] + route + text[end:]
           index.write_text(text, 'utf-8')
 
           validator = Path('.github/scripts/validate-worker-baseline.py')
           v = validator.read_text('utf-8')
-          old_d1 = '''    d1 = config.get("d1_databases", [])
-              if len(d1) != 1:
-                  fail("expected exactly one D1 binding")
-              if d1[0].get("binding") != "DB":
-                  fail("D1 binding name is not DB")
-              if d1[0].get("database_id") != binding_map["DB"].get("id"):
-                  fail("D1 database_id does not match recovered production binding")
-              if d1[0].get("database_name") != "metro_news_db":
-                  fail("D1 database_name is not metro_news_db")
-              if d1[0].get("migrations_dir") != "migrations":
-                  fail("D1 migrations_dir is not migrations")
-          '''
+          pattern = re.compile(r'''    d1 = config\.get\("d1_databases", \[\]\)\n.*?(?=    if config\.get\("secrets")''', re.S)
           new_d1 = '''    d1 = config.get("d1_databases", [])
               d1_map = {item.get("binding"): item for item in d1}
               if set(d1_map) != {"DB", "ARCHIVE_01"}:
@@ -169,12 +135,13 @@ jobs:
                   fail("archive D1 database_id mismatch")
               if archive_d1.get("database_name") != "metro_news_archive_01" or archive_d1.get("migrations_dir") != "archive-migrations":
                   fail("archive D1 name/migrations_dir mismatch")
+
           '''
-          if old_d1 not in v:
-              raise SystemExit('validator D1 block not found')
-          v = v.replace(old_d1, new_d1)
-          anchor = '''    # CF-W5: indexed substring search must remain on D1 FTS5 trigram.
-          '''
+          v2, count = pattern.subn(new_d1, v, count=1)
+          if count != 1:
+              raise SystemExit(f'validator D1 block replacement count={count}')
+          v = v2
+          anchor = '    # CF-W5: indexed substring search must remain on D1 FTS5 trigram.\n'
           addition = '''    # NS2C2B1: archive search is read-only, cursor-based, and replica-aware.
               archive_migration = (WORKER / "archive-migrations" / "0000_archive_baseline.sql").read_text("utf-8")
               for signal in [
@@ -205,12 +172,13 @@ jobs:
           '''
           if anchor not in v:
               raise SystemExit('validator archive anchor not found')
-          v = v.replace(anchor, addition + anchor)
+          v = v.replace(anchor, addition + anchor, 1)
           validator.write_text(v, 'utf-8')
           PY
 
           node --check worker/src/index.js
           node --check worker/src/search.js
+          python3 -m py_compile .github/scripts/validate-worker-baseline.py
           python3 .github/scripts/validate-worker-baseline.py
           cd worker && npm test
 
