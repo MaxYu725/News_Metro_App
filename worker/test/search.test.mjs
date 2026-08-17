@@ -75,12 +75,13 @@ test('unrelated FTS errors fail closed instead of triggering a table scan', asyn
   assert.equal(db.calls.length, 1);
 });
 
-test('search cursor round-trips stable pubDate and id', () => {
-  const cursor = encodeSearchCursor({ pubDate: '2026-07-18T12:08:38.000Z', id: 'https://example.test/a' });
+test('search cursor round-trips Unicode article ids', () => {
+  const id = 'https://example.test/香港新聞/測試文章';
+  const cursor = encodeSearchCursor({ pubDate: '2026-07-18T12:08:38.000Z', id });
   assert.ok(cursor.length > 0);
   assert.deepEqual(decodeSearchCursor(cursor), {
     pubDate: '2026-07-18T12:08:38.000Z',
-    id: 'https://example.test/a',
+    id,
   });
   assert.throws(() => decodeSearchCursor('%%%'), /invalid search cursor/);
 });
@@ -105,6 +106,28 @@ test('multi-D1 cursor search merges, de-duplicates and sorts globally', async ()
   });
   assert.match(live.calls[0].sql, /a\.pubDate < \?/);
   assert.match(archive.calls[0].sql, /ORDER BY a\.pubDate DESC, a\.id DESC/);
+});
+
+test('multi-D1 next page binds decoded cursor boundary', async () => {
+  const cursor = decodeSearchCursor(encodeSearchCursor({
+    pubDate: '2026-08-16T10:00:00.000Z',
+    id: 'https://example.test/香港新聞',
+  }));
+  const live = fakeDb([() => ({ results: [] })]);
+  const archive = fakeDb([() => ({ results: [] })]);
+  await searchArticlesAcrossDatabases([live, archive], '香港新聞', cursor, 20);
+  assert.deepEqual(live.calls[0].params.slice(1, 5), [
+    cursor.pubDate,
+    cursor.pubDate,
+    cursor.pubDate,
+    cursor.id,
+  ]);
+  assert.deepEqual(archive.calls[0].params.slice(1, 5), [
+    cursor.pubDate,
+    cursor.pubDate,
+    cursor.pubDate,
+    cursor.id,
+  ]);
 });
 
 test('archive fan-out is reserved for trigram-eligible queries', () => {
