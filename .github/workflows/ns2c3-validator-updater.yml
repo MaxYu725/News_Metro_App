@@ -1,0 +1,126 @@
+name: NS2C3 baseline validator updater
+
+on:
+  push:
+    branches:
+      - feature/ns2c3-controlled-backfill
+    paths:
+      - .github/workflows/ns2c3-validator-updater.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ns2c3-controlled-backfill
+
+      - name: Patch NS2C3 baseline contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('.github/scripts/validate-worker-baseline.py')
+          text = p.read_text('utf-8')
+
+          old = '''    bastille = (WORKER / "src" / "sources" / "bastille.js").read_text("utf-8")
+              manifest = json.loads((WORKER / "recovery-manifest.json").read_text("utf-8"))
+          '''
+          new = '''    bastille = (WORKER / "src" / "sources" / "bastille.js").read_text("utf-8")
+              archive_backfill = (WORKER / "src" / "archive-backfill.js").read_text("utf-8")
+              archive_backfill_script = (WORKER / "scripts" / "archive-backfill.mjs").read_text("utf-8")
+              archive_backfill_migration = (WORKER / "archive-migrations" / "0001_backfill_state.sql").read_text("utf-8")
+              manifest = json.loads((WORKER / "recovery-manifest.json").read_text("utf-8"))
+          '''
+          if old not in text:
+              raise SystemExit('validator read-owner marker not found')
+          text = text.replace(old, new, 1)
+
+          anchor = '''    # CF-W5: indexed substring search must remain on D1 FTS5 trigram.
+          '''
+          addition = '''    # NS2C3A: historical backfill is bounded, backward-only, replayable, and external to the Worker runtime.
+              for signal in [
+                  "ARCHIVE_BACKFILL_MAX_LIMIT = 1000",
+                  "ARCHIVE_SHARD_STOP_BYTES = 300_000_000",
+                  "ARCHIVE_SHARD_POST_WRITE_MAX_BYTES = 325_000_000",
+                  "https://web-data.api.hk01.com",
+                  "nextOffset",
+                  "https://www.bastillepost.com",
+                  "paged",
+                  "backfillPlanItemInsertSql",
+                  "backfillApplyArticlesSql",
+                  "backfillApplyStateAndMarkWrittenSql",
+                  "backfillMarkCompletedSql",
+              ]:
+                  if signal not in archive_backfill:
+                      fail(f"archive backfill contract signal missing: {signal}")
+              for zone_signal in [
+                  "{ zoneId: 1, category: 'local' }",
+                  "{ zoneId: 2, category: 'ent' }",
+                  "{ zoneId: 3, category: 'sports' }",
+                  "{ zoneId: 4, category: 'global' }",
+                  "{ zoneId: 5, category: 'china' }",
+                  "{ zoneId: 7, category: 'hot' }",
+                  "{ zoneId: 8, category: 'life' }",
+                  "{ zoneId: 10, category: 'community' }",
+                  "{ zoneId: 11, category: 'tech' }",
+              ]:
+                  if zone_signal not in archive_backfill:
+                      fail(f"archive historical zone mapping missing: {zone_signal}")
+              if "category: 'video'" in archive_backfill:
+                  fail("video/image archive must not be historical-backfill owned")
+              for signal in [
+                  "archive_backfill_state",
+                  "archive_backfill_runs",
+                  "archive_backfill_run_items",
+                  "archive_backfill_run_state",
+                  "'planned', 'written', 'completed'",
+              ]:
+                  if signal not in archive_backfill_migration:
+                      fail(f"archive backfill migration signal missing: {signal}")
+              for signal in [
+                  "sourceFloor(existingRows",
+                  "writeBatchPlan",
+                  "plan-reset.sql",
+                  "existing snapshot incomplete",
+                  "--batch-id",
+              ]:
+                  if signal not in archive_backfill_script:
+                      fail(f"archive backfill generator signal missing: {signal}")
+              if "ARCHIVE_01.prepare" in source or "ARCHIVE_01.batch" in source:
+                  fail("production Worker must remain read-only against ARCHIVE_01")
+
+          '''
+          if anchor not in text:
+              raise SystemExit('validator NS2C3 insertion anchor not found')
+          text = text.replace(anchor, addition + anchor, 1)
+
+          old_print = '    print("D1 FTS5 trigram search contract: OK")\n'
+          new_print = old_print + '    print("D1 controlled historical archive backfill contract: OK")\n'
+          if old_print not in text:
+              raise SystemExit('validator print marker not found')
+          text = text.replace(old_print, new_print, 1)
+          p.write_text(text, 'utf-8')
+          PY
+
+          python3 -m py_compile .github/scripts/validate-worker-baseline.py
+          python3 .github/scripts/validate-worker-baseline.py
+          node --check worker/src/archive-backfill.js
+          node --check worker/scripts/archive-backfill.mjs
+          cd worker && npm test
+
+      - name: Commit validator contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/scripts/validate-worker-baseline.py
+          git commit -m 'NS2C3A: lock controlled archive backfill contract'
+          git push origin HEAD:feature/ns2c3-controlled-backfill
