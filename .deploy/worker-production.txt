@@ -1,1 +1,1 @@
-NS2B production promotion: add 巴士的報 as a source-specific second provider with full RSS content, source-aware UI, exact article allowlist, and two-source production audit.
+NS2B-R1 production promotion: use Cloudflare-compatible redirect follow for the fixed Bastille RSS feed, validate final publisher host, and rollback Worker code when the post-sync D1 audit fails.
