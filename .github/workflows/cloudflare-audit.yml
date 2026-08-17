@@ -80,12 +80,12 @@ jobs:
 
             if cf_get "/workers/scripts/${worker}/deployments" /tmp/worker-deployments.json; then
               echo 'Latest deployment:'
-              jq -c '.result.deployments[0] // .result[0] // {} | {id,created_on,source,author_email,versions}' /tmp/worker-deployments.json
+              jq -c '.result.deployments[0] // .result[0] // {} | {id,created_on,source,versions}' /tmp/worker-deployments.json
             fi
 
             if cf_get "/workers/scripts/${worker}/schedules" /tmp/worker-schedules.json; then
-              echo 'Cron schedules:'
-              jq -c '.result // [] | if length == 0 then [] else map({cron,created_on,modified_on}) end' /tmp/worker-schedules.json
+              echo 'Cron schedules (raw sanitized Cloudflare result):'
+              jq -c '.result // []' /tmp/worker-schedules.json
             fi
           done
 
