@@ -1,4 +1,4 @@
-name: CF-W4 production sync race probe
+name: CF-W4R2 apply image upstream fix
 
 on:
   push:
@@ -8,43 +8,123 @@ on:
       - .github/workflows/cf-w4-rss-probe.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  probe:
+  update:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 5
     steps:
-      - name: Observe video row count around one controlled production sync
-        shell: node {0}
+      - name: Checkout diagnosis branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/cf-w4r2-upstream-diagnosis
+
+      - name: Apply confirmed image feed policy
+        shell: python
         run: |
-          const WORKER = 'https://news-proxy.maxyu0725us.workers.dev';
-          const APP_ORIGIN = 'https://maxyu725.github.io';
+          from pathlib import Path
 
-          async function videoCount(label) {
-            const response = await fetch(`${WORKER}/api/news/video?page=0`, {
-              headers: { Origin: APP_ORIGIN },
-              signal: AbortSignal.timeout(15000),
-            });
-            const payload = await response.json();
-            const count = Array.isArray(payload.data) ? payload.data.length : -1;
-            const dates = (payload.data || []).slice(0, 3).map(row => row.pubDate);
-            console.log(`${label}: http=${response.status} pageCount=${count} hasMore=${payload.hasMore} sampleDates=${JSON.stringify(dates)}`);
-            return count;
-          }
+          source_path = Path('worker/src/index.js')
+          source = source_path.read_text(encoding='utf-8')
 
-          await videoCount('before-sync');
+          old_timeout = "const timeoutId = setTimeout(() => controller.abort(), 8000);"
+          new_timeout = "const timeoutId = setTimeout(() => controller.abort(), sourceConfig.timeoutMs || 8000);"
+          if old_timeout not in source:
+              raise SystemExit('fetch timeout marker missing')
+          source = source.replace(old_timeout, new_timeout, 1)
 
-          const started = Date.now();
-          const syncResponse = await fetch(`${WORKER}/api/news/latest?page=0&sync=1`, {
-            headers: { Origin: APP_ORIGIN },
-            signal: AbortSignal.timeout(90000),
-          });
-          const syncPayload = await syncResponse.json();
-          console.log(`sync: http=${syncResponse.status} success=${syncPayload.success} elapsedMs=${Date.now() - started}`);
+          old_video = """  video: [259, 256, 260, 348].map(channelId => ({
+            name: '香港01',
+            urls: rssHubs.map(base => `${base}/hk01/channel/${channelId}`),
+          })),"""
+          new_video = """  video: [259, 256].map(channelId => ({
+            name: '香港01',
+            urls: [`https://rsshub.rssforever.com/hk01/channel/${channelId}`],
+            timeoutMs: 20000,
+          })),"""
+          if old_video not in source:
+              raise SystemExit('old image channel mapping missing')
+          source = source.replace(old_video, new_video, 1)
 
-          await videoCount('after-sync-0s');
-          for (const seconds of [2, 5, 10, 20]) {
-            await new Promise(resolve => setTimeout(resolve, seconds * 1000));
-            await videoCount(`after-additional-${seconds}s`);
-          }
+          old_warn = "console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name });"
+          new_warn = "console.warn('rss-source-empty', { category: categoryName, source: sourceConfig.name, timeoutMs: sourceConfig.timeoutMs || 8000, urlCount: sourceConfig.urls.length });"
+          if old_warn not in source:
+              raise SystemExit('rss-source-empty marker missing')
+          source = source.replace(old_warn, new_warn, 1)
+
+          old_export = """export default {
+            async scheduled(event, env, ctx) {
+            ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+          },
+
+          async fetch(request, env, ctx) {"""
+          new_export = """export default {
+            async scheduled(event, env, ctx) {
+              ctx.waitUntil(syncAllCategoriesAndCleanup(env));
+            },
+
+            async fetch(request, env, ctx) {"""
+          if old_export in source:
+              source = source.replace(old_export, new_export, 1)
+
+          old_category_indent = """              await syncCategoryToDB(category, env);
+                        if (forceSync) await cleanUpOldArticles(env);"""
+          new_category_indent = """              await syncCategoryToDB(category, env);
+              if (forceSync) await cleanUpOldArticles(env);"""
+          if old_category_indent in source:
+              source = source.replace(old_category_indent, new_category_indent, 1)
+
+          source_path.write_text(source, encoding='utf-8')
+
+          validator_path = Path('.github/scripts/validate-worker-baseline.py')
+          validator = validator_path.read_text(encoding='utf-8')
+          old_validator = """    # CF-W2: keep the image category on current HK01 subchannel feeds, not stale zone/13.
+              if '/hk01/zone/13' in source:
+                  fail('stale HK01 image aggregate feed must not be reintroduced')
+              if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
+                  fail('HK01 image subchannel feed mapping is missing')
+          """
+          # Match the real indentation without depending on comment spacing.
+          start = validator.find("    # CF-W2: keep the image category")
+          end = validator.find("\n    retention_sql =", start)
+          if start < 0 or end < 0:
+              raise SystemExit('image validator block missing')
+          new_validator = """    # CF-W4R2: image archive uses only the two live, verified RSSHub channels.
+              if '/hk01/zone/13' in source:
+                  fail('stale HK01 image aggregate feed must not be reintroduced')
+              if '[259, 256]' not in source or '/hk01/channel/${channelId}' not in source:
+                  fail('verified HK01 image channel mapping is missing')
+              if '[259, 256, 260, 348]' in source or 'channel/260' in source or 'channel/348' in source:
+                  fail('dead HK01 image channels must not be reintroduced')
+              if 'https://rsshub.rssforever.com/hk01/channel/${channelId}' not in source:
+                  fail('image archive must use the verified rssforever endpoint')
+              if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:
+                  fail('image archive timeout policy is missing')
+          """
+          # Normalize accidental extra indentation in the embedded block.
+          new_validator = new_validator.replace('\n      ', '\n  ')
+          validator = validator[:start] + new_validator.rstrip() + validator[end:]
+          validator_path.write_text(validator, encoding='utf-8')
+
+          Path('.deploy/worker-production.txt').write_text(
+              'CF-W4R2 production retry: use verified HK01 image channels 259/256 via rssforever with archive-specific 20s timeout.\n',
+              encoding='utf-8',
+          )
+
+      - name: Validate generated patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/src/index.js
+          python3 .github/scripts/validate-worker-baseline.py
+
+      - name: Commit confirmed fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/src/index.js .github/scripts/validate-worker-baseline.py .deploy/worker-production.txt
+          git commit -m "CF-W4R2: stabilize HK01 image archive fetch"
+          git push origin HEAD:agent/cf-w4r2-upstream-diagnosis
