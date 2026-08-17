@@ -20,6 +20,7 @@ const HK01_API_ORIGIN = 'https://web-data.api.hk01.com';
 const BASTILLE_ORIGIN = 'https://www.bastillepost.com';
 const HK01_ARTICLE_HOSTS = new Set(['hk01.com', 'www.hk01.com']);
 const BASTILLE_HOSTS = new Set(['bastillepost.com', 'www.bastillepost.com']);
+const HK01_IMAGE_HOSTS = new Set(['cdn.hk01.com']);
 
 function timeoutSignal(ms) {
   const controller = new AbortController();
@@ -44,8 +45,16 @@ function safeHttpsUrl(value, allowedHosts) {
   }
 }
 
+function integerLiteral(value) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 0) throw new Error('invalid non-negative integer literal');
+  return String(number);
+}
+
 export function hk01HistoricalPageUrl(zoneId, cursor = '') {
-  const url = new URL(`/v2/feed/zone/${Number(zoneId)}`, HK01_API_ORIGIN);
+  const zone = Number(zoneId);
+  if (!Number.isInteger(zone) || zone < 1) throw new Error('invalid HK01 zone');
+  const url = new URL(`/v2/feed/zone/${zone}`, HK01_API_ORIGIN);
   if (cursor !== '' && cursor != null) url.searchParams.set('offset', String(cursor));
   return url.href;
 }
@@ -66,7 +75,7 @@ export function parseHk01HistoricalPage(payload, category) {
 
     const imageUrl = safeHttpsUrl(
       data.mainImage?.cdnUrl || data.originalImage?.cdnUrl || '',
-      new Set(['cdn.hk01.com']),
+      HK01_IMAGE_HOSTS,
     );
 
     articles.push({
@@ -173,14 +182,68 @@ export function articleInsertSql(article) {
   ].map(sqlLiteral).join(',')});`;
 }
 
-export function backfillStateUpsertSql(state) {
+export function backfillStateUpsertSql(state, now = new Date().toISOString()) {
   return `INSERT INTO archive_backfill_state (source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted,updated_at) VALUES (${[
-    state.sourceKey,
-    state.cursor || '',
-    Number(state.pagesFetched || 0),
-    Number(state.rowsInserted || 0),
-    state.lastPubDate || '',
-    Number(state.exhausted ? 1 : 0),
-    new Date().toISOString(),
-  ].map(sqlLiteral).join(',')}) ON CONFLICT(source_key) DO UPDATE SET cursor=excluded.cursor,pages_fetched=excluded.pages_fetched,rows_inserted=excluded.rows_inserted,last_pubDate=excluded.last_pubDate,exhausted=excluded.exhausted,updated_at=excluded.updated_at;`;
+    sqlLiteral(state.sourceKey),
+    sqlLiteral(state.cursor || ''),
+    integerLiteral(Number(state.pagesFetched || 0)),
+    integerLiteral(Number(state.rowsInserted || 0)),
+    sqlLiteral(state.lastPubDate || ''),
+    integerLiteral(Number(state.exhausted ? 1 : 0)),
+    sqlLiteral(now),
+  ].join(',')}) ON CONFLICT(source_key) DO UPDATE SET cursor=excluded.cursor,pages_fetched=excluded.pages_fetched,rows_inserted=excluded.rows_inserted,last_pubDate=excluded.last_pubDate,exhausted=excluded.exhausted,updated_at=excluded.updated_at;`;
+}
+
+export function backfillPlanItemInsertSql(batchId, ordinal, article) {
+  return `INSERT INTO archive_backfill_run_items (batch_id,ordinal,id,title,link,pubDate,description,category,source,imageUrl) VALUES (${[
+    sqlLiteral(batchId),
+    integerLiteral(ordinal),
+    sqlLiteral(article.id),
+    sqlLiteral(article.title),
+    sqlLiteral(article.link),
+    sqlLiteral(article.pubDate),
+    sqlLiteral(article.description || ''),
+    sqlLiteral(article.category),
+    sqlLiteral(article.source),
+    sqlLiteral(article.imageUrl || ''),
+  ].join(',')});`;
+}
+
+export function backfillRunStateInsertSql(batchId, state) {
+  return `INSERT INTO archive_backfill_run_state (batch_id,source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted) VALUES (${[
+    sqlLiteral(batchId),
+    sqlLiteral(state.sourceKey),
+    sqlLiteral(state.cursor || ''),
+    integerLiteral(Number(state.pagesFetched || 0)),
+    integerLiteral(Number(state.rowsInserted || 0)),
+    sqlLiteral(state.lastPubDate || ''),
+    integerLiteral(Number(state.exhausted ? 1 : 0)),
+  ].join(',')});`;
+}
+
+export function backfillRunFinalizeSql({ batchId, source, requestedRows, generatedRows, beforeRows, now = new Date().toISOString() }) {
+  return `INSERT INTO archive_backfill_runs (batch_id,source,requested_rows,generated_rows,before_rows,status,created_at) VALUES (${[
+    sqlLiteral(batchId),
+    sqlLiteral(source),
+    integerLiteral(requestedRows),
+    integerLiteral(generatedRows),
+    integerLiteral(beforeRows),
+    sqlLiteral('planned'),
+    sqlLiteral(now),
+  ].join(',')});`;
+}
+
+export function backfillApplyArticlesSql(batchId, ordinalStart, ordinalEnd) {
+  const start = integerLiteral(ordinalStart);
+  const end = integerLiteral(ordinalEnd);
+  return `INSERT OR IGNORE INTO articles (id,title,link,pubDate,description,category,source,imageUrl) SELECT id,title,link,pubDate,description,category,source,imageUrl FROM archive_backfill_run_items WHERE batch_id=${sqlLiteral(batchId)} AND ordinal BETWEEN ${start} AND ${end} ORDER BY ordinal;`;
+}
+
+export function backfillApplyStateAndMarkWrittenSql(batchId, now = new Date().toISOString()) {
+  const id = sqlLiteral(batchId);
+  return `INSERT INTO archive_backfill_state (source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted,updated_at) SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted,${sqlLiteral(now)} FROM archive_backfill_run_state WHERE batch_id=${id} ON CONFLICT(source_key) DO UPDATE SET cursor=excluded.cursor,pages_fetched=excluded.pages_fetched,rows_inserted=excluded.rows_inserted,last_pubDate=excluded.last_pubDate,exhausted=excluded.exhausted,updated_at=excluded.updated_at;\nUPDATE archive_backfill_runs SET status='written',written_at=${sqlLiteral(now)} WHERE batch_id=${id} AND status='planned';`;
+}
+
+export function backfillMarkCompletedSql(batchId, now = new Date().toISOString()) {
+  return `UPDATE archive_backfill_runs SET status='completed',completed_at=${sqlLiteral(now)} WHERE batch_id=${sqlLiteral(batchId)} AND status='written';`;
 }
