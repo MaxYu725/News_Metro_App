@@ -4,10 +4,15 @@ import path from 'node:path';
 import {
   ARCHIVE_BACKFILL_MAX_LIMIT,
   HK01_HISTORICAL_ZONES,
-  articleInsertSql,
-  backfillStateUpsertSql,
+  backfillApplyArticlesSql,
+  backfillApplyStateAndMarkWrittenSql,
+  backfillMarkCompletedSql,
+  backfillPlanItemInsertSql,
+  backfillRunFinalizeSql,
+  backfillRunStateInsertSql,
   fetchBastilleHistoricalPage,
   fetchHk01HistoricalPage,
+  sqlLiteral,
 } from '../src/archive-backfill.js';
 
 function parseArgs(argv) {
@@ -117,9 +122,8 @@ async function collectHk01({ target, existingRows, existingIds, stateRows, selec
       state.pagesFetched += 1;
       pages += 1;
 
-      // Archive backfill is intentionally backward-only. Even if a source has
-      // holes in the prototype sample, do not spend archive capacity on newer
-      // rows that belong in the live database.
+      // Archive expansion is backward-only. The live database owns current
+      // coverage; archive capacity is reserved for extending the time horizon.
       const floor = sourceFloor(existingRows, '香港01', zone.category) || globalFloor;
       const candidates = eligibleNewArticles(page.articles, existingIds, selectedIds, floor);
       const remaining = target - (selected.length - startCount);
@@ -198,21 +202,74 @@ async function collectBastille({ target, existingRows, existingIds, stateRows, s
   return { pages, target, generated, states: [state] };
 }
 
-function writeChunks(outDir, articles, chunkSize = 50) {
-  fs.rmSync(outDir, { recursive: true, force: true });
-  fs.mkdirSync(outDir, { recursive: true });
+function writeStatementChunks(outDir, prefix, statements, chunkSize = 50) {
   const files = [];
-  for (let i = 0; i < articles.length; i += chunkSize) {
-    const file = path.join(outDir, `articles-${String(i / chunkSize + 1).padStart(3, '0')}.sql`);
-    fs.writeFileSync(file, `${articles.slice(i, i + chunkSize).map(articleInsertSql).join('\n')}\n`, 'utf8');
+  for (let i = 0; i < statements.length; i += chunkSize) {
+    const file = path.join(outDir, `${prefix}-${String(i / chunkSize + 1).padStart(3, '0')}.sql`);
+    fs.writeFileSync(file, `${statements.slice(i, i + chunkSize).join('\n')}\n`, 'utf8');
     files.push(file);
   }
   return files;
 }
 
+function writeBatchPlan({ outDir, batchId, source, requestedRows, beforeRows, articles, states }) {
+  fs.rmSync(outDir, { recursive: true, force: true });
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const quotedBatch = sqlLiteral(batchId);
+  fs.writeFileSync(
+    path.join(outDir, 'plan-reset.sql'),
+    `DELETE FROM archive_backfill_run_items WHERE batch_id=${quotedBatch};\nDELETE FROM archive_backfill_run_state WHERE batch_id=${quotedBatch};\nDELETE FROM archive_backfill_runs WHERE batch_id=${quotedBatch};\n`,
+    'utf8',
+  );
+
+  const planItemStatements = articles.map((article, index) =>
+    backfillPlanItemInsertSql(batchId, index + 1, article));
+  const planItemFiles = writeStatementChunks(outDir, 'plan-items', planItemStatements, 50);
+
+  fs.writeFileSync(
+    path.join(outDir, 'plan-state.sql'),
+    `${states.map(state => backfillRunStateInsertSql(batchId, state)).join('\n')}\n`,
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(outDir, 'plan-finalize.sql'),
+    `${backfillRunFinalizeSql({
+      batchId,
+      source,
+      requestedRows,
+      generatedRows: articles.length,
+      beforeRows,
+    })}\n`,
+    'utf8',
+  );
+
+  const applyFiles = [];
+  for (let start = 1; start <= articles.length; start += 50) {
+    const end = Math.min(start + 49, articles.length);
+    const file = path.join(outDir, `apply-articles-${String(applyFiles.length + 1).padStart(3, '0')}.sql`);
+    fs.writeFileSync(file, `${backfillApplyArticlesSql(batchId, start, end)}\n`, 'utf8');
+    applyFiles.push(file);
+  }
+
+  fs.writeFileSync(
+    path.join(outDir, 'apply-state.sql'),
+    `${backfillApplyStateAndMarkWrittenSql(batchId)}\n`,
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(outDir, 'complete.sql'),
+    `${backfillMarkCompletedSql(batchId)}\n`,
+    'utf8',
+  );
+
+  return { planItemFiles, applyFiles };
+}
+
 const args = parseArgs(process.argv.slice(2));
 const source = args.source || 'all';
 const limit = Number.parseInt(args.limit || '500', 10);
+const batchId = String(args['batch-id'] || '').trim();
 const existingFile = args.existing || '';
 const stateFile = args.state || '';
 const outDir = args['out-dir'] || '/tmp/metro-news-archive-backfill';
@@ -222,9 +279,16 @@ if (!['all', 'hk01', 'bastille'].includes(source)) throw new Error(`unsupported 
 if (!Number.isInteger(limit) || limit < 1 || limit > ARCHIVE_BACKFILL_MAX_LIMIT) {
   throw new Error(`limit must be 1..${ARCHIVE_BACKFILL_MAX_LIMIT}`);
 }
+if (!/^[A-Za-z0-9._-]{1,80}$/.test(batchId)) throw new Error('invalid batch id');
 
 const existingRows = d1Rows(existingFile);
 const stateRows = d1Rows(stateFile);
+const beforeRows = Number.parseInt(args['before-rows'] || String(existingRows.length), 10);
+if (!Number.isInteger(beforeRows) || beforeRows < 0) throw new Error('invalid before row count');
+if (beforeRows !== existingRows.length) {
+  throw new Error(`existing snapshot incomplete: before_rows=${beforeRows}, snapshot=${existingRows.length}`);
+}
+
 const existingIds = new Set(existingRows.map(row => String(row?.id || '')).filter(Boolean));
 const selected = [];
 const selectedIds = new Set();
@@ -251,26 +315,33 @@ const bastille = await collectBastille({
 
 if (selected.length !== limit) throw new Error(`generated ${selected.length}, expected exactly ${limit}`);
 
-const chunkFiles = writeChunks(outDir, selected);
 const touchedStates = [...(hk.states || []), ...(bastille.states || [])];
-fs.writeFileSync(
-  path.join(outDir, 'state.sql'),
-  `${touchedStates.map(backfillStateUpsertSql).join('\n')}\n`,
-  'utf8',
-);
+const planFiles = writeBatchPlan({
+  outDir,
+  batchId,
+  source,
+  requestedRows: limit,
+  beforeRows,
+  articles: selected,
+  states: touchedStates,
+});
 
 const dates = selected.map(item => item.pubDate).filter(Boolean).sort();
 const report = {
+  batchId,
   source,
   requested: limit,
   generated: selected.length,
+  beforeRows,
   hk01: { generated: hk.generated || 0, pages: hk.pages || 0 },
   bastille: { generated: bastille.generated || 0, pages: bastille.pages || 0 },
   oldest: dates[0] || '',
   newest: dates.at(-1) || '',
-  chunkCount: chunkFiles.length,
+  planChunkCount: planFiles.planItemFiles.length,
+  applyChunkCount: planFiles.applyFiles.length,
   existingRowsObserved: existingRows.length,
   stateRowsObserved: stateRows.length,
+  touchedStateCount: touchedStates.length,
 };
 fs.mkdirSync(path.dirname(reportFile), { recursive: true });
 fs.writeFileSync(reportFile, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
