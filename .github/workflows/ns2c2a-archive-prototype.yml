@@ -74,12 +74,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/bastille-history.mjs <<'NODE'
+          cat > ./ns2c2a-bastille-history.mjs <<'NODE'
           import fs from 'node:fs'; import { parseBastilleRss } from './worker/src/sources/bastille.js'; const rows=[]; const seen=new Set();
           for(let page=891;page<=950&&rows.length<500;page++){const r=await fetch(`https://www.bastillepost.com/hongkong/feed?paged=${page}`,{headers:{'User-Agent':'MetroNews-NS2C2A/1.0','Accept':'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5'}}); if(!r.ok) throw new Error(`page ${page} HTTP ${r.status}`); for(const item of parseBastilleRss(await r.text())){if(seen.has(item.id))continue;seen.add(item.id);rows.push(item);if(rows.length>=500)break;} await new Promise(x=>setTimeout(x,100));}
           if(rows.length<450)throw new Error(`Only ${rows.length} rows`); const q=v=>v==null?'NULL':`'${String(v).replace(/'/g,"''")}'`; for(let b=0;b<Math.ceil(rows.length/100);b++){const s=rows.slice(b*100,(b+1)*100);fs.writeFileSync(`/tmp/bastille-${b}.sql`,s.map(r=>`INSERT OR IGNORE INTO articles (id,title,link,pubDate,description,category,source,imageUrl) VALUES (${q(r.id)},${q(r.title)},${q(r.link)},${q(r.pubDate)},${q(r.description)},${q(r.category)},${q(r.source)},${q(r.imageUrl)});`).join('\n'));} console.log(JSON.stringify({rows:rows.length,newest:rows[0]?.pubDate,oldest:rows.at(-1)?.pubDate}));
           NODE
-          node /tmp/bastille-history.mjs
+          node ./ns2c2a-bastille-history.mjs
           cd worker
           for f in /tmp/bastille-*.sql; do npx wrangler d1 execute "$ARCHIVE_DB" --remote --file "$f"; done
 
