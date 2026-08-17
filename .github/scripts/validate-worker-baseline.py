@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Validate the recovered Worker, Wrangler config, and D1 baseline stay aligned."""
+"""Validate Worker config, security contract, and D1 baseline."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sqlite3
 from pathlib import Path
@@ -17,14 +16,10 @@ def fail(message: str) -> None:
 
 
 def main() -> int:
-    source = (WORKER / "src" / "index.js").read_bytes()
+    source = (WORKER / "src" / "index.js").read_text("utf-8")
+    security = (WORKER / "src" / "security.js").read_text("utf-8")
     manifest = json.loads((WORKER / "recovery-manifest.json").read_text("utf-8"))
     config = json.loads((WORKER / "wrangler.jsonc").read_text("utf-8"))
-
-    expected_hash = manifest["recovered_source"]["sha256"]
-    actual_hash = hashlib.sha256(source).hexdigest()
-    if actual_hash != expected_hash:
-        fail(f"source hash drifted: expected {expected_hash}, got {actual_hash}")
 
     settings = manifest["settings"]
     if config.get("name") != "news-proxy":
@@ -59,6 +54,19 @@ def main() -> int:
     if config.get("triggers", {}).get("crons") != ["*/15 * * * *"]:
         fail("cron trigger does not match production")
 
+    ratelimits = {item.get("name"): item for item in config.get("ratelimits", [])}
+    expected_rate_limits = {
+        "AI_RATE_LIMITER": (12, 60),
+        "FETCH_RATE_LIMITER": (60, 60),
+        "SYNC_RATE_LIMITER": (4, 60),
+    }
+    if set(ratelimits) != set(expected_rate_limits):
+        fail(f"unexpected rate limit bindings: {sorted(ratelimits)}")
+    for name, (limit, period) in expected_rate_limits.items():
+        simple = ratelimits[name].get("simple", {})
+        if simple.get("limit") != limit or simple.get("period") != period:
+            fail(f"{name} rate limit does not match security contract")
+
     migration = (WORKER / "migrations" / "0000_production_baseline.sql").read_text("utf-8")
     db = sqlite3.connect(":memory:")
     db.executescript(migration)
@@ -87,7 +95,6 @@ def main() -> int:
     if indexes != {"idx_category_pubDate", "idx_pubDate"}:
         fail(f"baseline index set mismatch: {sorted(indexes)}")
 
-    text = source.decode("utf-8")
     for route in [
         "/api/article-full",
         "/api/summarize",
@@ -95,13 +102,37 @@ def main() -> int:
         "/api/search",
         "/api/news/",
     ]:
-        if route not in text:
-            fail(f"recovered production route missing: {route}")
+        if route not in source:
+            fail(f"Worker route missing: {route}")
 
-    print("Worker recovery hash: OK")
-    print("Wrangler production alignment: OK")
+    security_signals = [
+        "https://maxyu725.github.io",
+        "parseAllowedArticleUrl",
+        "AI_RATE_LIMITER",
+        "FETCH_RATE_LIMITER",
+        "SYNC_RATE_LIMITER",
+    ]
+    combined = source + "\n" + security
+    for signal in security_signals:
+        if signal not in combined:
+            fail(f"security contract signal missing: {signal}")
+
+    if "Access-Control-Allow-Origin': '*'" in combined or '"Access-Control-Allow-Origin": "*"' in combined:
+        fail("wildcard CORS must not be reintroduced")
+    if "targetUrl.includes('hk01.com')" in combined:
+        fail("unsafe HK01 substring allowlist must not be reintroduced")
+
+    # CF-W2: keep the image category on current HK01 subchannel feeds, not stale zone/13.
+    if '/hk01/zone/13' in source:
+        fail('stale HK01 image aggregate feed must not be reintroduced')
+    if '/hk01/channel/${channelId}' not in source or '[259, 256, 260, 348]' not in source:
+        fail('HK01 image subchannel feed mapping is missing')
+
+    print("Wrangler production resource alignment: OK")
+    print("Rate limit security bindings: OK")
     print("D1 baseline schema/indexes: OK")
-    print("Recovered route inventory: OK")
+    print("Worker route/security contract: OK")
+    print("Recovery manifest retained as historical production provenance: OK")
     return 0
 
 

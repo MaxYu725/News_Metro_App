@@ -1,7 +1,9 @@
 {
   "name": "metro-news-worker",
   "private": true,
+  "type": "module",
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "check": "wrangler deploy --dry-run --outdir .wrangler-dry-run",
     "types": "wrangler types worker-configuration.d.ts"
   },

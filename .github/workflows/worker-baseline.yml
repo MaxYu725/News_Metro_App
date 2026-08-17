@@ -10,7 +10,7 @@ on:
       - .github/workflows/worker-baseline.yml
   push:
     branches:
-      - agent/cloudflare-readonly-audit
+      - agent/**
     paths:
       - worker/**
       - .github/scripts/validate-worker-baseline.py
@@ -27,15 +27,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate recovered source, config, and D1 schema
+      - name: Validate Worker config, security contract, and D1 schema
         run: python3 .github/scripts/validate-worker-baseline.py
 
       - name: Validate Worker JavaScript syntax
-        run: node --check worker/src/index.js
+        run: |
+          node --check worker/src/index.js
+          node --check worker/src/security.js
 
       - name: Install pinned Wrangler
         working-directory: worker
         run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run Worker security tests
+        working-directory: worker
+        run: npm test
 
       - name: Wrangler dry-run compile
         working-directory: worker
