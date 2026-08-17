@@ -18,6 +18,7 @@ jobs:
       CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       WORKER_NAME: news-proxy
+      RECOVERY_REVISION: "2"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
