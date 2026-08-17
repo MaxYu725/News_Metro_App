@@ -6,6 +6,11 @@ let overlayEl = null;
 let stageEl = null;
 let imgEl = null;
 let closeBtnEl = null;
+let hintEl = null;
+let mousePointerId = null;
+let mouseDragging = false;
+let mouseStartX = 0;
+let mouseStartY = 0;
 let restoreFocusTarget = null;
 let inertTargets = [];
 
@@ -13,6 +18,52 @@ function updateTransform() {
     if (imgEl) {
         imgEl.style.transform = `translate(${posX}px, ${posY}px) scale(${currentScale})`;
     }
+}
+
+function updatePointerUI() {
+    if (!imgEl) return;
+    if (mouseDragging) imgEl.style.cursor = 'grabbing';
+    else if (currentScale > 1) imgEl.style.cursor = 'grab';
+    else imgEl.style.cursor = 'zoom-in';
+}
+
+function resetView() {
+    currentScale = 1;
+    posX = 0;
+    posY = 0;
+    mouseDragging = false;
+    mousePointerId = null;
+    updateTransform();
+    updatePointerUI();
+}
+
+function scaleAt(nextScale, clientX, clientY) {
+    const clampedScale = Math.min(Math.max(nextScale, 1), 5);
+    if (!stageEl || currentScale === clampedScale) return;
+
+    const rect = stageEl.getBoundingClientRect();
+    const dx = clientX - (rect.left + rect.width / 2);
+    const dy = clientY - (rect.top + rect.height / 2);
+    const scaleRatio = clampedScale / currentScale;
+
+    posX -= dx * (scaleRatio - 1);
+    posY -= dy * (scaleRatio - 1);
+    currentScale = clampedScale;
+
+    if (currentScale === 1) {
+        posX = 0;
+        posY = 0;
+    }
+
+    updateTransform();
+    updatePointerUI();
+}
+
+function updateHint() {
+    if (!hintEl) return;
+    hintEl.textContent = window.matchMedia?.('(pointer: fine)').matches
+        ? '滾輪縮放 · 拖曳移動 · 雙擊還原'
+        : '雙指縮放 · 雙擊還原';
 }
 
 function setUnderlyingInert(active) {
@@ -49,10 +100,8 @@ export function openLightbox(src) {
 
     restoreFocusTarget = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     imgEl.src = src;
-    currentScale = 1;
-    posX = 0;
-    posY = 0;
-    updateTransform();
+    resetView();
+    updateHint();
 
     setUnderlyingInert(true);
     overlayEl.classList.remove('hidden');
@@ -92,6 +141,7 @@ export function initLightbox() {
     stageEl = document.getElementById('lightbox-stage');
     imgEl = document.getElementById('lightbox-img');
     closeBtnEl = document.getElementById('lightbox-close');
+    hintEl = document.getElementById('lightbox-hint');
 
     if (!overlayEl || !imgEl) return;
 
@@ -112,6 +162,57 @@ export function initLightbox() {
             return;
         }
         trapLightboxFocus(event);
+    });
+
+    // Desktop lightbox interaction: wheel zoom, drag-to-pan and double-click.
+    stageEl?.addEventListener('wheel', event => {
+        if (!isLightboxOpen || event.ctrlKey) return;
+        event.preventDefault();
+
+        const factor = event.deltaY < 0 ? 1.12 : (1 / 1.12);
+        scaleAt(currentScale * factor, event.clientX, event.clientY);
+    }, { passive: false });
+
+    imgEl.addEventListener('pointerdown', event => {
+        if (event.pointerType !== 'mouse' || event.button !== 0 || event.isPrimary === false) return;
+        if (currentScale <= 1) return;
+
+        mousePointerId = event.pointerId;
+        mouseDragging = true;
+        mouseStartX = event.clientX - posX;
+        mouseStartY = event.clientY - posY;
+        imgEl.setPointerCapture?.(mousePointerId);
+        updatePointerUI();
+        event.preventDefault();
+    });
+
+    imgEl.addEventListener('pointermove', event => {
+        if (event.pointerType !== 'mouse' || event.pointerId !== mousePointerId || !mouseDragging) return;
+        posX = event.clientX - mouseStartX;
+        posY = event.clientY - mouseStartY;
+        updateTransform();
+        event.preventDefault();
+    });
+
+    const finishMousePan = event => {
+        if (event.pointerType !== 'mouse' || event.pointerId !== mousePointerId) return;
+        const activePointerId = mousePointerId;
+        mousePointerId = null;
+        mouseDragging = false;
+        if (imgEl.hasPointerCapture?.(activePointerId)) imgEl.releasePointerCapture(activePointerId);
+        updatePointerUI();
+    };
+
+    imgEl.addEventListener('pointerup', finishMousePan);
+    imgEl.addEventListener('pointercancel', finishMousePan);
+    imgEl.addEventListener('dragstart', event => event.preventDefault());
+
+    imgEl.addEventListener('dblclick', event => {
+        if (!isLightboxOpen) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (currentScale > 1.05) resetView();
+        else scaleAt(2, event.clientX, event.clientY);
     });
 
     imgEl.addEventListener('touchstart', (e) => {
@@ -148,6 +249,7 @@ export function initLightbox() {
             posY -= dy * (scaleRatio - 1);
             currentScale = newScale;
             updateTransform();
+            updatePointerUI();
         } else if (isPanning && e.touches.length === 1 && currentScale > 1) {
             posX = e.touches[0].clientX - startX;
             posY = e.touches[0].clientY - startY;
@@ -160,10 +262,7 @@ export function initLightbox() {
         isPinching = false;
         const currentTime = Date.now();
         if (currentTime - lastTapTime < 300 && currentTime - lastTapTime > 0 && e.touches.length === 0) {
-            currentScale = 1;
-            posX = 0;
-            posY = 0;
-            updateTransform();
+            resetView();
         }
         lastTapTime = currentTime;
     });
