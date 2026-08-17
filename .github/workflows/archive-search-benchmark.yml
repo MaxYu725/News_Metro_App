@@ -1,0 +1,139 @@
+name: Archive search benchmark
+
+on:
+  push:
+    branches:
+      - diagnostic/ns2c3p1-search-benchmark
+    paths:
+      - .github/workflows/archive-search-benchmark.yml
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      API_BASE: https://news-proxy.maxyu0725us.workers.dev
+      ARCHIVE_ID: a3db6dc1-599c-4ace-b12c-142e56c3734a
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Snapshot archive and derive oldest search term
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT COUNT(*) AS total, SUM(CASE WHEN source='香港01' THEN 1 ELSE 0 END) AS hk01, SUM(CASE WHEN source='巴士的報' THEN 1 ELSE 0 END) AS bastille, MIN(pubDate) AS oldest, MAX(pubDate) AS newest FROM articles" \
+            > /tmp/inventory.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT category,COUNT(*) AS n FROM articles GROUP BY category ORDER BY n DESC" \
+            > /tmp/categories.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT id,title,pubDate,source FROM articles ORDER BY pubDate ASC,id ASC LIMIT 20" \
+            > /tmp/oldest.json
+          node <<'NODE'
+          const fs=require('fs');
+          const unwrap=p=>{const f=Array.isArray(p)?p[0]:p?.result?.[0];return {rows:f?.results||f?.result?.results||[],meta:f?.meta||f?.result?.meta||{}}};
+          const inv=unwrap(JSON.parse(fs.readFileSync('/tmp/inventory.json','utf8')));
+          const row=inv.rows[0];
+          if(Number(row?.total)!==7000) throw new Error(`expected 7000 archive rows, got ${row?.total}`);
+          console.log(`ARCHIVE inventory total=${row.total} hk01=${row.hk01} bastille=${row.bastille} oldest=${row.oldest} newest=${row.newest} size=${inv.meta.size_after||0}`);
+          const cats=unwrap(JSON.parse(fs.readFileSync('/tmp/categories.json','utf8'))).rows;
+          console.log('ARCHIVE categories '+cats.map(x=>`${x.category}:${x.n}`).join(', '));
+          const oldest=unwrap(JSON.parse(fs.readFileSync('/tmp/oldest.json','utf8'))).rows;
+          let chosen=null, term='';
+          for(const item of oldest){
+            const m=String(item.title||'').match(/[\u3400-\u9fff]{4,}/u);
+            if(m){chosen=item; term=Array.from(m[0]).slice(0,4).join(''); break;}
+          }
+          if(!chosen||term.length<3) throw new Error('unable to derive oldest archive search term');
+          console.log(`OLDEST sample pubDate=${chosen.pubDate} source=${chosen.source} title=${chosen.title}`);
+          console.log(`OLDEST derived_term=${term}`);
+          fs.appendFileSync(process.env.GITHUB_ENV,`OLD_TERM=${term}\n`);
+          NODE
+
+      - name: Benchmark archive FTS directly
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd worker
+          i=0
+          for term in '香港政府' '特朗普' '婦人油麻地' "$OLD_TERM"; do
+            i=$((i+1))
+            TERM="$term" node <<'NODE' > /tmp/fts-sql.txt
+          const term=process.env.TERM.replace(/'/g,"''");
+          process.stdout.write(`SELECT a.id,a.pubDate,a.source,a.title FROM articles_fts JOIN articles a ON a.rowid=articles_fts.rowid WHERE articles_fts MATCH '${term}' ORDER BY a.pubDate DESC,a.id DESC LIMIT 20`);
+          NODE
+            sql=$(cat /tmp/fts-sql.txt)
+            npx wrangler d1 execute ARCHIVE_01 --remote --json --command "$sql" > "/tmp/fts-${i}.json"
+            TERM="$term" FILE="/tmp/fts-${i}.json" node <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync(process.env.FILE,'utf8'));
+          const f=Array.isArray(p)?p[0]:p?.result?.[0];
+          const rows=f?.results||f?.result?.results||[];
+          const meta=f?.meta||f?.result?.meta||{};
+          console.log(`FTS term=${process.env.TERM} results=${rows.length} rows_read=${meta.rows_read??'n/a'} sql_ms=${meta.duration??meta.timings?.sql_duration_ms??'n/a'} served_region=${meta.served_by_region??'n/a'} primary=${meta.served_by_primary??'n/a'}`);
+          if(process.env.TERM===process.env.OLD_TERM && rows.length===0) throw new Error('oldest derived term did not resolve through FTS');
+          NODE
+          done
+
+      - name: Benchmark production live plus archive API and cursor
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const {performance}=require('perf_hooks');
+          const base=process.env.API_BASE+'/api/search';
+          const terms=['香港政府','特朗普','婦人油麻地',process.env.OLD_TERM];
+          const samples=new Map();
+          let cursorCandidate=null;
+          async function call(term,cursor=''){
+            const u=new URL(base); u.searchParams.set('q',term); u.searchParams.set('scope','all'); if(cursor)u.searchParams.set('cursor',cursor);
+            const t=performance.now(); const r=await fetch(u); const body=await r.json(); const ms=performance.now()-t;
+            if(!r.ok||!body.success) throw new Error(`API failed ${r.status} ${term}: ${JSON.stringify(body).slice(0,300)}`);
+            return {ms,body};
+          }
+          (async()=>{
+            for(const term of terms){
+              const arr=[];
+              let first;
+              for(let n=0;n<2;n++){ const x=await call(term); arr.push(x.ms); if(!first)first=x; }
+              arr.sort((a,b)=>a-b);
+              const ids=(first.body.data||[]).map(x=>String(x.id||x.link||''));
+              console.log(`API term=${term} samples_ms=${arr.map(x=>x.toFixed(1)).join(',')} results=${ids.length} hasMore=${!!first.body.hasMore} cursor=${first.body.nextCursor?'yes':'no'}`);
+              if(!cursorCandidate && first.body.nextCursor) cursorCandidate={term,first,ids};
+              if(term===process.env.OLD_TERM && ids.length===0) throw new Error('production API failed to return oldest derived archive term');
+            }
+            if(!cursorCandidate) throw new Error('no search term produced a cursor for page-2 validation');
+            const second=await call(cursorCandidate.term,cursorCandidate.first.body.nextCursor);
+            const ids2=(second.body.data||[]).map(x=>String(x.id||x.link||''));
+            const overlap=ids2.filter(x=>cursorCandidate.ids.includes(x));
+            console.log(`CURSOR term=${cursorCandidate.term} page1=${cursorCandidate.ids.length} page2=${ids2.length} page2_ms=${second.ms.toFixed(1)} overlap=${overlap.length} next=${second.body.nextCursor?'yes':'no'}`);
+            if(overlap.length) throw new Error(`cursor pagination overlap: ${overlap.slice(0,3).join(',')}`);
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
+
+      - name: Verify archive read replication
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --retry 2 --retry-delay 1 \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${ARCHIVE_ID}" \
+            > /tmp/archive-resource.json
+          jq -e '.success == true and .result.read_replication.mode == "auto"' /tmp/archive-resource.json >/dev/null
+          jq -r '"REPLICATION mode=\(.result.read_replication.mode) primary=\(.result.primary_location_hint // "unknown")"' /tmp/archive-resource.json
+
+      - name: Benchmark complete
+        run: echo 'NS2C3P1 read-only search benchmark PASS'
