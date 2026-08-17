@@ -1,0 +1,154 @@
+name: Diagnostic HK01 legacy archive probe
+
+on:
+  push:
+    branches:
+      - diagnostic/hk01-legacy-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe HK01 robots and sitemaps
+        shell: bash
+        run: |
+          python - <<'PY'
+          import gzip
+          import re
+          import urllib.request
+          import xml.etree.ElementTree as ET
+          from collections import deque
+          from urllib.parse import urlparse
+
+          UA = 'Mozilla/5.0 (compatible; Nwes-HK01-legacy-probe/1.0)'
+          ROOTS = [
+              'https://www.hk01.com/sitemap.xml',
+              'https://www.hk01.com/sitemapByLastMod.xml',
+          ]
+          KNOWN_OLD = {
+              '1187': '2016-01-11',
+              '1401': '2016',
+              '29618': '2016-07',
+              '52037': '2016-11',
+              '62558': '2017-01',
+              '80075': '2017-03',
+              '145194': '2017-12',
+              '185096': '2018-05',
+          }
+
+          def fetch(url):
+              req = urllib.request.Request(url, headers={
+                  'User-Agent': UA,
+                  'Accept': 'application/xml,text/xml,text/plain,*/*',
+                  'Accept-Language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
+              })
+              with urllib.request.urlopen(req, timeout=25) as r:
+                  data = r.read()
+                  ctype = r.headers.get('content-type', '')
+                  encoding = r.headers.get('content-encoding', '')
+                  final = r.geturl()
+              if url.endswith('.gz') or 'gzip' in encoding.lower():
+                  try:
+                      data = gzip.decompress(data)
+                  except OSError:
+                      pass
+              return final, ctype, data
+
+          def local(tag):
+              return tag.rsplit('}', 1)[-1]
+
+          def parse_xml(data):
+              root = ET.fromstring(data)
+              kind = local(root.tag)
+              locs = []
+              rows = []
+              for node in root:
+                  children = {local(c.tag): (c.text or '').strip() for c in node}
+                  loc = children.get('loc', '')
+                  if loc:
+                      locs.append(loc)
+                      rows.append((loc, children.get('lastmod', '')))
+              return kind, locs, rows
+
+          print('=== robots.txt ===')
+          final, ctype, data = fetch('https://www.hk01.com/robots.txt')
+          print('final=', final, 'content-type=', ctype, 'bytes=', len(data))
+          print(data.decode('utf-8', 'replace')[:4000])
+
+          seen_maps = set()
+          q = deque((root, 0, root) for root in ROOTS)
+          all_urls = []
+          map_summaries = []
+          max_maps = 300
+
+          while q and len(seen_maps) < max_maps:
+              url, depth, root_owner = q.popleft()
+              if url in seen_maps:
+                  continue
+              seen_maps.add(url)
+              try:
+                  final, ctype, data = fetch(url)
+                  kind, locs, rows = parse_xml(data)
+              except Exception as exc:
+                  print('FETCH_ERROR', url, repr(exc))
+                  continue
+
+              print('SITEMAP', {'url': url, 'final': final, 'kind': kind, 'entries': len(locs), 'bytes': len(data), 'depth': depth})
+              map_summaries.append((url, kind, len(locs), len(data), depth))
+              if kind == 'sitemapindex':
+                  for child in locs:
+                      if child.startswith('https://www.hk01.com/') and child not in seen_maps:
+                          q.append((child, depth + 1, root_owner))
+              elif kind == 'urlset':
+                  all_urls.extend((loc, lastmod, url) for loc, lastmod in rows)
+
+          print('=== aggregate ===')
+          print('sitemaps_fetched=', len(seen_maps))
+          print('url_rows=', len(all_urls))
+          unique = {}
+          for loc, lastmod, srcmap in all_urls:
+              unique.setdefault(loc, (lastmod, srcmap))
+          print('unique_urls=', len(unique))
+
+          article_rows = []
+          numeric_ids = []
+          for loc, (lastmod, srcmap) in unique.items():
+              p = urlparse(loc)
+              if p.hostname not in {'hk01.com', 'www.hk01.com'}:
+                  continue
+              m = re.search(r'/article/(\d+)(?:/|$)', p.path)
+              if not m:
+                  m = re.search(r'/[^/]+/(\d+)(?:/|$)', p.path)
+              if m:
+                  aid = int(m.group(1))
+                  numeric_ids.append(aid)
+                  article_rows.append((aid, loc, lastmod, srcmap))
+
+          print('article_like_urls=', len(article_rows))
+          if numeric_ids:
+              print('article_id_min=', min(numeric_ids), 'article_id_max=', max(numeric_ids))
+
+          print('=== known old article coverage ===')
+          for aid, date in KNOWN_OLD.items():
+              matches = [row for row in article_rows if str(row[0]) == aid]
+              print('KNOWN', aid, date, 'FOUND' if matches else 'MISSING')
+              for row in matches[:2]:
+                  print(' ', row[1], 'lastmod=', row[2], 'map=', row[3])
+
+          print('=== lowest numeric article IDs discovered ===')
+          for row in sorted(article_rows)[:30]:
+              print(row[0], row[1], 'lastmod=', row[2], 'map=', row[3])
+
+          print('=== sample oldest lastmod values ===')
+          dated = [(lastmod, loc, srcmap) for loc, (lastmod, srcmap) in unique.items() if lastmod]
+          for lastmod, loc, srcmap in sorted(dated)[:30]:
+              print(lastmod, loc, 'map=', srcmap)
+
+          print('=== sample newest lastmod values ===')
+          for lastmod, loc, srcmap in sorted(dated, reverse=True)[:20]:
+              print(lastmod, loc, 'map=', srcmap)
+          PY
