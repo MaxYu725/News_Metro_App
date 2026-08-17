@@ -412,7 +412,51 @@ body {
     background: rgba(8, 11, 18, 0.46);
 }
 
+#lightbox-quality {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    left: calc(env(safe-area-inset-left, 0px) + 10px);
+    z-index: 11;
+    min-width: 58px;
+    min-height: 40px;
+    padding: 0 13px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 2px;
+    background: rgba(8, 11, 18, 0.68);
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+#lightbox-quality:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+#lightbox-quality:active {
+    background: rgba(255, 255, 255, 0.20);
+}
+
+#lightbox-quality[aria-pressed="true"] {
+    background: rgba(255, 255, 255, 0.92);
+    color: #080b12;
+    border-color: rgba(255, 255, 255, 0.92);
+}
+
+#lightbox-quality:disabled {
+    opacity: 0.52;
+    cursor: wait;
+}
+
+#lightbox-quality.hidden {
+    display: none;
+}
+
 #lightbox-close:focus-visible,
+#lightbox-quality:focus-visible,
 .subview-back:focus-visible,
 .search-submit:focus-visible,
 .metro-btn:focus-visible,
