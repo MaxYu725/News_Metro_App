@@ -22,6 +22,7 @@
 
     <div id="lightbox-overlay" class="fixed inset-0 bg-black/95 z-[100] hidden flex flex-col justify-center items-center opacity-0 transition-opacity duration-200" role="dialog" aria-modal="true" aria-label="圖片檢視器" aria-hidden="true">
         <button id="lightbox-close" type="button" class="absolute text-white text-4xl font-light hover:text-gray-400 z-10" aria-label="關閉圖片">&times;</button>
+        <button id="lightbox-quality" type="button" class="lightbox-quality hidden" aria-label="載入高清圖片" aria-pressed="false">高清</button>
         <div id="lightbox-stage" class="relative w-full h-full flex justify-center items-center overflow-hidden">
             <img id="lightbox-img" src="" class="max-w-full max-h-full object-contain transition-transform duration-100 ease-out origin-center" alt="全螢幕圖片">
         </div>
