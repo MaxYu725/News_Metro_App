@@ -42,16 +42,19 @@ def main() -> int:
         fail("AI binding is not reproduced in wrangler.jsonc")
 
     d1 = config.get("d1_databases", [])
-    if len(d1) != 1:
-        fail("expected exactly one D1 binding")
-    if d1[0].get("binding") != "DB":
-        fail("D1 binding name is not DB")
-    if d1[0].get("database_id") != binding_map["DB"].get("id"):
-        fail("D1 database_id does not match recovered production binding")
-    if d1[0].get("database_name") != "metro_news_db":
-        fail("D1 database_name is not metro_news_db")
-    if d1[0].get("migrations_dir") != "migrations":
-        fail("D1 migrations_dir is not migrations")
+    d1_map = {item.get("binding"): item for item in d1}
+    if set(d1_map) != {"DB", "ARCHIVE_01"}:
+        fail(f"expected live + archive D1 bindings, got {sorted(d1_map)}")
+    live_d1 = d1_map["DB"]
+    if live_d1.get("database_id") != binding_map["DB"].get("id"):
+        fail("live D1 database_id does not match recovered production binding")
+    if live_d1.get("database_name") != "metro_news_db" or live_d1.get("migrations_dir") != "migrations":
+        fail("live D1 name/migrations_dir mismatch")
+    archive_d1 = d1_map["ARCHIVE_01"]
+    if archive_d1.get("database_id") != "a3db6dc1-599c-4ace-b12c-142e56c3734a":
+        fail("archive D1 database_id mismatch")
+    if archive_d1.get("database_name") != "metro_news_archive_01" or archive_d1.get("migrations_dir") != "archive-migrations":
+        fail("archive D1 name/migrations_dir mismatch")
 
     if config.get("secrets", {}).get("required") != ["API_KEY"]:
         fail("API_KEY must be declared as the only required secret")
@@ -158,6 +161,33 @@ def main() -> int:
         fail('image archive must use the verified rssforever endpoint')
     if 'timeoutMs: 20000' not in source or 'sourceConfig.timeoutMs || 8000' not in source:
         fail('image archive timeout policy is missing')
+
+    # NS2C2B1: archive search is read-only, cursor-based, and replica-aware.
+    archive_migration = (WORKER / "archive-migrations" / "0000_archive_baseline.sql").read_text("utf-8")
+    for signal in [
+        "CREATE TABLE IF NOT EXISTS articles",
+        "USING fts5",
+        "tokenize='trigram'",
+        "idx_archive_pubDate",
+        "idx_archive_source_pubDate",
+        "articles_fts_ai",
+        "articles_fts_ad",
+        "articles_fts_au",
+    ]:
+        if signal not in archive_migration:
+            fail(f"archive migration signal missing: {signal}")
+    if "images TEXT" in archive_migration:
+        fail("archive schema must remain lean and omit full images JSON")
+    for signal in [
+        "searchArticlesAcrossDatabases",
+        "decodeSearchCursor",
+        "scope === 'all'",
+        "env.ARCHIVE_01.withSession('first-unconstrained')",
+    ]:
+        if signal not in source:
+            fail(f"archive search integration signal missing: {signal}")
+    if "ARCHIVE_01.prepare" in source or "ARCHIVE_01.batch" in source:
+        fail("production Worker must not write directly to archive during NS2C2B1")
 
     # CF-W5: indexed substring search must remain on D1 FTS5 trigram.
     fts_migration = (WORKER / "migrations" / "0001_search_fts.sql").read_text("utf-8")
