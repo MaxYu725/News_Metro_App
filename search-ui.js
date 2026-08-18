@@ -459,7 +459,7 @@ function installSearchChrome() {
 
     form.dataset.mui4aReady = '1';
     input.type = 'text';
-    input.placeholder = '搜尋 HK01 新聞';
+    input.placeholder = '搜尋新聞';
 
     const icon = document.createElement('span');
     icon.className = 'search-leading-icon';

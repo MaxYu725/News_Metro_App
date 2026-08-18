@@ -233,7 +233,7 @@ function renderSearchLanding() {
         DOM.newsGrid.innerHTML = `
             <div class="px-5 py-10 text-center">
                 <p class="text-sm text-white/45 font-light">搜尋新聞標題與內容</p>
-                <p class="text-xs text-white/25 mt-2 tracking-wide">來源：香港01 · 巴士的報 · 3 個字以上搜尋歷史新聞</p>
+                <p class="text-xs text-white/25 mt-2 tracking-wide">3 個字以上可搜尋歷史新聞</p>
             </div>
         `;
     }
