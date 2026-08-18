@@ -19,8 +19,7 @@ export function sourceNamesForIds(ids) {
 
 export function sourceFilterSql(column, names) {
   const unique = [...new Set((names || []).filter(name => SOURCE_NAME_SET.has(name)))];
-  if (unique.length === NEWS_SOURCES.length) return { sql: '', params: [] };
-  if (unique.length === 0) return { sql: ' AND 1 = 0', params: [] };
+  if (unique.length === 0 || unique.length === NEWS_SOURCES.length) return { sql: '', params: [] };
   return {
     sql: ` AND ${column} IN (${unique.map(() => '?').join(', ')})`,
     params: unique,
