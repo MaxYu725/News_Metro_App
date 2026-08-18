@@ -563,7 +563,7 @@ export default {
 
         if (category === 'latest') {
           if (forceSync || page === 0) {
-            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles`).all();
+            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE 1 = 1${sourceFilter.sql}`).bind(...sourceFilter.params).all();
             if (forceSync || checkDB[0].count === 0) {
               await syncAllCategoriesAndRetention(env);
             }
@@ -572,7 +572,7 @@ export default {
           params = [...sourceFilter.params, limit, offset];
         } else {
           if (forceSync || page === 0) {
-            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?`).bind(category).all();
+            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?${sourceFilter.sql}`).bind(category, ...sourceFilter.params).all();
             if (forceSync || checkDB[0].count === 0) {
               await Promise.all([
                 syncCategoryToDB(category, env),
