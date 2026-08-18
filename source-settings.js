@@ -16,11 +16,14 @@ function initSourceSettings() {
     const list = document.getElementById('source-visibility-list');
     const apply = document.getElementById('btn-apply-sources');
     const status = document.getElementById('source-visibility-status');
+    const settingsButton = document.querySelector('.bottom-nav-btn[data-section="settings"]');
     if (!list || !apply || !status) return;
 
     const saved = new Set(LocalDB.getVisibleSources());
     const pending = new Set(saved);
     const counts = new Map();
+    let statsLoaded = false;
+    let statsLoading = false;
 
     const setStatus = (message = '') => {
         status.textContent = message;
@@ -72,6 +75,22 @@ function initSourceSettings() {
         syncApplyState();
     };
 
+    const loadStats = async () => {
+        if (statsLoaded || statsLoading) return;
+        statsLoading = true;
+        setStatus('正在讀取新聞量…');
+        const result = await fetchSourceStats();
+        statsLoading = false;
+        if (!result.success) {
+            setStatus('新聞量暫時無法讀取；來源選擇仍可使用。');
+            return;
+        }
+        result.data.forEach(item => counts.set(item.id, Number(item.count || 0)));
+        statsLoaded = true;
+        render();
+        setStatus('');
+    };
+
     apply.addEventListener('click', () => {
         if (pending.size === 0 || apply.disabled) return;
         LocalDB.saveVisibleSources([...pending]);
@@ -80,17 +99,11 @@ function initSourceSettings() {
         window.location.reload();
     });
 
-    render();
-    setStatus('正在讀取新聞量…');
-    fetchSourceStats().then(result => {
-        if (!result.success) {
-            setStatus('新聞量暫時無法讀取；來源選擇仍可使用。');
-            return;
-        }
-        result.data.forEach(item => counts.set(item.id, Number(item.count || 0)));
-        render();
-        setStatus('');
+    settingsButton?.addEventListener('click', () => {
+        loadStats();
     });
+
+    render();
 
     let shouldReopen = false;
     try {
@@ -99,7 +112,7 @@ function initSourceSettings() {
     } catch (error) {}
     if (shouldReopen) {
         window.setTimeout(() => {
-            document.querySelector('.bottom-nav-btn[data-section="settings"]')?.click();
+            settingsButton?.click();
         }, 0);
     }
 }
