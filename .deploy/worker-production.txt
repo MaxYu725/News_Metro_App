@@ -1,1 +1,1 @@
-NS2C2B1 production promotion: bind metro_news_archive_01, apply source-controlled lean archive FTS schema, expose opt-in scope=all cursor search using D1 read-replica sessions, and gate deployment with archive smoke/audit.
+NS2C5 production promotion: deploy configurable news-source filtering, per-source searchable archive counts, source-aware feed/search SQL, and the /api/source-stats endpoint required by Settings.
