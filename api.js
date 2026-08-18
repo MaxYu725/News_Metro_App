@@ -1,12 +1,22 @@
 import { getCachedFeed, saveCachedFeed } from './data-cache.js';
+import { LocalDB } from './utils.js';
 
 const API_BASE_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/news/';
 const SEARCH_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/search';
 const IMAGE_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/images';
 const AI_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/summarize';
 const ARTICLE_FULL_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/article-full';
+const SOURCE_STATS_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/source-stats';
 
 export const DATA_STATE_EVENT = 'metro:data-state';
+
+function selectedSourceIds() {
+    return LocalDB.getVisibleSources().join(',');
+}
+
+function sourceCacheKey(query = '') {
+    return `${String(query || '')}::sources=${selectedSourceIds()}`;
+}
 
 function emitDataState(detail) {
     if (typeof window === 'undefined') return;
@@ -27,7 +37,7 @@ function errorMessage(error, fallback) {
 function fallbackNewsResult(categoryId, page, searchQuery, error, append = false) {
     const context = newsContext(categoryId);
     const message = errorMessage(error, '暫時無法連接新聞服務');
-    const cached = page === 0 ? getCachedFeed(categoryId, searchQuery) : null;
+    const cached = page === 0 ? getCachedFeed(categoryId, sourceCacheKey(searchQuery)) : null;
 
     if (cached?.data?.length) {
         emitDataState({
@@ -64,7 +74,7 @@ function searchCodePointLength(value) {
 
 function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live' } = {}) {
     const message = errorMessage(error, '暫時無法連接搜尋服務');
-    const cached = !append ? getCachedFeed('search', searchQuery) : null;
+    const cached = !append ? getCachedFeed('search', sourceCacheKey(searchQuery)) : null;
 
     if (cached?.data?.length) {
         emitDataState({
@@ -92,11 +102,12 @@ function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live
 }
 
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
+    const sources = selectedSourceIds();
     let url;
     if (categoryId === 'search') {
-        url = `${SEARCH_API_URL}?q=${encodeURIComponent(searchQuery)}&page=${page}`;
+        url = `${SEARCH_API_URL}?q=${encodeURIComponent(searchQuery)}&page=${page}&sources=${encodeURIComponent(sources)}`;
     } else {
-        url = `${API_BASE_URL}${categoryId}?page=${page}${forceSync ? '&sync=1' : ''}`;
+        url = `${API_BASE_URL}${categoryId}?page=${page}${forceSync ? '&sync=1' : ''}&sources=${encodeURIComponent(sources)}`;
     }
 
     const context = newsContext(categoryId);
@@ -123,7 +134,7 @@ export async function fetchNewsData(categoryId, page, forceSync = false, searchQ
         if (result.success) {
             const updatedAt = Date.now();
             if (page === 0 && Array.isArray(result.data) && result.data.length > 0) {
-                saveCachedFeed(categoryId, searchQuery, result.data, result.hasMore);
+                saveCachedFeed(categoryId, sourceCacheKey(searchQuery), result.data, result.hasMore);
             }
             emitDataState({ context, status: 'ok', query: searchQuery, append: page > 0, updatedAt });
             return { success: true, data: result.data || [], hasMore: !!result.hasMore, updatedAt };
@@ -146,7 +157,7 @@ export async function fetchSearchData(searchQuery, { cursor = '', page = 0, incl
     const useArchive = includeArchive && searchCodePointLength(query) >= 3;
     const mode = useArchive ? 'archive' : 'live';
     const append = useArchive ? !!cursor : page > 0;
-    const params = new URLSearchParams({ q: query });
+    const params = new URLSearchParams({ q: query, sources: selectedSourceIds() });
 
     if (useArchive) {
         params.set('scope', 'all');
@@ -175,7 +186,7 @@ export async function fetchSearchData(searchQuery, { cursor = '', page = 0, incl
         const updatedAt = Date.now();
         const data = Array.isArray(result.data) ? result.data : [];
         if (!append && data.length > 0) {
-            saveCachedFeed('search', query, data, !!result.hasMore);
+            saveCachedFeed('search', sourceCacheKey(query), data, !!result.hasMore);
         }
         emitDataState({ context: 'search', status: 'ok', query, append, updatedAt });
         return {
@@ -189,6 +200,19 @@ export async function fetchSearchData(searchQuery, { cursor = '', page = 0, incl
         };
     } catch (error) {
         return fallbackSearchResult(query, error, { append, mode });
+    }
+}
+
+export async function fetchSourceStats() {
+    try {
+        const response = await fetch(SOURCE_STATS_API_URL);
+        const result = await response.json();
+        if (!response.ok || !result.success || !Array.isArray(result.data)) {
+            return { success: false, data: [], error: result?.error || '無法讀取新聞來源統計' };
+        }
+        return { success: true, data: result.data };
+    } catch (error) {
+        return { success: false, data: [], error: '無法讀取新聞來源統計' };
     }
 }
 

@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v28-archive-search';
+const SHELL_CACHE = 'metro-news-shell-v29-source-controls';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -20,6 +20,7 @@ const SHELL_URLS = [
     './tracking.js',
     './gestures.js',
     './settings.js',
+    './source-settings.js',
     './lightbox.js',
     './manifest.json',
     './ic_launcher.png'
