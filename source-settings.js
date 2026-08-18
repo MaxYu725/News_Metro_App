@@ -75,6 +75,7 @@ function initSourceSettings() {
         syncApplyState();
     };
 
+    // The archive count query is deferred until Settings is opened to avoid a D1 read on every app launch.
     const loadStats = async () => {
         if (statsLoaded || statsLoading) return;
         statsLoading = true;
