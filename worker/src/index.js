@@ -13,6 +13,7 @@ import {
 } from './search.js';
 import { enforceAdaptiveRetention } from './retention.js';
 import { fetchBastilleArticles, isBastilleSource } from './sources/bastille.js';
+import { NEWS_SOURCES, parseSourceFilter, sourceNamesForIds, sourceFilterSql } from './source-filter.js';
 
 function jsonResponse(request, payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
@@ -428,11 +429,37 @@ export default {
       }
     }
 
+    if (url.pathname === '/api/source-stats') {
+      if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
+      try {
+        const archiveDb = env.ARCHIVE_01?.withSession
+          ? env.ARCHIVE_01.withSession('first-unconstrained')
+          : env.DB;
+        const { results } = await archiveDb.prepare(
+          `SELECT source, COUNT(*) AS count FROM articles GROUP BY source`,
+        ).all();
+        const bySource = new Map((results || []).map(row => [String(row.source || ''), Number(row.count || 0)]));
+        return jsonResponse(request, {
+          success: true,
+          data: NEWS_SOURCES.map(source => ({
+            id: source.id,
+            name: source.name,
+            count: bySource.get(source.name) || 0,
+          })),
+        });
+      } catch {
+        return jsonResponse(request, { success: false, error: '讀取新聞來源統計失敗' }, 500);
+      }
+    }
+
     if (url.pathname === '/api/search') {
     if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
 
     const query = (url.searchParams.get('q') || '').trim();
     const scope = (url.searchParams.get('scope') || 'live').trim();
+    const sourceIds = parseSourceFilter(url.searchParams.get('sources'));
+    if (!sourceIds) return jsonResponse(request, { success: false, error: '新聞來源參數無效' }, 400);
+    const sourceNames = sourceNamesForIds(sourceIds);
     const limit = 20;
 
     if (query.length > 100 || !['live', 'all'].includes(scope)) {
@@ -461,6 +488,7 @@ export default {
           query,
           cursor,
           limit,
+          sourceNames,
         );
         const formattedResults = rows.map(formatArticleRow);
         return jsonResponse(request, {
@@ -487,7 +515,7 @@ export default {
     }
 
     try {
-      const { rows, hasMore } = await searchArticles(env.DB, query, page, limit);
+      const { rows, hasMore } = await searchArticles(env.DB, query, page, limit, sourceNames);
       const formattedResults = rows.map(formatArticleRow);
       return jsonResponse(request, {
         success: true,
@@ -508,6 +536,10 @@ export default {
       const category = url.pathname.split('/').pop();
       const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
       const forceSync = url.searchParams.get('sync') === '1';
+      const sourceIds = parseSourceFilter(url.searchParams.get('sources'));
+      if (!sourceIds) return jsonResponse(request, { success: false, error: '新聞來源參數無效' }, 400);
+      const sourceNames = sourceNamesForIds(sourceIds);
+      const sourceFilter = sourceFilterSql('source', sourceNames);
       const limit = 20;
 
       if (!Number.isInteger(page) || page < 0 || page > 500) {
@@ -531,16 +563,16 @@ export default {
 
         if (category === 'latest') {
           if (forceSync || page === 0) {
-            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles`).all();
+            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE 1 = 1${sourceFilter.sql}`).bind(...sourceFilter.params).all();
             if (forceSync || checkDB[0].count === 0) {
               await syncAllCategoriesAndRetention(env);
             }
           }
-          query = `SELECT * FROM articles ORDER BY pubDate DESC LIMIT ? OFFSET ?`;
-          params = [limit, offset];
+          query = `SELECT * FROM articles WHERE 1 = 1${sourceFilter.sql} ORDER BY pubDate DESC LIMIT ? OFFSET ?`;
+          params = [...sourceFilter.params, limit, offset];
         } else {
           if (forceSync || page === 0) {
-            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?`).bind(category).all();
+            const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE category = ?${sourceFilter.sql}`).bind(category, ...sourceFilter.params).all();
             if (forceSync || checkDB[0].count === 0) {
               await Promise.all([
                 syncCategoryToDB(category, env),
@@ -549,8 +581,8 @@ export default {
               if (forceSync) await enforceAdaptiveRetention(env.DB);
             }
           }
-          query = `SELECT * FROM articles WHERE category = ? ORDER BY pubDate DESC LIMIT ? OFFSET ?`;
-          params = [category, limit, offset];
+          query = `SELECT * FROM articles WHERE category = ?${sourceFilter.sql} ORDER BY pubDate DESC LIMIT ? OFFSET ?`;
+          params = [category, ...sourceFilter.params, limit, offset];
         }
 
         const { results } = await env.DB.prepare(query).bind(...params).all();

@@ -1,3 +1,5 @@
+import { sourceFilterSql } from './source-filter.js';
+
 const FTS_MIN_CODEPOINTS = 3;
 
 function codePointLength(value) {
@@ -57,59 +59,63 @@ export function decodeSearchCursor(value) {
   }
 }
 
-async function runFtsSearch(db, query, offset, fetchLimit) {
+async function runFtsSearch(db, query, offset, fetchLimit, sourceNames) {
+  const filter = sourceFilterSql('a.source', sourceNames);
   return db
     .prepare(`SELECT a.*
       FROM articles_fts
       JOIN articles AS a ON a.rowid = articles_fts.rowid
-      WHERE articles_fts MATCH ?
+      WHERE articles_fts MATCH ?${filter.sql}
       ORDER BY a.pubDate DESC
       LIMIT ? OFFSET ?`)
-    .bind(quoteFtsPhrase(query), fetchLimit, offset)
+    .bind(quoteFtsPhrase(query), ...filter.params, fetchLimit, offset)
     .all();
 }
 
-async function runLikeFallback(db, query, offset, fetchLimit) {
+async function runLikeFallback(db, query, offset, fetchLimit, sourceNames) {
   const pattern = `%${escapeLike(query)}%`;
+  const filter = sourceFilterSql('source', sourceNames);
   return db
     .prepare(`SELECT * FROM articles
-      WHERE title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'
+      WHERE (title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')${filter.sql}
       ORDER BY pubDate DESC
       LIMIT ? OFFSET ?`)
-    .bind(pattern, pattern, fetchLimit, offset)
+    .bind(pattern, pattern, ...filter.params, fetchLimit, offset)
     .all();
 }
 
-async function runFtsCursorSearch(db, query, cursor, fetchLimit) {
+async function runFtsCursorSearch(db, query, cursor, fetchLimit, sourceNames) {
   const pubDate = cursor?.pubDate || null;
   const id = cursor?.id || null;
+  const filter = sourceFilterSql('a.source', sourceNames);
   return db
     .prepare(`SELECT a.*
       FROM articles_fts
       JOIN articles AS a ON a.rowid = articles_fts.rowid
-      WHERE articles_fts MATCH ?
+      WHERE articles_fts MATCH ?${filter.sql}
         AND (? IS NULL OR a.pubDate < ? OR (a.pubDate = ? AND a.id < ?))
       ORDER BY a.pubDate DESC, a.id DESC
       LIMIT ?`)
-    .bind(quoteFtsPhrase(query), pubDate, pubDate, pubDate, id, fetchLimit)
+    .bind(quoteFtsPhrase(query), ...filter.params, pubDate, pubDate, pubDate, id, fetchLimit)
     .all();
 }
 
-async function runLikeCursorSearch(db, query, cursor, fetchLimit) {
+async function runLikeCursorSearch(db, query, cursor, fetchLimit, sourceNames) {
   const pattern = `%${escapeLike(query)}%`;
   const pubDate = cursor?.pubDate || null;
   const id = cursor?.id || null;
+  const filter = sourceFilterSql('source', sourceNames);
   return db
     .prepare(`SELECT * FROM articles
-      WHERE (title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')
+      WHERE (title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')${filter.sql}
         AND (? IS NULL OR pubDate < ? OR (pubDate = ? AND id < ?))
       ORDER BY pubDate DESC, id DESC
       LIMIT ?`)
-    .bind(pattern, pattern, pubDate, pubDate, pubDate, id, fetchLimit)
+    .bind(pattern, pattern, ...filter.params, pubDate, pubDate, pubDate, id, fetchLimit)
     .all();
 }
 
-export async function searchArticles(db, query, page, limit = 20) {
+export async function searchArticles(db, query, page, limit = 20, sourceNames = []) {
   const offset = page * limit;
   const fetchLimit = limit + 1;
   let result;
@@ -117,16 +123,16 @@ export async function searchArticles(db, query, page, limit = 20) {
 
   if (codePointLength(query) >= FTS_MIN_CODEPOINTS) {
     try {
-      result = await runFtsSearch(db, query, offset, fetchLimit);
+      result = await runFtsSearch(db, query, offset, fetchLimit, sourceNames);
       backend = 'fts5-trigram';
     } catch (error) {
       if (!isMissingFtsTable(error)) throw error;
       console.warn('search-fts-missing-fallback', { queryLength: codePointLength(query) });
-      result = await runLikeFallback(db, query, offset, fetchLimit);
+      result = await runLikeFallback(db, query, offset, fetchLimit, sourceNames);
       backend = 'like-migration-fallback';
     }
   } else {
-    result = await runLikeFallback(db, query, offset, fetchLimit);
+    result = await runLikeFallback(db, query, offset, fetchLimit, sourceNames);
     backend = 'like-short-query';
   }
 
@@ -138,23 +144,23 @@ export async function searchArticles(db, query, page, limit = 20) {
   };
 }
 
-export async function searchArticlesAfterCursor(db, query, cursor, limit = 20) {
+export async function searchArticlesAfterCursor(db, query, cursor, limit = 20, sourceNames = []) {
   const fetchLimit = limit + 1;
   let result;
   let backend;
 
   if (codePointLength(query) >= FTS_MIN_CODEPOINTS) {
     try {
-      result = await runFtsCursorSearch(db, query, cursor, fetchLimit);
+      result = await runFtsCursorSearch(db, query, cursor, fetchLimit, sourceNames);
       backend = 'fts5-trigram';
     } catch (error) {
       if (!isMissingFtsTable(error)) throw error;
       console.warn('search-fts-missing-fallback', { queryLength: codePointLength(query) });
-      result = await runLikeCursorSearch(db, query, cursor, fetchLimit);
+      result = await runLikeCursorSearch(db, query, cursor, fetchLimit, sourceNames);
       backend = 'like-migration-fallback';
     }
   } else {
-    result = await runLikeCursorSearch(db, query, cursor, fetchLimit);
+    result = await runLikeCursorSearch(db, query, cursor, fetchLimit, sourceNames);
     backend = 'like-short-query';
   }
 
@@ -166,13 +172,13 @@ export async function searchArticlesAfterCursor(db, query, cursor, limit = 20) {
   };
 }
 
-export async function searchArticlesAcrossDatabases(databases, query, cursor, limit = 20) {
+export async function searchArticlesAcrossDatabases(databases, query, cursor, limit = 20, sourceNames = []) {
   const eligible = (databases || []).filter(Boolean);
   if (eligible.length === 0) return { rows: [], hasMore: false, nextCursor: '', backends: [] };
 
   const perDbLimit = limit * 2 + 1;
   const batches = await Promise.all(
-    eligible.map(db => searchArticlesAfterCursor(db, query, cursor, perDbLimit)),
+    eligible.map(db => searchArticlesAfterCursor(db, query, cursor, perDbLimit, sourceNames)),
   );
 
   const unique = new Map();

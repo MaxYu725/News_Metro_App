@@ -93,6 +93,20 @@ export const LocalDB = {
     saveVisibleCategories: (data) => {
         try { localStorage.setItem('metro_news_visible_cats', JSON.stringify(data)); } catch(e){}
     },
+    getVisibleSources: () => {
+        try {
+            const data = localStorage.getItem('metro_news_visible_sources_v1');
+            const parsed = data ? JSON.parse(data) : ['hk01', 'bastille'];
+            const allowed = ['hk01', 'bastille'];
+            const result = Array.isArray(parsed) ? parsed.filter(id => allowed.includes(id)) : [];
+            return result.length > 0 ? [...new Set(result)] : ['hk01', 'bastille'];
+        } catch (e) {
+            return ['hk01', 'bastille'];
+        }
+    },
+    saveVisibleSources: (data) => {
+        try { localStorage.setItem('metro_news_visible_sources_v1', JSON.stringify(data)); } catch(e){}
+    },
     getAISummaries: () => {
         try { return JSON.parse(localStorage.getItem('metro_news_ai_cache')) || {}; } catch(e){ return {}; }
     },

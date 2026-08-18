@@ -33,7 +33,6 @@
         <div class="app-brand-row px-5">
             <div class="flex items-baseline gap-2 min-w-0">
                 <h1 class="app-title">Metro News</h1>
-                <span class="app-source">HK01</span>
             </div>
         </div>
         <div id="category-strip" class="px-5">
@@ -48,7 +47,7 @@
             <div class="view-title-row">
                 <div>
                     <h2 class="view-title">搜尋</h2>
-                    <p class="view-subtitle">搜尋 HK01 新聞資料庫</p>
+                    <p class="view-subtitle">搜尋新聞資料庫</p>
                 </div>
             </div>
             <form id="news-search-form" class="search-form" role="search">
@@ -114,6 +113,18 @@
             <div>
                 <p class="text-xs text-gray-400 uppercase tracking-widest mb-3">新聞分類</p>
                 <div id="category-visibility-list" class="grid grid-cols-2 gap-2"></div>
+            </div>
+
+            <div>
+                <div class="flex items-end justify-between gap-3 mb-3">
+                    <div>
+                        <p class="text-xs text-gray-400 uppercase tracking-widest">新聞來源</p>
+                        <p class="text-xs text-white/35 mt-1 leading-relaxed">選擇要顯示的來源；數字為搜尋資料庫已存檔新聞量。</p>
+                    </div>
+                    <button id="btn-apply-sources" class="metro-btn shrink-0" type="button" disabled>套用</button>
+                </div>
+                <div id="source-visibility-list" class="flex flex-col gap-2"></div>
+                <p id="source-visibility-status" class="text-xs min-h-[18px] mt-2" role="status" aria-live="polite"></p>
             </div>
 
             <div class="flex flex-col space-y-3">
@@ -183,5 +194,6 @@
     <script type="module" src="./reader-ui.js"></script>
     <script type="module" src="./data-state-ui.js"></script>
     <script type="module" src="./pwa-state.js"></script>
+    <script type="module" src="./source-settings.js"></script>
 </body>
 </html>
