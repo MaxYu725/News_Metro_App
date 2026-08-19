@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v35-foreground-surfaces';
+const SHELL_CACHE = 'metro-news-shell-v36-fullscreen-header-cleanup';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -25,7 +25,7 @@ const SHELL_URLS = [
     './settings.js',
     './source-settings.js',
     './lightbox.js',
-    './manifest.json',
+    './manifest.json?v=36',
     './ic_launcher.png'
 ];
 

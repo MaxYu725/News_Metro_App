@@ -3,7 +3,8 @@
   "short_name": "News",
   "description": "極簡無廣告的 Metro UI 新聞閱讀器",
   "start_url": "./index.html",
-  "display": "standalone",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "background_color": "#000000",
   "theme_color": "#000000",
   "icons": [
