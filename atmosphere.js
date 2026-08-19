@@ -150,8 +150,12 @@ function installAtmosphere() {
     observeAccent();
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', installAtmosphere, { once: true });
+function installAfterAppBoot() {
+    queueMicrotask(installAtmosphere);
+}
+
+if (document.readyState === 'complete') {
+    installAfterAppBoot();
 } else {
-    installAtmosphere();
+    document.addEventListener('DOMContentLoaded', installAfterAppBoot, { once: true });
 }
