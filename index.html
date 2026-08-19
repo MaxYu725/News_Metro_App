@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="./reader-ui.css">
     <link rel="stylesheet" href="./atmosphere.css?v=34">
     <link rel="stylesheet" href="./surface-ui.css?v=35">
+    <link rel="stylesheet" href="./shell-ui.css?v=37">
 </head>
 <body class="h-screen w-screen flex flex-col relative bg-[#0a0d1a] text-white select-none overflow-hidden app-shell">
 
@@ -31,9 +32,19 @@
         <p id="lightbox-hint" class="absolute text-gray-400 text-xs tracking-widest uppercase">雙指縮放 · 雙擊還原</p>
     </div>
 
-    <header id="app-header" class="app-header flex-shrink-0 relative z-30">
-        <div id="category-strip" class="px-5">
-            <nav class="flex gap-6 text-2xl text-gray-400 overflow-x-auto hide-scrollbar justify-start" id="nav-menu" aria-label="新聞分類"></nav>
+    <header id="app-header" class="app-header flex-shrink-0 relative z-30" data-section="news">
+        <div class="page-header-shell">
+            <div class="page-heading-row">
+                <button id="page-header-back" class="page-header-back hidden" type="button" aria-label="返回設定">←</button>
+                <div class="page-heading-copy">
+                    <h1 id="page-title" class="page-title">新聞</h1>
+                    <p id="page-subtitle" class="page-subtitle">最新新聞、分類與追蹤主題</p>
+                </div>
+                <span id="page-meta" class="page-meta hidden"></span>
+            </div>
+            <div id="category-strip">
+                <nav class="flex text-2xl text-gray-400 overflow-x-auto hide-scrollbar justify-start" id="nav-menu" aria-label="新聞分類"></nav>
+            </div>
         </div>
     </header>
 
@@ -193,5 +204,6 @@
     <script type="module" src="./pwa-state.js"></script>
     <script type="module" src="./source-settings.js"></script>
     <script type="module" src="./atmosphere.js?v=34"></script>
+    <script type="module" src="./shell-ui.js?v=37"></script>
 </body>
 </html>
