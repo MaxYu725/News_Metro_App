@@ -1,0 +1,314 @@
+/* MUI-7B.3 — Foreground Surface Integration
+   Layered dark surfaces for all app views except Reader. */
+:root {
+    --metro-surface-0: rgba(7, 10, 18, 0.70);
+    --metro-surface-1: rgba(12, 16, 28, 0.76);
+    --metro-surface-2: rgba(17, 22, 38, 0.82);
+    --metro-surface-border: rgba(255, 255, 255, 0.10);
+    --metro-surface-border-soft: rgba(255, 255, 255, 0.07);
+    --metro-surface-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+/* Keep Reader visually isolated from this foreground system. */
+body:not(.reader-open) .app-header {
+    background:
+        linear-gradient(180deg, rgba(7, 10, 20, 0.88) 0%, rgba(7, 10, 20, 0.76) 100%);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(18px) saturate(118%);
+    -webkit-backdrop-filter: blur(18px) saturate(118%);
+}
+
+body:not(.reader-open) .bottom-nav {
+    background:
+        linear-gradient(180deg, rgba(7, 10, 20, 0.84), rgba(5, 8, 16, 0.90));
+    border-top-color: rgba(255, 255, 255, 0.11);
+    box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.22);
+    backdrop-filter: blur(18px) saturate(118%);
+    -webkit-backdrop-filter: blur(18px) saturate(118%);
+}
+
+/* Final atmosphere visibility pass: raise structure, not dot noise. */
+body:not(.reader-open) #app-bg-container .metro-atmosphere {
+    --metro-dot-alpha: 0.078;
+    --metro-route-major-alpha: 0.255;
+    --metro-route-minor-alpha: 0.135;
+    --metro-arc-alpha: 0.125;
+    --metro-node-alpha: 0.25;
+    --metro-node-core-alpha: 0.18;
+    --metro-glow-primary-alpha: 0.18;
+    --metro-glow-secondary-alpha: 0.105;
+}
+
+body:not(.reader-open) #app-bg-container[data-section="search"] .metro-atmosphere {
+    --metro-dot-alpha: 0.085;
+    --metro-route-major-alpha: 0.215;
+    --metro-route-minor-alpha: 0.115;
+    --metro-arc-alpha: 0.105;
+    --metro-node-alpha: 0.22;
+    --metro-node-core-alpha: 0.16;
+    --metro-glow-primary-alpha: 0.175;
+    --metro-glow-secondary-alpha: 0.10;
+}
+
+body:not(.reader-open) #app-bg-container[data-section="bookmarks"] .metro-atmosphere {
+    --metro-dot-alpha: 0.078;
+    --metro-route-major-alpha: 0.245;
+    --metro-route-minor-alpha: 0.13;
+    --metro-arc-alpha: 0.12;
+    --metro-node-alpha: 0.24;
+    --metro-node-core-alpha: 0.175;
+    --metro-glow-primary-alpha: 0.17;
+    --metro-glow-secondary-alpha: 0.10;
+}
+
+body:not(.reader-open) #app-bg-container[data-section="settings"] .metro-atmosphere,
+body:not(.reader-open) #app-bg-container[data-section="gallery"] .metro-atmosphere {
+    --metro-dot-alpha: 0.082;
+    --metro-route-major-alpha: 0.18;
+    --metro-route-minor-alpha: 0.095;
+    --metro-arc-alpha: 0.09;
+    --metro-node-alpha: 0.19;
+    --metro-node-core-alpha: 0.14;
+    --metro-glow-primary-alpha: 0.14;
+    --metro-glow-secondary-alpha: 0.085;
+}
+
+/* News cards: translucent editorial surfaces instead of near-solid black blocks. */
+body:not(.reader-open) .metro-tile.feed-card {
+    border-color: rgba(255, 255, 255, 0.105);
+    border-left-color: var(--metro-accent-color, #22d3ee) !important;
+    background:
+        linear-gradient(145deg, rgba(18, 23, 39, 0.86), rgba(9, 13, 24, 0.76));
+    backdrop-filter: blur(9px) saturate(112%);
+    -webkit-backdrop-filter: blur(9px) saturate(112%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.025),
+        inset 0 0 0 1px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.022),
+        0 9px 26px rgba(0, 0, 0, 0.27);
+}
+
+body:not(.reader-open) .metro-tile.feed-card:active {
+    background:
+        linear-gradient(145deg, rgba(24, 31, 50, 0.91), rgba(12, 17, 30, 0.84));
+}
+
+body:not(.reader-open) .metro-tile.hero-tile {
+    background:
+        linear-gradient(145deg, rgba(15, 20, 34, 0.91), rgba(8, 12, 22, 0.82));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+/* Search becomes one coherent foreground tool surface. */
+body:not(.reader-open) #search-view:not(.hidden) {
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    background:
+        radial-gradient(circle at 78% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.075), transparent 34%),
+        linear-gradient(145deg, rgba(13, 18, 31, 0.78), rgba(8, 12, 23, 0.69));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.025),
+        0 16px 38px rgba(0, 0, 0, 0.24);
+    backdrop-filter: blur(14px) saturate(116%);
+    -webkit-backdrop-filter: blur(14px) saturate(116%);
+}
+
+body:not(.reader-open) #search-view:not(.hidden) .search-form {
+    border-color: rgba(255, 255, 255, 0.17);
+    background: rgba(12, 16, 29, 0.66);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.02),
+        0 0 0 1px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.025);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+body:not(.reader-open) #search-view:not(.hidden) .search-submit {
+    background: rgba(255, 255, 255, 0.055);
+}
+
+body:not(.reader-open) #search-view:not(.hidden) .search-chip {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(17, 22, 38, 0.56);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+body:not(.reader-open) #search-view:not(.hidden) .search-follow-btn:not(.is-tracked) {
+    background: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.075);
+}
+
+/* Search landing: a secondary quiet surface under the tool panel. */
+body:not(.reader-open) #app-bg-container[data-section="search"] ~ .app-main #news-grid > .px-5.py-10.text-center {
+    width: min(calc(100% - 32px), 520px);
+    margin: clamp(28px, 7vh, 72px) auto 0;
+    padding: 24px 18px !important;
+    border: 1px solid rgba(255, 255, 255, 0.065);
+    background: rgba(10, 14, 25, 0.47);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+body:not(.reader-open) #app-bg-container[data-section="search"] ~ .app-main #news-grid > .px-5.py-10.text-center::before {
+    content: '⌕';
+    display: block;
+    margin-bottom: 10px;
+    color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.72);
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+/* Bookmarks empty state: enough structure to avoid a large dead-black canvas. */
+body:not(.reader-open) #app-bg-container[data-section="bookmarks"] ~ .app-main #news-grid > .px-5.py-10.text-center {
+    width: min(calc(100% - 36px), 460px);
+    margin: clamp(42px, 10vh, 110px) auto 0;
+    padding: 30px 20px 28px !important;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    background:
+        radial-gradient(circle at 50% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.07), transparent 48%),
+        rgba(10, 14, 25, 0.52);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.02),
+        var(--metro-surface-shadow);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+body:not(.reader-open) #app-bg-container[data-section="bookmarks"] ~ .app-main #news-grid > .px-5.py-10.text-center::before {
+    content: '☆';
+    display: block;
+    margin-bottom: 12px;
+    color: var(--metro-accent-color, #22d3ee);
+    font-size: 2rem;
+    font-weight: 300;
+    line-height: 1;
+}
+
+body:not(.reader-open) #app-bg-container[data-section="bookmarks"] ~ .app-main #news-grid > .px-5.py-10.text-center::after {
+    content: '收藏新聞後會顯示在這裡';
+    display: block;
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.34);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+}
+
+/* Settings: figure-3-style grouped surfaces, but lighter and accent-aware. */
+body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) {
+    position: relative;
+    padding: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.085);
+    background:
+        linear-gradient(145deg, rgba(14, 19, 33, 0.76), rgba(9, 13, 24, 0.68));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.024),
+        inset 3px 0 0 rgba(var(--metro-accent-rgb, 34, 211, 238), 0.16),
+        0 12px 28px rgba(0, 0, 0, 0.20);
+    backdrop-filter: blur(12px) saturate(112%);
+    -webkit-backdrop-filter: blur(12px) saturate(112%);
+}
+
+body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) > p:first-child,
+body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) > .flex:first-child p:first-child {
+    color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.88);
+}
+
+body:not(.reader-open) #settings-view #category-visibility-list > label,
+body:not(.reader-open) #settings-view #source-visibility-list > *,
+body:not(.reader-open) #settings-view #category-manager-list > *,
+body:not(.reader-open) #settings-view .settings-link-row,
+body:not(.reader-open) #settings-view .density-btn {
+    border-color: rgba(255, 255, 255, 0.09) !important;
+    background: rgba(18, 23, 40, 0.58) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+body:not(.reader-open) #settings-view #new-cat-input,
+body:not(.reader-open) #settings-view #font-size-display {
+    border-color: rgba(255, 255, 255, 0.12);
+    background: rgba(13, 18, 31, 0.70) !important;
+}
+
+body:not(.reader-open) #settings-view .metro-btn {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.035);
+}
+
+/* Preserve hierarchy for section headings floating above surfaces. */
+body:not(.reader-open) .section-heading {
+    position: relative;
+    z-index: 2;
+}
+
+@media (max-width: 699px) {
+    body:not(.reader-open) #search-view:not(.hidden) {
+        width: auto;
+        margin: 12px 12px 7px;
+        padding: 16px 14px 14px !important;
+    }
+
+    body:not(.reader-open) #settings-view:not(.hidden) {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+        padding-bottom: 34px;
+    }
+
+    body:not(.reader-open) #settings-view:not(.hidden) > :not([hidden]) ~ :not([hidden]) {
+        margin-top: 14px !important;
+    }
+
+    body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) {
+        padding: 14px 13px;
+    }
+}
+
+@media (min-width: 700px) {
+    body:not(.reader-open) #search-view:not(.hidden) {
+        margin-top: 16px;
+        margin-bottom: 10px;
+        padding: 18px 20px 17px !important;
+    }
+
+    body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) {
+        padding: 17px;
+    }
+}
+
+@media (min-width: 900px) {
+    body:not(.reader-open) .bottom-nav {
+        border-top: 0;
+        border-right-color: rgba(255, 255, 255, 0.10);
+        box-shadow: 12px 0 34px rgba(0, 0, 0, 0.18);
+    }
+}
+
+@media (hover: hover) and (pointer: fine) {
+    body:not(.reader-open) .metro-tile.feed-card:hover {
+        border-color: rgba(255, 255, 255, 0.14);
+        border-left-color: var(--metro-accent-color, #22d3ee) !important;
+        background:
+            linear-gradient(145deg, rgba(22, 28, 46, 0.90), rgba(11, 16, 29, 0.82));
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 12px 30px rgba(0, 0, 0, 0.30);
+    }
+
+    body:not(.reader-open) #settings-view #category-visibility-list > label:hover,
+    body:not(.reader-open) #settings-view #source-visibility-list > *:hover,
+    body:not(.reader-open) #settings-view .settings-link-row:hover {
+        background: rgba(24, 31, 50, 0.70) !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body:not(.reader-open) .metro-tile.feed-card,
+    body:not(.reader-open) #search-view,
+    body:not(.reader-open) #settings-view > div,
+    body:not(.reader-open) .app-header,
+    body:not(.reader-open) .bottom-nav {
+        transition: none !important;
+    }
+}
