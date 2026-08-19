@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v37-unified-app-shell';
+const SHELL_CACHE = 'metro-news-shell-v38-shell-spacing-refinement';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -10,7 +10,7 @@ const SHELL_URLS = [
     './reader-ui.css',
     './atmosphere.css?v=34',
     './surface-ui.css?v=35',
-    './shell-ui.css?v=37',
+    './shell-ui.css?v=38',
     './app.js',
     './feed-ui.js',
     './search-ui.js',

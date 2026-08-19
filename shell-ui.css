@@ -12,6 +12,11 @@
     --shell-secondary-bg: rgba(10, 14, 25, 0.40);
 }
 
+/* The shared header owns the top safe area. Do not reserve it twice on the app shell. */
+body:not(.reader-open).app-shell {
+    padding-top: 0;
+}
+
 body:not(.reader-open) .app-header {
     position: relative;
     z-index: 30;
@@ -163,7 +168,21 @@ body:not(.reader-open) #settings-view .density-btn {
     -webkit-backdrop-filter: none !important;
 }
 
-body:not(.reader-open) #settings-view #category-visibility-list > label:active,
+/* Category toggles are tertiary rows, not another card layer. */
+body:not(.reader-open) #settings-view #category-visibility-list {
+    gap: 6px !important;
+}
+
+body:not(.reader-open) #settings-view #category-visibility-list > label {
+    border-color: rgba(255, 255, 255, 0.028) !important;
+    background: rgba(14, 19, 34, 0.16) !important;
+}
+
+body:not(.reader-open) #settings-view #category-visibility-list > label:active {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10) !important;
+    background: rgba(255, 255, 255, 0.038) !important;
+}
+
 body:not(.reader-open) #settings-view #source-visibility-list > *:active,
 body:not(.reader-open) #settings-view .settings-link-row:active {
     background: rgba(255, 255, 255, 0.055) !important;
@@ -188,6 +207,20 @@ body:not(.reader-open) #app-bg-container[data-section="search"] ~ .app-main #new
 body:not(.reader-open) #app-bg-container[data-section="bookmarks"] ~ .app-main #news-grid > .px-5.py-10.text-center::before {
     margin-bottom: 12px;
     color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.76);
+}
+
+/* Search landing is intentionally quieter than the primary search tool surface. */
+body:not(.reader-open) #app-bg-container[data-section="search"] ~ .app-main #news-grid > .px-5.py-10.text-center {
+    width: min(calc(100% - 40px), 470px);
+    margin-top: clamp(24px, 5vh, 54px);
+    padding: 22px 18px 20px !important;
+    border-color: rgba(255, 255, 255, 0.034);
+    background:
+        radial-gradient(circle at 50% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.028), transparent 52%),
+        rgba(10, 14, 25, 0.27);
+    box-shadow: none;
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
 }
 
 /* News content begins with the same gutter rhythm as the other pages. */
@@ -247,7 +280,11 @@ body:not(.reader-open) #news-grid {
         color: #fff;
     }
 
-    body:not(.reader-open) #settings-view #category-visibility-list > label:hover,
+    body:not(.reader-open) #settings-view #category-visibility-list > label:hover {
+        border-color: rgba(255, 255, 255, 0.045) !important;
+        background: rgba(255, 255, 255, 0.028) !important;
+    }
+
     body:not(.reader-open) #settings-view #source-visibility-list > *:hover,
     body:not(.reader-open) #settings-view .settings-link-row:hover {
         background: rgba(255, 255, 255, 0.048) !important;
