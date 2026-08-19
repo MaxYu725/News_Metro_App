@@ -146,12 +146,22 @@ function installAtmosphere() {
     container.classList.add('atmosphere-ready');
     syncPalette();
     syncSection(container);
-    observeSection(container);
-    observeAccent();
+
+    if (container.dataset.atmosphereObserversReady !== '1') {
+        container.dataset.atmosphereObserversReady = '1';
+        observeSection(container);
+        observeAccent();
+
+        const repairObserver = new MutationObserver(() => {
+            if (container.querySelector(':scope > .metro-atmosphere')) return;
+            requestAnimationFrame(installAtmosphere);
+        });
+        repairObserver.observe(container, { childList: true });
+    }
 }
 
 function installAfterAppBoot() {
-    queueMicrotask(installAtmosphere);
+    requestAnimationFrame(installAtmosphere);
 }
 
 if (document.readyState === 'complete') {
