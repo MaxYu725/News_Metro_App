@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v31-atmosphere';
+const SHELL_CACHE = 'metro-news-shell-v32-atmosphere-refresh';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -8,14 +8,14 @@ const SHELL_URLS = [
     './style.css',
     './feed-ui.css',
     './reader-ui.css',
-    './atmosphere.css',
+    './atmosphere.css?v=32',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
     './reader-ui.js',
     './data-state-ui.js',
     './pwa-state.js',
-    './atmosphere.js',
+    './atmosphere.js?v=32',
     './api.js',
     './data-cache.js',
     './utils.js',
