@@ -26,6 +26,7 @@
     --metro-route-minor-alpha: 0.055;
     --metro-arc-alpha: 0.055;
     --metro-node-alpha: 0.13;
+    --metro-node-core-alpha: 0.095;
     --metro-glow-primary-alpha: 0.085;
     --metro-glow-secondary-alpha: 0.048;
     background:
@@ -153,7 +154,7 @@
 .metro-atmosphere-node-core {
     fill: rgb(var(--metro-atmosphere-primary-rgb));
     stroke: none;
-    opacity: calc(var(--metro-node-alpha) * 0.78);
+    opacity: var(--metro-node-core-alpha);
 }
 
 .metro-atmosphere-mask {
@@ -175,6 +176,7 @@
     --metro-route-minor-alpha: 0.042;
     --metro-arc-alpha: 0.043;
     --metro-node-alpha: 0.105;
+    --metro-node-core-alpha: 0.078;
     --metro-glow-primary-alpha: 0.078;
     --metro-glow-secondary-alpha: 0.04;
 }
@@ -189,6 +191,7 @@
     --metro-route-minor-alpha: 0.048;
     --metro-arc-alpha: 0.05;
     --metro-node-alpha: 0.115;
+    --metro-node-core-alpha: 0.085;
     --metro-glow-primary-alpha: 0.072;
     --metro-glow-secondary-alpha: 0.038;
 }
@@ -200,6 +203,7 @@
     --metro-route-minor-alpha: 0.032;
     --metro-arc-alpha: 0.034;
     --metro-node-alpha: 0.09;
+    --metro-node-core-alpha: 0.066;
     --metro-glow-primary-alpha: 0.052;
     --metro-glow-secondary-alpha: 0.03;
 }
