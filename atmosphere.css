@@ -21,16 +21,16 @@
     inset: 0;
     overflow: hidden;
     isolation: isolate;
-    --metro-dot-alpha: 0.045;
-    --metro-route-major-alpha: 0.105;
-    --metro-route-minor-alpha: 0.055;
-    --metro-arc-alpha: 0.055;
-    --metro-node-alpha: 0.13;
-    --metro-node-core-alpha: 0.095;
-    --metro-glow-primary-alpha: 0.085;
-    --metro-glow-secondary-alpha: 0.048;
+    --metro-dot-alpha: 0.072;
+    --metro-route-major-alpha: 0.18;
+    --metro-route-minor-alpha: 0.095;
+    --metro-arc-alpha: 0.09;
+    --metro-node-alpha: 0.20;
+    --metro-node-core-alpha: 0.15;
+    --metro-glow-primary-alpha: 0.15;
+    --metro-glow-secondary-alpha: 0.085;
     background:
-        linear-gradient(180deg, rgba(10, 14, 25, 0.96) 0%, rgba(7, 9, 16, 0.98) 54%, #06080e 100%);
+        linear-gradient(180deg, rgba(10, 14, 25, 0.95) 0%, rgba(7, 9, 16, 0.975) 54%, #06080e 100%);
 }
 
 .metro-atmosphere-base,
@@ -45,8 +45,8 @@
 .metro-atmosphere-base {
     z-index: 0;
     background:
-        radial-gradient(circle at 48% 18%, rgba(255, 255, 255, 0.018), transparent 34%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.012), transparent 42%);
+        radial-gradient(circle at 48% 18%, rgba(255, 255, 255, 0.025), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.016), transparent 42%);
 }
 
 .metro-atmosphere-glow {
@@ -55,7 +55,7 @@
     width: 72vmax;
     height: 72vmax;
     border-radius: 50%;
-    filter: blur(44px);
+    filter: blur(42px);
     transform: translateZ(0);
     transition: background 420ms ease, opacity 320ms ease;
 }
@@ -66,7 +66,7 @@
     background: radial-gradient(
         circle,
         rgba(var(--metro-atmosphere-primary-rgb), var(--metro-glow-primary-alpha)) 0%,
-        rgba(var(--metro-atmosphere-primary-rgb), 0.022) 38%,
+        rgba(var(--metro-atmosphere-primary-rgb), 0.04) 38%,
         transparent 68%
     );
 }
@@ -77,7 +77,7 @@
     background: radial-gradient(
         circle,
         rgba(var(--metro-atmosphere-secondary-rgb), var(--metro-glow-secondary-alpha)) 0%,
-        rgba(var(--metro-atmosphere-secondary-rgb), 0.016) 40%,
+        rgba(var(--metro-atmosphere-secondary-rgb), 0.028) 40%,
         transparent 70%
     );
 }
@@ -92,8 +92,8 @@
     opacity: 0;
     background: radial-gradient(
         ellipse at 50% 42%,
-        rgba(var(--metro-atmosphere-primary-rgb), 0.065),
-        rgba(var(--metro-atmosphere-secondary-rgb), 0.02) 48%,
+        rgba(var(--metro-atmosphere-primary-rgb), 0.11),
+        rgba(var(--metro-atmosphere-secondary-rgb), 0.04) 48%,
         transparent 73%
     );
     filter: blur(24px);
@@ -124,26 +124,26 @@
 
 .metro-atmosphere-route-primary {
     stroke: rgb(var(--metro-atmosphere-primary-rgb));
-    stroke-width: 1.45;
+    stroke-width: 1.55;
     opacity: var(--metro-route-major-alpha);
 }
 
 .metro-atmosphere-route-secondary {
     stroke: rgb(var(--metro-atmosphere-secondary-rgb));
-    stroke-width: 1.15;
+    stroke-width: 1.25;
     stroke-dasharray: 11 10;
     opacity: var(--metro-route-minor-alpha);
 }
 
 .metro-atmosphere-arc {
     stroke: rgb(var(--metro-atmosphere-primary-rgb));
-    stroke-width: 1;
+    stroke-width: 1.1;
     opacity: var(--metro-arc-alpha);
 }
 
 .metro-atmosphere-node {
     stroke: rgb(var(--metro-atmosphere-primary-rgb));
-    stroke-width: 1.2;
+    stroke-width: 1.35;
     opacity: var(--metro-node-alpha);
 }
 
@@ -160,8 +160,8 @@
 .metro-atmosphere-mask {
     z-index: 3;
     background:
-        radial-gradient(ellipse at 50% 42%, transparent 12%, rgba(5, 7, 13, 0.07) 54%, rgba(5, 7, 13, 0.34) 100%),
-        linear-gradient(180deg, rgba(5, 7, 13, 0.03) 0%, transparent 25%, transparent 72%, rgba(5, 7, 13, 0.28) 100%);
+        radial-gradient(ellipse at 50% 42%, transparent 12%, rgba(5, 7, 13, 0.045) 54%, rgba(5, 7, 13, 0.22) 100%),
+        linear-gradient(180deg, rgba(5, 7, 13, 0.02) 0%, transparent 25%, transparent 72%, rgba(5, 7, 13, 0.18) 100%);
 }
 
 .metro-atmosphere-detail-tablet,
@@ -171,14 +171,14 @@
 
 /* Page intensity: one composition, different editorial emphasis. */
 #app-bg-container[data-section="search"] .metro-atmosphere {
-    --metro-dot-alpha: 0.06;
-    --metro-route-major-alpha: 0.08;
-    --metro-route-minor-alpha: 0.042;
-    --metro-arc-alpha: 0.043;
-    --metro-node-alpha: 0.105;
-    --metro-node-core-alpha: 0.078;
-    --metro-glow-primary-alpha: 0.078;
-    --metro-glow-secondary-alpha: 0.04;
+    --metro-dot-alpha: 0.085;
+    --metro-route-major-alpha: 0.15;
+    --metro-route-minor-alpha: 0.075;
+    --metro-arc-alpha: 0.075;
+    --metro-node-alpha: 0.17;
+    --metro-node-core-alpha: 0.125;
+    --metro-glow-primary-alpha: 0.14;
+    --metro-glow-secondary-alpha: 0.08;
 }
 
 #app-bg-container[data-section="search"] .metro-atmosphere-search-haze {
@@ -186,30 +186,47 @@
 }
 
 #app-bg-container[data-section="bookmarks"] .metro-atmosphere {
-    --metro-dot-alpha: 0.043;
-    --metro-route-major-alpha: 0.09;
-    --metro-route-minor-alpha: 0.048;
-    --metro-arc-alpha: 0.05;
-    --metro-node-alpha: 0.115;
-    --metro-node-core-alpha: 0.085;
-    --metro-glow-primary-alpha: 0.072;
-    --metro-glow-secondary-alpha: 0.038;
+    --metro-dot-alpha: 0.07;
+    --metro-route-major-alpha: 0.17;
+    --metro-route-minor-alpha: 0.09;
+    --metro-arc-alpha: 0.085;
+    --metro-node-alpha: 0.19;
+    --metro-node-core-alpha: 0.14;
+    --metro-glow-primary-alpha: 0.135;
+    --metro-glow-secondary-alpha: 0.078;
 }
 
 #app-bg-container[data-section="settings"] .metro-atmosphere,
 #app-bg-container[data-section="gallery"] .metro-atmosphere {
-    --metro-dot-alpha: 0.06;
-    --metro-route-major-alpha: 0.062;
-    --metro-route-minor-alpha: 0.032;
-    --metro-arc-alpha: 0.034;
-    --metro-node-alpha: 0.09;
-    --metro-node-core-alpha: 0.066;
-    --metro-glow-primary-alpha: 0.052;
-    --metro-glow-secondary-alpha: 0.03;
+    --metro-dot-alpha: 0.08;
+    --metro-route-major-alpha: 0.13;
+    --metro-route-minor-alpha: 0.065;
+    --metro-arc-alpha: 0.065;
+    --metro-node-alpha: 0.15;
+    --metro-node-core-alpha: 0.11;
+    --metro-glow-primary-alpha: 0.11;
+    --metro-glow-secondary-alpha: 0.065;
 }
 
 body.reader-open #app-bg-container {
     opacity: 0;
+}
+
+@media (max-width: 699px) {
+    .metro-atmosphere-glow-primary {
+        top: -30vmax;
+        right: -22vmax;
+    }
+
+    .metro-atmosphere-glow-secondary {
+        left: -28vmax;
+        bottom: -34vmax;
+    }
+
+    .metro-atmosphere-search-haze {
+        left: 4%;
+        right: 4%;
+    }
 }
 
 @media (min-width: 700px) {
@@ -236,7 +253,7 @@ body.reader-open #app-bg-container {
     .metro-atmosphere-glow {
         width: 78vmax;
         height: 78vmax;
-        filter: blur(56px);
+        filter: blur(52px);
     }
 
     .metro-atmosphere-glow-primary {
