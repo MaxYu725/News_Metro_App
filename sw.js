@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v36-fullscreen-header-cleanup';
+const SHELL_CACHE = 'metro-news-shell-v37-unified-app-shell';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -10,6 +10,7 @@ const SHELL_URLS = [
     './reader-ui.css',
     './atmosphere.css?v=34',
     './surface-ui.css?v=35',
+    './shell-ui.css?v=37',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
@@ -17,6 +18,7 @@ const SHELL_URLS = [
     './data-state-ui.js',
     './pwa-state.js',
     './atmosphere.js?v=34',
+    './shell-ui.js?v=37',
     './api.js',
     './data-cache.js',
     './utils.js',
