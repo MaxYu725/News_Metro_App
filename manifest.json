@@ -5,8 +5,8 @@
   "start_url": "./index.html",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0a0d1a",
+  "theme_color": "#0a0d1a",
   "icons": [
     {
       "src": "./ic_launcher.png",
