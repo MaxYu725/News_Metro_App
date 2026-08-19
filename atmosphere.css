@@ -1,0 +1,260 @@
+/* MUI-7B — Accent-aware Metro Atmosphere
+   Decorative background for every app surface except Reader. */
+:root {
+    --metro-atmosphere-primary-rgb: var(--metro-accent-rgb, 34, 211, 238);
+    --metro-atmosphere-secondary-rgb: 99, 102, 241;
+    --metro-atmosphere-base: #070910;
+    --metro-atmosphere-raised: #0a0e19;
+}
+
+#app-bg-container {
+    background: var(--metro-atmosphere-base) !important;
+    transition: opacity 180ms ease;
+}
+
+#app-bg-container .metro-atmosphere-map {
+    opacity: 1 !important;
+}
+
+.metro-atmosphere {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    isolation: isolate;
+    --metro-dot-alpha: 0.045;
+    --metro-route-major-alpha: 0.105;
+    --metro-route-minor-alpha: 0.055;
+    --metro-arc-alpha: 0.055;
+    --metro-node-alpha: 0.13;
+    --metro-glow-primary-alpha: 0.085;
+    --metro-glow-secondary-alpha: 0.048;
+    background:
+        linear-gradient(180deg, rgba(10, 14, 25, 0.96) 0%, rgba(7, 9, 16, 0.98) 54%, #06080e 100%);
+}
+
+.metro-atmosphere-base,
+.metro-atmosphere-glow,
+.metro-atmosphere-search-haze,
+.metro-atmosphere-map,
+.metro-atmosphere-mask {
+    position: absolute;
+    inset: 0;
+}
+
+.metro-atmosphere-base {
+    z-index: 0;
+    background:
+        radial-gradient(circle at 48% 18%, rgba(255, 255, 255, 0.018), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.012), transparent 42%);
+}
+
+.metro-atmosphere-glow {
+    z-index: 1;
+    inset: auto;
+    width: 72vmax;
+    height: 72vmax;
+    border-radius: 50%;
+    filter: blur(44px);
+    transform: translateZ(0);
+    transition: background 420ms ease, opacity 320ms ease;
+}
+
+.metro-atmosphere-glow-primary {
+    top: -39vmax;
+    right: -30vmax;
+    background: radial-gradient(
+        circle,
+        rgba(var(--metro-atmosphere-primary-rgb), var(--metro-glow-primary-alpha)) 0%,
+        rgba(var(--metro-atmosphere-primary-rgb), 0.022) 38%,
+        transparent 68%
+    );
+}
+
+.metro-atmosphere-glow-secondary {
+    left: -35vmax;
+    bottom: -45vmax;
+    background: radial-gradient(
+        circle,
+        rgba(var(--metro-atmosphere-secondary-rgb), var(--metro-glow-secondary-alpha)) 0%,
+        rgba(var(--metro-atmosphere-secondary-rgb), 0.016) 40%,
+        transparent 70%
+    );
+}
+
+.metro-atmosphere-search-haze {
+    z-index: 1;
+    top: clamp(72px, 12vh, 156px);
+    left: 10%;
+    right: 10%;
+    bottom: auto;
+    height: clamp(130px, 18vh, 220px);
+    opacity: 0;
+    background: radial-gradient(
+        ellipse at 50% 42%,
+        rgba(var(--metro-atmosphere-primary-rgb), 0.065),
+        rgba(var(--metro-atmosphere-secondary-rgb), 0.02) 48%,
+        transparent 73%
+    );
+    filter: blur(24px);
+    transition: opacity 220ms ease, background 420ms ease;
+}
+
+.metro-atmosphere-map {
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.metro-atmosphere-dot {
+    fill: rgb(var(--metro-atmosphere-primary-rgb));
+    opacity: var(--metro-dot-alpha);
+    transition: fill 420ms ease, opacity 300ms ease;
+}
+
+.metro-atmosphere-route,
+.metro-atmosphere-arc,
+.metro-atmosphere-node,
+.metro-atmosphere-node-core {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    transition: stroke 420ms ease, fill 420ms ease, opacity 300ms ease;
+}
+
+.metro-atmosphere-route-primary {
+    stroke: rgb(var(--metro-atmosphere-primary-rgb));
+    stroke-width: 1.45;
+    opacity: var(--metro-route-major-alpha);
+}
+
+.metro-atmosphere-route-secondary {
+    stroke: rgb(var(--metro-atmosphere-secondary-rgb));
+    stroke-width: 1.15;
+    stroke-dasharray: 11 10;
+    opacity: var(--metro-route-minor-alpha);
+}
+
+.metro-atmosphere-arc {
+    stroke: rgb(var(--metro-atmosphere-primary-rgb));
+    stroke-width: 1;
+    opacity: var(--metro-arc-alpha);
+}
+
+.metro-atmosphere-node {
+    stroke: rgb(var(--metro-atmosphere-primary-rgb));
+    stroke-width: 1.2;
+    opacity: var(--metro-node-alpha);
+}
+
+.metro-atmosphere-node-secondary {
+    stroke: rgb(var(--metro-atmosphere-secondary-rgb));
+}
+
+.metro-atmosphere-node-core {
+    fill: rgb(var(--metro-atmosphere-primary-rgb));
+    stroke: none;
+    opacity: calc(var(--metro-node-alpha) * 0.78);
+}
+
+.metro-atmosphere-mask {
+    z-index: 3;
+    background:
+        radial-gradient(ellipse at 50% 42%, transparent 12%, rgba(5, 7, 13, 0.07) 54%, rgba(5, 7, 13, 0.34) 100%),
+        linear-gradient(180deg, rgba(5, 7, 13, 0.03) 0%, transparent 25%, transparent 72%, rgba(5, 7, 13, 0.28) 100%);
+}
+
+.metro-atmosphere-detail-tablet,
+.metro-atmosphere-detail-desktop {
+    display: none;
+}
+
+/* Page intensity: one composition, different editorial emphasis. */
+#app-bg-container[data-section="search"] .metro-atmosphere {
+    --metro-dot-alpha: 0.06;
+    --metro-route-major-alpha: 0.08;
+    --metro-route-minor-alpha: 0.042;
+    --metro-arc-alpha: 0.043;
+    --metro-node-alpha: 0.105;
+    --metro-glow-primary-alpha: 0.078;
+    --metro-glow-secondary-alpha: 0.04;
+}
+
+#app-bg-container[data-section="search"] .metro-atmosphere-search-haze {
+    opacity: 1;
+}
+
+#app-bg-container[data-section="bookmarks"] .metro-atmosphere {
+    --metro-dot-alpha: 0.043;
+    --metro-route-major-alpha: 0.09;
+    --metro-route-minor-alpha: 0.048;
+    --metro-arc-alpha: 0.05;
+    --metro-node-alpha: 0.115;
+    --metro-glow-primary-alpha: 0.072;
+    --metro-glow-secondary-alpha: 0.038;
+}
+
+#app-bg-container[data-section="settings"] .metro-atmosphere,
+#app-bg-container[data-section="gallery"] .metro-atmosphere {
+    --metro-dot-alpha: 0.06;
+    --metro-route-major-alpha: 0.062;
+    --metro-route-minor-alpha: 0.032;
+    --metro-arc-alpha: 0.034;
+    --metro-node-alpha: 0.09;
+    --metro-glow-primary-alpha: 0.052;
+    --metro-glow-secondary-alpha: 0.03;
+}
+
+body.reader-open #app-bg-container {
+    opacity: 0;
+}
+
+@media (min-width: 700px) {
+    .metro-atmosphere-detail-tablet {
+        display: inline;
+    }
+
+    .metro-atmosphere-glow-primary {
+        top: -43vmax;
+        right: -25vmax;
+    }
+
+    .metro-atmosphere-glow-secondary {
+        left: -29vmax;
+        bottom: -43vmax;
+    }
+}
+
+@media (min-width: 1200px) {
+    .metro-atmosphere-detail-desktop {
+        display: inline;
+    }
+
+    .metro-atmosphere-glow {
+        width: 78vmax;
+        height: 78vmax;
+        filter: blur(56px);
+    }
+
+    .metro-atmosphere-glow-primary {
+        top: -50vmax;
+        right: -26vmax;
+    }
+
+    .metro-atmosphere-glow-secondary {
+        left: -34vmax;
+        bottom: -51vmax;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #app-bg-container,
+    .metro-atmosphere-glow,
+    .metro-atmosphere-search-haze,
+    .metro-atmosphere-dot,
+    .metro-atmosphere-route,
+    .metro-atmosphere-arc,
+    .metro-atmosphere-node,
+    .metro-atmosphere-node-core {
+        transition: none !important;
+    }
+}
