@@ -5,6 +5,7 @@ import {
   parseAllowedArticleUrl,
   rateLimitKey,
 } from './security.js';
+import { archiveDatabases, sourceCountsAcrossDatabases } from './archive-shards.js';
 import {
   decodeSearchCursor,
   isArchiveEligibleQuery,
@@ -432,13 +433,9 @@ export default {
     if (url.pathname === '/api/source-stats') {
       if (request.method !== 'GET') return methodNotAllowed(request, ['GET']);
       try {
-        const archiveDb = env.ARCHIVE_01?.withSession
-          ? env.ARCHIVE_01.withSession('first-unconstrained')
-          : env.DB;
-        const { results } = await archiveDb.prepare(
-          `SELECT source, COUNT(*) AS count FROM articles GROUP BY source`,
-        ).all();
-        const bySource = new Map((results || []).map(row => [String(row.source || ''), Number(row.count || 0)]));
+        const archives = archiveDatabases(env);
+        const databases = archives.length > 0 ? archives : [env.DB].filter(Boolean);
+        const bySource = await sourceCountsAcrossDatabases(databases);
         return jsonResponse(request, {
           success: true,
           data: NEWS_SOURCES.map(source => ({
@@ -482,9 +479,9 @@ export default {
       }
 
       try {
-        const archiveSession = env.ARCHIVE_01.withSession('first-unconstrained');
+        const archives = archiveDatabases(env);
         const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
-          [env.DB, archiveSession],
+          [env.DB, ...archives],
           query,
           cursor,
           limit,

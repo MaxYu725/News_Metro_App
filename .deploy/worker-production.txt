@@ -1,1 +1,1 @@
-NS2C5 production promotion: deploy configurable news-source filtering, per-source searchable archive counts, source-aware feed/search SQL, and the /api/source-stats endpoint required by Settings.
+NS2C7 production promotion: bind metro_news_archive_02, search/count across both archive shards, and enable automatic HK01 rollover with cross-shard watchdog coverage.

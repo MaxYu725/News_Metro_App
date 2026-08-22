@@ -22,6 +22,7 @@ def main() -> int:
     retention = (WORKER / "src" / "retention.js").read_text("utf-8")
     bastille = (WORKER / "src" / "sources" / "bastille.js").read_text("utf-8")
     archive_backfill = (WORKER / "src" / "archive-backfill.js").read_text("utf-8")
+    archive_shards = (WORKER / "src" / "archive-shards.js").read_text("utf-8")
     archive_backfill_script = (WORKER / "scripts" / "archive-backfill.mjs").read_text("utf-8")
     archive_backfill_migration = (WORKER / "archive-migrations" / "0001_backfill_state.sql").read_text("utf-8")
     manifest = json.loads((WORKER / "recovery-manifest.json").read_text("utf-8"))
@@ -46,8 +47,8 @@ def main() -> int:
 
     d1 = config.get("d1_databases", [])
     d1_map = {item.get("binding"): item for item in d1}
-    if set(d1_map) != {"DB", "ARCHIVE_01"}:
-        fail(f"expected live + archive D1 bindings, got {sorted(d1_map)}")
+    if set(d1_map) != {"DB", "ARCHIVE_01", "ARCHIVE_02"}:
+        fail(f"expected live + two archive D1 bindings, got {sorted(d1_map)}")
     live_d1 = d1_map["DB"]
     if live_d1.get("database_id") != binding_map["DB"].get("id"):
         fail("live D1 database_id does not match recovered production binding")
@@ -55,9 +56,14 @@ def main() -> int:
         fail("live D1 name/migrations_dir mismatch")
     archive_d1 = d1_map["ARCHIVE_01"]
     if archive_d1.get("database_id") != "a3db6dc1-599c-4ace-b12c-142e56c3734a":
-        fail("archive D1 database_id mismatch")
+        fail("ARCHIVE_01 database_id mismatch")
     if archive_d1.get("database_name") != "metro_news_archive_01" or archive_d1.get("migrations_dir") != "archive-migrations":
-        fail("archive D1 name/migrations_dir mismatch")
+        fail("ARCHIVE_01 name/migrations_dir mismatch")
+    archive_d2 = d1_map["ARCHIVE_02"]
+    if archive_d2.get("database_id") != "60ca53f2-7b2a-41cb-b933-4232b8d26d7a":
+        fail("ARCHIVE_02 database_id mismatch")
+    if archive_d2.get("database_name") != "metro_news_archive_02" or archive_d2.get("migrations_dir") != "archive-migrations":
+        fail("ARCHIVE_02 name/migrations_dir mismatch")
 
     if config.get("secrets", {}).get("required") != ["API_KEY"]:
         fail("API_KEY must be declared as the only required secret")
@@ -185,12 +191,16 @@ def main() -> int:
         "searchArticlesAcrossDatabases",
         "decodeSearchCursor",
         "scope === 'all'",
-        "env.ARCHIVE_01.withSession('first-unconstrained')",
+        "archiveDatabases(env)",
+        "sourceCountsAcrossDatabases",
     ]:
         if signal not in source:
             fail(f"archive search integration signal missing: {signal}")
-    if "ARCHIVE_01.prepare" in source or "ARCHIVE_01.batch" in source:
-        fail("production Worker must not write directly to archive during NS2C2B1")
+    for signal in ["ARCHIVE_BINDING_NAMES", "ARCHIVE_01", "ARCHIVE_02", "first-unconstrained"]:
+        if signal not in archive_shards:
+            fail(f"archive shard registry signal missing: {signal}")
+    if any(signal in source for signal in ["ARCHIVE_01.prepare", "ARCHIVE_01.batch", "ARCHIVE_02.prepare", "ARCHIVE_02.batch"]):
+        fail("production Worker must not write directly to archive shards")
 
     # NS2C3A: historical backfill is bounded, backward-only, replayable, and external to the Worker runtime.
     for signal in [
@@ -244,8 +254,8 @@ def main() -> int:
     ]:
         if signal not in archive_backfill_script:
             fail(f"archive backfill generator signal missing: {signal}")
-    if "ARCHIVE_01.prepare" in source or "ARCHIVE_01.batch" in source:
-        fail("production Worker must remain read-only against ARCHIVE_01")
+    if any(signal in source for signal in ["ARCHIVE_01.prepare", "ARCHIVE_01.batch", "ARCHIVE_02.prepare", "ARCHIVE_02.batch"]):
+        fail("production Worker must remain read-only against archive shards")
 
     # CF-W5: indexed substring search must remain on D1 FTS5 trigram.
     fts_migration = (WORKER / "migrations" / "0001_search_fts.sql").read_text("utf-8")
