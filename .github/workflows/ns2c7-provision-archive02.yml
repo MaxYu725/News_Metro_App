@@ -6,12 +6,18 @@ on:
       - feature/ns2c7-archive02-rollover
     paths:
       - .github/workflows/ns2c7-provision-archive02.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ns2c7-provision-archive02.yml
 
 permissions:
   contents: write
 
 jobs:
   provision:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'feature/ns2c7-archive02-rollover'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     environment: production
@@ -70,7 +76,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          archive_id=$(cat /tmp/archive02-id.txt)
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const path = 'worker/wrangler.jsonc';
@@ -78,12 +83,7 @@ jobs:
           const id = fs.readFileSync('/tmp/archive02-id.txt', 'utf8').trim();
           config.d1_databases = (config.d1_databases || []).filter(item => item.binding !== 'ARCHIVE_02');
           const index = config.d1_databases.findIndex(item => item.binding === 'ARCHIVE_01');
-          const shard = {
-            binding: 'ARCHIVE_02',
-            database_name: 'metro_news_archive_02',
-            database_id: id,
-            migrations_dir: 'archive-migrations',
-          };
+          const shard = { binding: 'ARCHIVE_02', database_name: 'metro_news_archive_02', database_id: id, migrations_dir: 'archive-migrations' };
           config.d1_databases.splice(index >= 0 ? index + 1 : config.d1_databases.length, 0, shard);
           fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
           NODE
