@@ -89,13 +89,14 @@ jobs:
           NODE
           cd worker
           npx wrangler d1 migrations apply metro_news_archive_02 --remote
-          # Idempotent repair path: a prior interrupted bootstrap may have recorded migration history
-          # before the schema audit completed. Reapply the CREATE IF NOT EXISTS baselines directly.
           npx wrangler d1 execute ARCHIVE_02 --remote --file archive-migrations/0000_archive_baseline.sql
           npx wrangler d1 execute ARCHIVE_02 --remote --file archive-migrations/0001_backfill_state.sql
-          npx wrangler d1 execute ARCHIVE_02 --remote --json --command "SELECT COUNT(*) AS total_rows,(SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='articles_fts') AS fts_table_count,(SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='archive_backfill_state') AS state_table_count" > /tmp/archive02-schema.json
+          npx wrangler d1 execute ARCHIVE_02 --remote --command "INSERT INTO articles_fts(articles_fts) VALUES('rebuild')"
+          npx wrangler d1 execute ARCHIVE_02 --remote --json --command "SELECT COUNT(*) AS total_rows,(SELECT COUNT(*) FROM articles_fts) AS fts_rows,SUM(CASE WHEN source NOT IN ('香港01','巴士的報') THEN 1 ELSE 0 END) AS invalid_source_rows,(SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='articles_fts') AS fts_table_count,(SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='archive_backfill_state') AS state_table_count FROM articles" > /tmp/archive02-schema.json
+          npx wrangler d1 execute ARCHIVE_02 --remote --json --command "SELECT id,title,source,pubDate FROM articles ORDER BY pubDate DESC LIMIT 5" > /tmp/archive02-sample.json
           cat /tmp/archive02-schema.json
-          node -e "const p=require('/tmp/archive02-schema.json');const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];if(Number(r?.total_rows||0)!==0||Number(r?.fts_table_count||0)!==1||Number(r?.state_table_count||0)!==1)throw new Error('ARCHIVE_02 schema audit failed')"
+          cat /tmp/archive02-sample.json
+          node -e "const p=require('/tmp/archive02-schema.json');const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];const total=Number(r?.total_rows||0);if(Number(r?.fts_table_count||0)!==1||Number(r?.state_table_count||0)!==1||Number(r?.invalid_source_rows||0)!==0||Number(r?.fts_rows||0)!==total)throw new Error('ARCHIVE_02 schema/content audit failed')"
 
       - name: Commit provisioned binding
         shell: bash
