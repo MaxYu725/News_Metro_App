@@ -49,7 +49,7 @@ jobs:
               (SELECT MAX(completed_at) FROM archive_backfill_runs WHERE source='hk01' AND status='completed') AS latest_completed_at,
               (SELECT requested_rows FROM archive_backfill_runs WHERE source='hk01' AND status='completed' ORDER BY completed_at DESC LIMIT 1) AS latest_requested,
               (SELECT generated_rows FROM archive_backfill_runs WHERE source='hk01' AND status='completed' ORDER BY completed_at DESC LIMIT 1) AS latest_generated,
-              (SELECT COUNT(*) FROM archive_backfill_runs WHERE status IN ('planned','written') AND created_at < datetime('now','-2 hours')) AS stale_open_batches
+              (SELECT COUNT(*) FROM archive_backfill_runs WHERE status IN ('planned','written') AND julianday(created_at) < julianday('now','-2 hours')) AS stale_open_batches
           " > /tmp/archive-watchdog.json
 
           node <<'NODE'
@@ -58,7 +58,13 @@ jobs:
           const first = Array.isArray(payload) ? payload[0] : payload?.result?.[0];
           const row = first?.results?.[0] || first?.result?.results?.[0] || {};
           const size = Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0);
-          const latest = row.latest_completed_at ? Date.parse(`${row.latest_completed_at}Z`.replace('ZZ', 'Z')) : NaN;
+          const parseTime = value => {
+            const raw = String(value || '').trim();
+            if (!raw) return NaN;
+            if (/[zZ]$|[+-]\d\d:\d\d$/.test(raw)) return Date.parse(raw);
+            return Date.parse(`${raw.replace(' ', 'T')}Z`);
+          };
+          const latest = parseTime(row.latest_completed_at);
           const ageHours = Number.isFinite(latest) ? (Date.now() - latest) / 3_600_000 : Infinity;
           const exhausted = Number(row.exhausted || 0) === 1;
           const stale = Number(row.stale_open_batches || 0);
@@ -84,7 +90,7 @@ jobs:
           if (stale > 0) throw new Error(`archive has ${stale} stale planned/written batch(es)`);
           if (requested > 0 && generated !== requested) throw new Error(`latest completed batch mismatch: ${generated}/${requested}`);
           if (!capacityHalted && !exhausted && ageHours > 9) {
-            throw new Error(`HK01 background backfill heartbeat stale: ${ageHours.toFixed(1)} hours`);
+            throw new Error(`HK01 background backfill heartbeat stale: ${Number.isFinite(ageHours) ? ageHours.toFixed(1) : 'unknown'} hours`);
           }
           if (capacityHalted) console.log('Archive capacity guard reached; background pause is expected.');
           else if (exhausted) console.log('HK01 archive source is exhausted; background pause is expected.');
