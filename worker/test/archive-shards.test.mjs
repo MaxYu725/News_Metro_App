@@ -27,6 +27,11 @@ test('archive registry exposes the two provisioned shards in deterministic order
   assert.deepEqual(ARCHIVE_BINDING_NAMES, ['ARCHIVE_01', 'ARCHIVE_02']);
 });
 
+test('archive registry is safe before any archive binding is available', () => {
+  assert.deepEqual(archiveDatabases({}), []);
+  assert.deepEqual(archiveDatabases(null), []);
+});
+
 test('archive registry ignores missing bindings and de-duplicates aliases', () => {
   const shard1 = fakeDb([]);
   const shard2 = fakeDb([]);
