@@ -1,0 +1,107 @@
+name: NS2C7 post-merge production audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ns2c7-postmerge-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: github.event.pull_request.head.ref == 'diagnostic/ns2c7-postmerge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Verify live Worker bindings and archive shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+
+          settings_api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/news-proxy/settings"
+          curl -sS --retry 2 --retry-delay 1 \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$settings_api" > /tmp/worker-settings.json
+          jq -e '.success == true' /tmp/worker-settings.json >/dev/null
+          node <<'NODE'
+          const p = require('/tmp/worker-settings.json');
+          const result = p?.result || {};
+          const names = new Set((result.bindings || []).map(x => String(x?.name || '')));
+          for (const required of ['DB','ARCHIVE_01','ARCHIVE_02']) {
+            if (!names.has(required)) throw new Error(`production Worker binding missing: ${required}`);
+          }
+          console.log(`Production Worker D1 bindings: ${[...names].filter(x => x === 'DB' || x.startsWith('ARCHIVE_')).sort().join(', ')}`);
+          NODE
+
+          for binding in ARCHIVE_01 ARCHIVE_02; do
+            lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
+            npx wrangler d1 execute "$binding" --remote --json --command "
+              SELECT
+                COUNT(*) AS total_rows,
+                SUM(CASE WHEN source='香港01' THEN 1 ELSE 0 END) AS hk01_rows,
+                SUM(CASE WHEN source='巴士的報' THEN 1 ELSE 0 END) AS bastille_rows,
+                MIN(pubDate) AS oldest,
+                MAX(pubDate) AS newest,
+                (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='articles_fts') AS fts_table_count,
+                (SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('articles_fts_ai','articles_fts_ad','articles_fts_au')) AS fts_trigger_count,
+                (SELECT cursor FROM archive_backfill_state WHERE source_key='hk01:search') AS cursor,
+                (SELECT exhausted FROM archive_backfill_state WHERE source_key='hk01:search') AS exhausted,
+                (SELECT MAX(completed_at) FROM archive_backfill_runs WHERE source='hk01' AND status='completed') AS latest_completed_at
+              FROM articles
+            " > "/tmp/${lower}.json"
+          done
+
+          node <<'NODE'
+          const fs = require('fs');
+          function read(binding) {
+            const p = JSON.parse(fs.readFileSync(`/tmp/${binding.toLowerCase()}.json`, 'utf8'));
+            const first = Array.isArray(p) ? p[0] : p?.result?.[0];
+            const r = first?.results?.[0] || first?.result?.results?.[0] || {};
+            const out = {
+              binding,
+              rows: Number(r.total_rows || 0),
+              hk01: Number(r.hk01_rows || 0),
+              bastille: Number(r.bastille_rows || 0),
+              oldest: String(r.oldest || ''),
+              newest: String(r.newest || ''),
+              fts: Number(r.fts_table_count || 0),
+              triggers: Number(r.fts_trigger_count || 0),
+              cursor: String(r.cursor || ''),
+              exhausted: Number(r.exhausted || 0),
+              latest: String(r.latest_completed_at || ''),
+              size: Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0),
+            };
+            if (out.fts !== 1 || out.triggers !== 3 || out.size <= 0) throw new Error(`${binding} health contract failed`);
+            return out;
+          }
+          const a = read('ARCHIVE_01');
+          const b = read('ARCHIVE_02');
+          console.log(JSON.stringify({ ARCHIVE_01: a, ARCHIVE_02: b, totalRows: a.rows + b.rows, totalHk01: a.hk01 + b.hk01, totalBastille: a.bastille + b.bastille }, null, 2));
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## NS2C7 production audit',
+            `- ARCHIVE_01: rows=${a.rows}, hk01=${a.hk01}, bastille=${a.bastille}, size=${a.size}`,
+            `- ARCHIVE_02: rows=${b.rows}, hk01=${b.hk01}, bastille=${b.bastille}, size=${b.size}`,
+            `- total rows: ${a.rows + b.rows}`,
+            `- total HK01: ${a.hk01 + b.hk01}`,
+            `- total Bastille: ${a.bastille + b.bastille}`,
+          ].join('\n') + '\n');
+          NODE
+
+          curl -fsS --retry 2 --retry-delay 1 \
+            -H 'Origin: https://maxyu725.github.io' \
+            'https://news-proxy.maxyu0725us.workers.dev/api/source-stats' \
+            > /tmp/source-stats.json
+          node -e "const p=require('/tmp/source-stats.json');if(p?.success!==true||!Array.isArray(p?.data))throw new Error('production source-stats failed');console.log('source-stats:',JSON.stringify(p.data))"
