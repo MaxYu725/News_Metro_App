@@ -1,0 +1,173 @@
+name: NS2C7 code patch
+
+on:
+  push:
+    branches:
+      - feature/ns2c7-archive02-rollover
+    paths:
+      - .github/workflows/ns2c7-code-patch.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/ns2c7-code-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ns2c7-archive02-rollover
+          fetch-depth: 0
+
+      - name: Apply shard-aware Worker changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          p = Path('worker/src/index.js')
+          text = p.read_text()
+          if "from './archive-shards.js'" not in text:
+              anchor = "import {\n  decodeSearchCursor,\n"
+              if anchor not in text:
+                  raise SystemExit('index import anchor missing')
+              text = text.replace(anchor, "import { archiveDatabases, sourceCountsAcrossDatabases } from './archive-shards.js';\nimport {\n  decodeSearchCursor,\n", 1)
+
+          old = """        const archiveDb = env.ARCHIVE_01?.withSession
+          ? env.ARCHIVE_01.withSession('first-unconstrained')
+          : env.DB;
+        const { results } = await archiveDb.prepare(
+          `SELECT source, COUNT(*) AS count FROM articles GROUP BY source`,
+        ).all();
+        const bySource = new Map((results || []).map(row => [String(row.source || ''), Number(row.count || 0)]));
+"""
+          new = """        const archives = archiveDatabases(env);
+        const databases = archives.length > 0 ? archives : [env.DB].filter(Boolean);
+        const bySource = await sourceCountsAcrossDatabases(databases);
+"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('source stats anchor missing')
+
+          old = """        const archiveSession = env.ARCHIVE_01.withSession('first-unconstrained');
+        const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
+          [env.DB, archiveSession],
+"""
+          new = """        const archives = archiveDatabases(env);
+        const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
+          [env.DB, ...archives],
+"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('archive search anchor missing')
+          p.write_text(text)
+
+          p = Path('.github/scripts/validate-worker-baseline.py')
+          text = p.read_text()
+          old = "    archive_backfill = (WORKER / \"src\" / \"archive-backfill.js\").read_text(\"utf-8\")\n"
+          new = old + "    archive_shards = (WORKER / \"src\" / \"archive-shards.js\").read_text(\"utf-8\")\n"
+          if 'archive_shards = ' not in text:
+              if old not in text:
+                  raise SystemExit('validator source anchor missing')
+              text = text.replace(old, new, 1)
+
+          text = text.replace(
+              '    if set(d1_map) != {"DB", "ARCHIVE_01"}:\n        fail(f"expected live + archive D1 bindings, got {sorted(d1_map)}")\n',
+              '    if set(d1_map) != {"DB", "ARCHIVE_01", "ARCHIVE_02"}:\n        fail(f"expected live + two archive D1 bindings, got {sorted(d1_map)}")\n',
+              1,
+          )
+          old = """    archive_d1 = d1_map[\"ARCHIVE_01\"]
+    if archive_d1.get(\"database_id\") != \"a3db6dc1-599c-4ace-b12c-142e56c3734a\":
+        fail(\"archive D1 database_id mismatch\")
+    if archive_d1.get(\"database_name\") != \"metro_news_archive_01\" or archive_d1.get(\"migrations_dir\") != \"archive-migrations\":
+        fail(\"archive D1 name/migrations_dir mismatch\")
+"""
+          new = """    archive_d1 = d1_map[\"ARCHIVE_01\"]
+    if archive_d1.get(\"database_id\") != \"a3db6dc1-599c-4ace-b12c-142e56c3734a\":
+        fail(\"ARCHIVE_01 database_id mismatch\")
+    if archive_d1.get(\"database_name\") != \"metro_news_archive_01\" or archive_d1.get(\"migrations_dir\") != \"archive-migrations\":
+        fail(\"ARCHIVE_01 name/migrations_dir mismatch\")
+    archive_d2 = d1_map[\"ARCHIVE_02\"]
+    if archive_d2.get(\"database_id\") != \"60ca53f2-7b2a-41cb-b933-4232b8d26d7a\":
+        fail(\"ARCHIVE_02 database_id mismatch\")
+    if archive_d2.get(\"database_name\") != \"metro_news_archive_02\" or archive_d2.get(\"migrations_dir\") != \"archive-migrations\":
+        fail(\"ARCHIVE_02 name/migrations_dir mismatch\")
+"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif 'archive_d2 = d1_map["ARCHIVE_02"]' not in text:
+              raise SystemExit('validator archive binding anchor missing')
+
+          old = """    for signal in [
+        \"searchArticlesAcrossDatabases\",
+        \"decodeSearchCursor\",
+        \"scope === 'all'\",
+        \"env.ARCHIVE_01.withSession('first-unconstrained')\",
+    ]:
+        if signal not in source:
+            fail(f\"archive search integration signal missing: {signal}\")
+    if \"ARCHIVE_01.prepare\" in source or \"ARCHIVE_01.batch\" in source:
+        fail(\"production Worker must not write directly to archive during NS2C2B1\")
+"""
+          new = """    for signal in [
+        \"searchArticlesAcrossDatabases\",
+        \"decodeSearchCursor\",
+        \"scope === 'all'\",
+        \"archiveDatabases(env)\",
+        \"sourceCountsAcrossDatabases\",
+    ]:
+        if signal not in source:
+            fail(f\"archive search integration signal missing: {signal}\")
+    for signal in [\"ARCHIVE_BINDING_NAMES\", \"ARCHIVE_01\", \"ARCHIVE_02\", \"first-unconstrained\"]:
+        if signal not in archive_shards:
+            fail(f\"archive shard registry signal missing: {signal}\")
+    if any(signal in source for signal in [\"ARCHIVE_01.prepare\", \"ARCHIVE_01.batch\", \"ARCHIVE_02.prepare\", \"ARCHIVE_02.batch\"]):
+        fail(\"production Worker must not write directly to archive shards\")
+"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif 'archive shard registry signal missing' not in text:
+              raise SystemExit('validator archive search anchor missing')
+
+          old = """    if \"ARCHIVE_01.prepare\" in source or \"ARCHIVE_01.batch\" in source:
+        fail(\"production Worker must remain read-only against ARCHIVE_01\")
+"""
+          new = """    if any(signal in source for signal in [\"ARCHIVE_01.prepare\", \"ARCHIVE_01.batch\", \"ARCHIVE_02.prepare\", \"ARCHIVE_02.batch\"]):
+        fail(\"production Worker must remain read-only against archive shards\")
+"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          p.write_text(text)
+
+          Path('.deploy/worker-production.txt').write_text(
+              'NS2C7 production promotion: bind metro_news_archive_02, search/count across both archive shards, and enable automatic HK01 rollover with cross-shard watchdog coverage.\n'
+          )
+          PY
+
+          node --check worker/src/index.js
+          node --check worker/src/archive-shards.js
+          python3 .github/scripts/validate-worker-baseline.py
+
+      - name: Run Worker tests
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund && npm test
+
+      - name: Commit shard-aware Worker changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/ns2c7-code-patch.yml
+          git add worker/src/index.js .github/scripts/validate-worker-baseline.py .deploy/worker-production.txt
+          git commit -m 'NS2C7: wire archive shard 02 into Worker'
+          git push origin HEAD:feature/ns2c7-archive02-rollover
