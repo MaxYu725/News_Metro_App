@@ -45,6 +45,7 @@ jobs:
           node --check worker/src/index.js
           node --check worker/src/security.js
           node --check worker/src/search.js
+          node --check worker/src/archive-shards.js
           node --check worker/src/retention.js
           node --check worker/src/sources/bastille.js
           bash -n .github/scripts/validate-search-fts.sh
@@ -120,7 +121,9 @@ jobs:
 
       - name: Apply archive D1 migrations
         working-directory: worker
-        run: npx wrangler d1 migrations apply metro_news_archive_01 --remote
+        run: |
+          npx wrangler d1 migrations apply metro_news_archive_01 --remote
+          npx wrangler d1 migrations apply metro_news_archive_02 --remote
 
       - name: Deploy Worker
         working-directory: worker

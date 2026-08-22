@@ -34,65 +34,102 @@ jobs:
         working-directory: worker
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Audit archive heartbeat
+      - name: Audit archive heartbeat across shards
         shell: bash
         run: |
           set -euo pipefail
           cd worker
-          npx wrangler d1 execute ARCHIVE_01 --remote --json --command "
-            SELECT
-              (SELECT COUNT(*) FROM articles) AS total_rows,
-              (SELECT COUNT(*) FROM articles WHERE source='香港01') AS hk01_rows,
-              (SELECT MIN(pubDate) FROM articles WHERE source='香港01') AS hk01_oldest,
-              (SELECT cursor FROM archive_backfill_state WHERE source_key='hk01:search') AS cursor,
-              (SELECT exhausted FROM archive_backfill_state WHERE source_key='hk01:search') AS exhausted,
-              (SELECT MAX(completed_at) FROM archive_backfill_runs WHERE source='hk01' AND status='completed') AS latest_completed_at,
-              (SELECT requested_rows FROM archive_backfill_runs WHERE source='hk01' AND status='completed' ORDER BY completed_at DESC LIMIT 1) AS latest_requested,
-              (SELECT generated_rows FROM archive_backfill_runs WHERE source='hk01' AND status='completed' ORDER BY completed_at DESC LIMIT 1) AS latest_generated,
-              (SELECT COUNT(*) FROM archive_backfill_runs WHERE status IN ('planned','written') AND julianday(created_at) < julianday('now','-2 hours')) AS stale_open_batches
-          " > /tmp/archive-watchdog.json
+          for binding in ARCHIVE_01 ARCHIVE_02; do
+            lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
+            npx wrangler d1 execute "$binding" --remote --json --command "
+              SELECT
+                (SELECT COUNT(*) FROM articles) AS total_rows,
+                (SELECT COUNT(*) FROM articles WHERE source='香港01') AS hk01_rows,
+                (SELECT MIN(pubDate) FROM articles WHERE source='香港01') AS hk01_oldest,
+                (SELECT COUNT(*) FROM archive_backfill_state WHERE source_key='hk01:search') AS state_present,
+                (SELECT cursor FROM archive_backfill_state WHERE source_key='hk01:search') AS cursor,
+                (SELECT exhausted FROM archive_backfill_state WHERE source_key='hk01:search') AS exhausted,
+                (SELECT MAX(completed_at) FROM archive_backfill_runs WHERE source='hk01' AND status='completed') AS latest_completed_at,
+                (SELECT requested_rows FROM archive_backfill_runs WHERE source='hk01' AND status='completed' ORDER BY completed_at DESC LIMIT 1) AS latest_requested,
+                (SELECT generated_rows FROM archive_backfill_runs WHERE source='hk01' AND status='completed' ORDER BY completed_at DESC LIMIT 1) AS latest_generated,
+                (SELECT COUNT(*) FROM archive_backfill_runs WHERE status IN ('planned','written') AND julianday(created_at) < julianday('now','-2 hours')) AS stale_open_batches
+            " > "/tmp/${lower}-watchdog.json"
+          done
 
           node <<'NODE'
           const fs = require('fs');
-          const payload = JSON.parse(fs.readFileSync('/tmp/archive-watchdog.json', 'utf8'));
-          const first = Array.isArray(payload) ? payload[0] : payload?.result?.[0];
-          const row = first?.results?.[0] || first?.result?.results?.[0] || {};
-          const size = Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0);
           const parseTime = value => {
             const raw = String(value || '').trim();
             if (!raw) return NaN;
             if (/[zZ]$|[+-]\d\d:\d\d$/.test(raw)) return Date.parse(raw);
             return Date.parse(`${raw.replace(' ', 'T')}Z`);
           };
-          const latest = parseTime(row.latest_completed_at);
-          const ageHours = Number.isFinite(latest) ? (Date.now() - latest) / 3_600_000 : Infinity;
-          const exhausted = Number(row.exhausted || 0) === 1;
-          const stale = Number(row.stale_open_batches || 0);
-          const requested = Number(row.latest_requested || 0);
-          const generated = Number(row.latest_generated || 0);
-          const capacityHalted = size >= 300_000_000;
+          const read = binding => {
+            const payload = JSON.parse(fs.readFileSync(`/tmp/${binding.toLowerCase()}-watchdog.json`, 'utf8'));
+            const first = Array.isArray(payload) ? payload[0] : payload?.result?.[0];
+            const row = first?.results?.[0] || first?.result?.results?.[0] || {};
+            return {
+              binding,
+              total: Number(row.total_rows || 0),
+              hk01: Number(row.hk01_rows || 0),
+              oldest: String(row.hk01_oldest || ''),
+              size: Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0),
+              statePresent: Number(row.state_present || 0) > 0,
+              cursor: String(row.cursor || ''),
+              exhausted: Number(row.exhausted || 0) === 1,
+              completedAt: String(row.latest_completed_at || ''),
+              completedMs: parseTime(row.latest_completed_at),
+              requested: Number(row.latest_requested || 0),
+              generated: Number(row.latest_generated || 0),
+              stale: Number(row.stale_open_batches || 0),
+            };
+          };
+          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02')];
+          if (shards.some(shard => shard.size <= 0)) throw new Error('watchdog cannot observe archive shard size');
+
+          const totalRows = shards.reduce((sum, shard) => sum + shard.total, 0);
+          const hk01Rows = shards.reduce((sum, shard) => sum + shard.hk01, 0);
+          const oldest = shards.map(shard => shard.oldest).filter(Boolean).sort()[0] || 'unknown';
+          const stale = shards.reduce((sum, shard) => sum + shard.stale, 0);
+          const stateOwner = shards[1].statePresent ? shards[1] : shards[0];
+          const exhausted = stateOwner.statePresent && stateOwner.exhausted;
+          const completed = [...shards]
+            .filter(shard => Number.isFinite(shard.completedMs))
+            .sort((a, b) => b.completedMs - a.completedMs)[0];
+          const ageHours = completed ? (Date.now() - completed.completedMs) / 3_600_000 : Infinity;
+          const capacityHalted = shards.every(shard => shard.size >= 300_000_000);
+          const active = shards[0].size < 300_000_000
+            ? 'ARCHIVE_01'
+            : shards[1].size < 300_000_000
+              ? 'ARCHIVE_02'
+              : 'none';
 
           const summary = [
             '## Archive watchdog',
-            `- total rows: ${Number(row.total_rows || 0)}`,
-            `- HK01 rows: ${Number(row.hk01_rows || 0)}`,
-            `- HK01 oldest: ${row.hk01_oldest || 'unknown'}`,
-            `- latest completed: ${row.latest_completed_at || 'unknown'}`,
+            `- total rows: ${totalRows}`,
+            `- HK01 rows: ${hk01Rows}`,
+            `- HK01 oldest: ${oldest}`,
+            `- active shard: ${active}`,
+            `- state owner: ${stateOwner.statePresent ? stateOwner.binding : 'none'}`,
+            `- latest completed: ${completed?.completedAt || 'unknown'}`,
             `- hours since completed: ${Number.isFinite(ageHours) ? ageHours.toFixed(1) : 'unknown'}`,
-            `- latest batch: ${generated}/${requested}`,
+            `- latest batch: ${completed ? `${completed.generated}/${completed.requested}` : 'unknown'}`,
             `- stale open batches: ${stale}`,
-            `- archive size: ${size} bytes`,
-            `- capacity halted: ${capacityHalted}`,
+            `- ARCHIVE_01: rows=${shards[0].total}, size=${shards[0].size}`,
+            `- ARCHIVE_02: rows=${shards[1].total}, size=${shards[1].size}`,
+            `- all shards capacity halted: ${capacityHalted}`,
             `- exhausted: ${exhausted}`,
           ];
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary.join('\n')}\n`);
 
           if (stale > 0) throw new Error(`archive has ${stale} stale planned/written batch(es)`);
-          if (requested > 0 && generated !== requested) throw new Error(`latest completed batch mismatch: ${generated}/${requested}`);
+          if (completed && completed.requested > 0 && completed.generated !== completed.requested) {
+            throw new Error(`latest completed batch mismatch: ${completed.generated}/${completed.requested}`);
+          }
           if (!capacityHalted && !exhausted && ageHours > 9) {
             throw new Error(`HK01 background backfill heartbeat stale: ${Number.isFinite(ageHours) ? ageHours.toFixed(1) : 'unknown'} hours`);
           }
-          if (capacityHalted) console.log('Archive capacity guard reached; background pause is expected.');
+          if (capacityHalted) console.log('All provisioned archive shards reached capacity; background pause is expected.');
           else if (exhausted) console.log('HK01 archive source is exhausted; background pause is expected.');
-          else console.log('Archive watchdog: healthy');
+          else console.log(`Archive watchdog: healthy, writable shard=${active}`);
           NODE

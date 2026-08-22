@@ -8,6 +8,9 @@ on:
       - worker/src/sources/hk01-search.js
       - worker/scripts/hk01-search-backfill.mjs
       - worker/test/hk01-search-archive.test.mjs
+      - worker/src/archive-shards.js
+      - worker/test/archive-shards.test.mjs
+      - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/hk01-background-backfill.yml
   push:
     branches:
@@ -16,6 +19,9 @@ on:
       - worker/src/sources/hk01-search.js
       - worker/scripts/hk01-search-backfill.mjs
       - worker/test/hk01-search-archive.test.mjs
+      - worker/src/archive-shards.js
+      - worker/test/archive-shards.test.mjs
+      - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/hk01-background-backfill.yml
   schedule:
     - cron: '17 */6 * * *'
@@ -49,8 +55,11 @@ jobs:
       - name: Validate background backfill syntax
         run: |
           node --check worker/src/sources/hk01-search.js
+          node --check worker/src/archive-shards.js
           node --check worker/scripts/hk01-search-backfill.mjs
           node --check worker/test/hk01-search-archive.test.mjs
+          node --check worker/test/archive-shards.test.mjs
+          bash -n .github/scripts/archive-backfill-production-audit.sh
 
       - name: Install pinned Wrangler
         working-directory: worker
@@ -77,7 +86,7 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Resolve replay-safe background batch
-        id: control
+        id: batch
         shell: bash
         env:
           INPUT_LIMIT: ${{ inputs.limit }}
@@ -104,95 +113,175 @@ jobs:
 
       - name: Apply archive operational migrations
         working-directory: worker
-        run: npx wrangler d1 migrations apply metro_news_archive_01 --remote
+        run: |
+          npx wrangler d1 migrations apply metro_news_archive_01 --remote
+          npx wrangler d1 migrations apply metro_news_archive_02 --remote
 
-      - name: Read existing batch status
-        id: status
+      - name: Locate replay batch and select writable shard
+        id: control
         shell: bash
         env:
-          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
         run: |
           set -euo pipefail
           cd worker
-          npx wrangler d1 execute ARCHIVE_01 --remote --json \
-            --command "SELECT status,generated_rows,before_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}'" \
-            > /tmp/hk01-background-status.json
+          for binding in ARCHIVE_01 ARCHIVE_02; do
+            lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
+            npx wrangler d1 execute "$binding" --remote --json --command "
+              SELECT
+                (SELECT COUNT(*) FROM articles) AS total_rows,
+                (SELECT status FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}') AS batch_status,
+                (SELECT generated_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}') AS generated_rows,
+                (SELECT before_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}') AS before_rows,
+                (SELECT COUNT(*) FROM archive_backfill_state WHERE source_key='hk01:search') AS state_present,
+                (SELECT cursor FROM archive_backfill_state WHERE source_key='hk01:search') AS cursor,
+                (SELECT pages_fetched FROM archive_backfill_state WHERE source_key='hk01:search') AS pages_fetched,
+                (SELECT rows_inserted FROM archive_backfill_state WHERE source_key='hk01:search') AS rows_inserted,
+                (SELECT last_pubDate FROM archive_backfill_state WHERE source_key='hk01:search') AS last_pubDate,
+                (SELECT exhausted FROM archive_backfill_state WHERE source_key='hk01:search') AS exhausted
+            " > "/tmp/${lower}-control.json"
+          done
+
           node <<'NODE' >> "$GITHUB_OUTPUT"
           const fs = require('fs');
-          const p = JSON.parse(fs.readFileSync('/tmp/hk01-background-status.json','utf8'));
-          const first = Array.isArray(p) ? p[0] : p?.result?.[0];
-          const row = first?.results?.[0] || first?.result?.results?.[0];
-          console.log(`status=${row?.status || 'absent'}`);
-          console.log(`generated=${Number(row?.generated_rows || 0)}`);
-          console.log(`before_rows=${Number(row?.before_rows || 0)}`);
+          const read = binding => {
+            const file = `/tmp/${binding.toLowerCase()}-control.json`;
+            const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const first = Array.isArray(payload) ? payload[0] : payload?.result?.[0];
+            const row = first?.results?.[0] || first?.result?.results?.[0] || {};
+            return {
+              binding,
+              total: Number(row.total_rows || 0),
+              size: Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0),
+              status: String(row.batch_status || ''),
+              generated: Number(row.generated_rows || 0),
+              before: Number(row.before_rows || 0),
+              statePresent: Number(row.state_present || 0) > 0,
+              state: {
+                source_key: 'hk01:search',
+                cursor: row.cursor == null ? '' : String(row.cursor),
+                pages_fetched: Number(row.pages_fetched || 0),
+                rows_inserted: Number(row.rows_inserted || 0),
+                last_pubDate: String(row.last_pubDate || ''),
+                exhausted: Number(row.exhausted || 0),
+              },
+            };
+          };
+          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02')];
+          if (shards.some(shard => shard.size <= 0)) throw new Error('Unable to observe archive shard size');
+
+          const replay = shards.filter(shard => shard.status);
+          if (replay.length > 1) throw new Error('Replay batch unexpectedly exists in multiple archive shards');
+
+          let active;
+          let halted = false;
+          let haltReason = '';
+          if (replay.length === 1) {
+            active = replay[0];
+          } else if (shards[0].size < 300_000_000) {
+            active = shards[0];
+          } else if (shards[1].size < 300_000_000) {
+            active = shards[1];
+          } else {
+            active = shards[1];
+            halted = true;
+            haltReason = 'all-shards-at-capacity';
+          }
+
+          let sourceState = active.statePresent ? active : null;
+          if (!sourceState && active.binding === 'ARCHIVE_02' && shards[0].statePresent) sourceState = shards[0];
+          if (!sourceState) sourceState = active;
+
+          if (!active.status && sourceState.statePresent && sourceState.state.exhausted === 1) {
+            halted = true;
+            haltReason = 'source-exhausted';
+          }
+
+          const statePayload = [{ results: sourceState.statePresent ? [sourceState.state] : [] }];
+          fs.writeFileSync('/tmp/hk01-background-state.json', JSON.stringify(statePayload));
+          console.log(`active_binding=${active.binding}`);
+          console.log(`status=${active.status || 'absent'}`);
+          console.log(`generated=${active.generated}`);
+          console.log(`before_rows=${active.status ? active.before : active.total}`);
+          console.log(`active_rows=${active.total}`);
+          console.log(`active_size=${active.size}`);
+          console.log(`halted=${halted ? 'true' : 'false'}`);
+          console.log(`halt_reason=${haltReason}`);
           NODE
 
+          echo "Shard control: active=${{ steps.control.outputs.active_binding || 'resolving' }}" >/dev/null || true
+
+      - name: Report expected background halt
+        if: steps.control.outputs.halted == 'true'
+        shell: bash
+        env:
+          REASON: ${{ steps.control.outputs.halt_reason }}
+          ACTIVE: ${{ steps.control.outputs.active_binding }}
+        run: |
+          if [[ "$REASON" == 'source-exhausted' ]]; then
+            echo "::notice::HK01 universal-search archive is exhausted; no further writes are required."
+          else
+            echo "::notice::All provisioned archive shards reached the 300 MB start guard; next shard provisioning is required."
+          fi
+          echo "Background halt: reason=${REASON} active=${ACTIVE}"
+
       - name: Replay completed cycle as no-op
-        if: steps.status.outputs.status == 'completed'
+        if: steps.control.outputs.status == 'completed'
         run: echo 'Background batch already completed; workflow rerun is a no-op.'
 
-      - name: Snapshot archive and capacity gate
-        if: steps.status.outputs.status == 'absent'
-        id: snapshot
+      - name: Build cross-shard dedupe snapshot
+        if: steps.control.outputs.status == 'absent' && steps.control.outputs.halted != 'true'
         shell: bash
         run: |
           set -euo pipefail
           cd worker
-          npx wrangler d1 execute ARCHIVE_01 --remote --json \
-            --command "SELECT COUNT(*) AS total_rows FROM articles" \
-            > /tmp/hk01-background-before.json
-          node <<'NODE' > /tmp/hk01-background-before.env
+          overlap_start=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const r=p?.[0]?.results?.[0];const c=Number.parseInt(r?.cursor||'',10);const e=1451606400;if(Number.isSafeInteger(c)&&c>e)process.stdout.write(new Date(Math.max(e,c-46*86400)*1000).toISOString())")
+
+          for binding in ARCHIVE_01 ARCHIVE_02; do
+            lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
+            if [[ -n "$overlap_start" ]]; then
+              npx wrangler d1 execute "$binding" --remote --json \
+                --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' AND pubDate >= '${overlap_start}' ORDER BY pubDate DESC,id DESC" \
+                > "/tmp/${lower}-existing.json"
+            else
+              npx wrangler d1 execute "$binding" --remote --json \
+                --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC" \
+                > "/tmp/${lower}-existing.json"
+            fi
+          done
+
+          node <<'NODE'
           const fs = require('fs');
-          const p = JSON.parse(fs.readFileSync('/tmp/hk01-background-before.json','utf8'));
-          const first = Array.isArray(p) ? p[0] : p?.result?.[0];
-          const row = first?.results?.[0] || first?.result?.results?.[0];
-          console.log(`total=${Number(row?.total_rows || 0)}`);
-          console.log(`size=${Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0)}`);
+          const rows = [];
+          for (const binding of ['archive_01', 'archive_02']) {
+            const payload = JSON.parse(fs.readFileSync(`/tmp/${binding}-existing.json`, 'utf8'));
+            const chunks = Array.isArray(payload) ? payload : [payload];
+            for (const chunk of chunks) {
+              if (Array.isArray(chunk?.results)) rows.push(...chunk.results);
+              else if (Array.isArray(chunk?.result?.results)) rows.push(...chunk.result.results);
+            }
+          }
+          const unique = new Map();
+          for (const row of rows) {
+            const key = String(row?.id || row?.link || '');
+            if (key && !unique.has(key)) unique.set(key, row);
+          }
+          fs.writeFileSync('/tmp/hk01-background-existing.json', JSON.stringify([{ results: [...unique.values()] }]));
+          console.log(`Cross-shard dedupe rows: ${unique.size}`);
           NODE
-          cat /tmp/hk01-background-before.env >> "$GITHUB_OUTPUT"
-          source /tmp/hk01-background-before.env
-          (( size > 0 )) || { echo '::error::Unable to observe archive size'; exit 1; }
-
-          npx wrangler d1 execute ARCHIVE_01 --remote --json \
-            --command "SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state WHERE source_key='hk01:search'" \
-            > /tmp/hk01-background-state.json
-
-          exhausted=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];process.stdout.write(String(Number(r?.exhausted||0)))")
-
-          if (( size >= 300000000 )); then
-            echo 'halted=true' >> "$GITHUB_OUTPUT"
-            echo "::notice::Background backfill paused at archive start guard: ${size} bytes"
-            exit 0
-          fi
-          if [[ "$exhausted" == '1' ]]; then
-            echo 'halted=true' >> "$GITHUB_OUTPUT"
-            echo '::notice::Background backfill source is exhausted; no further archive writes are required.'
-            exit 0
-          fi
-          echo 'halted=false' >> "$GITHUB_OUTPUT"
-
-          overlap_start=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];const c=Number.parseInt(r?.cursor||'',10);const e=1451606400;if(Number.isSafeInteger(c)&&c>e)process.stdout.write(new Date(Math.max(e,c-46*86400)*1000).toISOString())")
-
           if [[ -n "$overlap_start" ]]; then
-            npx wrangler d1 execute ARCHIVE_01 --remote --json \
-              --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' AND pubDate >= '${overlap_start}' ORDER BY pubDate DESC,id DESC" \
-              > /tmp/hk01-background-existing.json
-            echo "Background dedupe snapshot: bounded_46d from=${overlap_start}"
+            echo "Background dedupe snapshot: bounded_46d from=${overlap_start} across ARCHIVE_01+ARCHIVE_02"
           else
-            npx wrangler d1 execute ARCHIVE_01 --remote --json \
-              --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC" \
-              > /tmp/hk01-background-existing.json
-            echo 'Background dedupe snapshot: full bootstrap scan'
+            echo 'Background dedupe snapshot: full bootstrap scan across ARCHIVE_01+ARCHIVE_02'
           fi
-          echo "Background snapshot: rows=${total}, size_bytes=${size}"
 
       - name: Generate HK01 universal-search plan
-        if: steps.status.outputs.status == 'absent' && steps.snapshot.outputs.halted != 'true'
+        if: steps.control.outputs.status == 'absent' && steps.control.outputs.halted != 'true'
         shell: bash
         env:
-          BATCH_ID: ${{ steps.control.outputs.batch_id }}
-          LIMIT: ${{ steps.control.outputs.limit }}
-          BEFORE_ROWS: ${{ steps.snapshot.outputs.total }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+          LIMIT: ${{ steps.batch.outputs.limit }}
+          BEFORE_ROWS: ${{ steps.control.outputs.before_rows }}
         run: |
           set -euo pipefail
           node worker/scripts/hk01-search-backfill.mjs \
@@ -206,31 +295,34 @@ jobs:
           cat /tmp/hk01-background-plan/report.json
 
       - name: Persist new background plan
-        if: steps.status.outputs.status == 'absent' && steps.snapshot.outputs.halted != 'true'
+        if: steps.control.outputs.status == 'absent' && steps.control.outputs.halted != 'true'
         shell: bash
+        env:
+          ACTIVE_BINDING: ${{ steps.control.outputs.active_binding }}
         run: |
           set -euo pipefail
           cd worker
-          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/hk01-background-plan/plan-reset.sql
+          npx wrangler d1 execute "$ACTIVE_BINDING" --remote --file /tmp/hk01-background-plan/plan-reset.sql
           shopt -s nullglob
           files=(/tmp/hk01-background-plan/plan-items-*.sql)
           (( ${#files[@]} > 0 )) || { echo '::error::No background plan item chunks generated'; exit 1; }
           for file in "${files[@]}"; do
-            echo "Persisting $(basename "$file")"
-            npx wrangler d1 execute ARCHIVE_01 --remote --file "$file"
+            echo "Persisting $(basename "$file") to ${ACTIVE_BINDING}"
+            npx wrangler d1 execute "$ACTIVE_BINDING" --remote --file "$file"
           done
-          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/hk01-background-plan/plan-state.sql
-          npx wrangler d1 execute ARCHIVE_01 --remote --file /tmp/hk01-background-plan/plan-finalize.sql
+          npx wrangler d1 execute "$ACTIVE_BINDING" --remote --file /tmp/hk01-background-plan/plan-state.sql
+          npx wrangler d1 execute "$ACTIVE_BINDING" --remote --file /tmp/hk01-background-plan/plan-finalize.sql
 
       - name: Materialize planned HK01 articles
-        if: steps.status.outputs.status != 'written' && steps.status.outputs.status != 'completed' && steps.snapshot.outputs.halted != 'true'
+        if: steps.control.outputs.status != 'written' && steps.control.outputs.status != 'completed' && steps.control.outputs.halted != 'true'
         shell: bash
         env:
-          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+          ACTIVE_BINDING: ${{ steps.control.outputs.active_binding }}
         run: |
           set -euo pipefail
           cd worker
-          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+          npx wrangler d1 execute "$ACTIVE_BINDING" --remote --json \
             --command "SELECT status,generated_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}'" \
             > /tmp/hk01-background-planned.json
           generated=$(node -e "const p=require('/tmp/hk01-background-planned.json'); const f=Array.isArray(p)?p[0]:p?.result?.[0]; const r=f?.results?.[0]||f?.result?.results?.[0]; if(r?.status!=='planned') process.exit(2); process.stdout.write(String(Number(r.generated_rows||0)))")
@@ -240,51 +332,65 @@ jobs:
             end=$(( start + 49 ))
             (( end > generated )) && end=$generated
             sql=$(node --input-type=module -e "import {backfillApplyArticlesSql} from './src/archive-backfill.js'; console.log(backfillApplyArticlesSql(process.argv[1],Number(process.argv[2]),Number(process.argv[3])))" "$BATCH_ID" "$start" "$end")
-            npx wrangler d1 execute ARCHIVE_01 --remote --command "$sql"
+            npx wrangler d1 execute "$ACTIVE_BINDING" --remote --command "$sql"
           done
 
           state_sql=$(node --input-type=module -e "import {backfillApplyStateAndMarkWrittenSql} from './src/archive-backfill.js'; console.log(backfillApplyStateAndMarkWrittenSql(process.argv[1]))" "$BATCH_ID")
-          npx wrangler d1 execute ARCHIVE_01 --remote --command "$state_sql"
+          npx wrangler d1 execute "$ACTIVE_BINDING" --remote --command "$state_sql"
 
       - name: Audit written background batch
-        if: steps.status.outputs.status != 'completed' && steps.snapshot.outputs.halted != 'true'
+        if: steps.control.outputs.status != 'completed' && steps.control.outputs.halted != 'true'
         env:
-          BATCH_ID: ${{ steps.control.outputs.batch_id }}
-        run: bash .github/scripts/archive-backfill-production-audit.sh "$BATCH_ID"
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+          ACTIVE_BINDING: ${{ steps.control.outputs.active_binding }}
+        run: bash .github/scripts/archive-backfill-production-audit.sh "$BATCH_ID" "$ACTIVE_BINDING"
 
       - name: Mark background batch completed
-        if: steps.status.outputs.status != 'completed' && steps.snapshot.outputs.halted != 'true'
+        if: steps.control.outputs.status != 'completed' && steps.control.outputs.halted != 'true'
         shell: bash
         env:
-          BATCH_ID: ${{ steps.control.outputs.batch_id }}
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+          ACTIVE_BINDING: ${{ steps.control.outputs.active_binding }}
         run: |
           set -euo pipefail
           cd worker
           sql=$(node --input-type=module -e "import {backfillMarkCompletedSql} from './src/archive-backfill.js'; console.log(backfillMarkCompletedSql(process.argv[1]))" "$BATCH_ID")
-          npx wrangler d1 execute ARCHIVE_01 --remote --command "$sql"
+          npx wrangler d1 execute "$ACTIVE_BINDING" --remote --command "$sql"
 
       - name: Publish compact health summary
         if: always()
         shell: bash
+        env:
+          BATCH_ID: ${{ steps.batch.outputs.batch_id }}
+          ACTIVE_BINDING: ${{ steps.control.outputs.active_binding }}
         run: |
           set -euo pipefail
           cd worker
-          npx wrangler d1 execute ARCHIVE_01 --remote --json \
-            --command "SELECT COUNT(*) AS total_rows,SUM(CASE WHEN source='香港01' THEN 1 ELSE 0 END) AS hk01_rows,MIN(CASE WHEN source='香港01' THEN pubDate END) AS hk01_oldest FROM articles" \
-            > /tmp/hk01-background-health.json || true
+          for binding in ARCHIVE_01 ARCHIVE_02; do
+            lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
+            npx wrangler d1 execute "$binding" --remote --json \
+              --command "SELECT COUNT(*) AS total_rows,SUM(CASE WHEN source='香港01' THEN 1 ELSE 0 END) AS hk01_rows,MIN(CASE WHEN source='香港01' THEN pubDate END) AS hk01_oldest FROM articles" \
+              > "/tmp/${lower}-health.json" || true
+          done
           node <<'NODE' >> "$GITHUB_STEP_SUMMARY"
           const fs = require('fs');
-          let row = {};
-          try {
-            const p = JSON.parse(fs.readFileSync('/tmp/hk01-background-health.json','utf8'));
-            const first = Array.isArray(p) ? p[0] : p?.result?.[0];
-            row = first?.results?.[0] || first?.result?.results?.[0] || {};
-          } catch {}
+          const read = binding => {
+            try {
+              const p = JSON.parse(fs.readFileSync(`/tmp/${binding.toLowerCase()}-health.json`, 'utf8'));
+              const first = Array.isArray(p) ? p[0] : p?.result?.[0];
+              const row = first?.results?.[0] || first?.result?.results?.[0] || {};
+              return { rows: Number(row.total_rows || 0), hk01: Number(row.hk01_rows || 0), oldest: String(row.hk01_oldest || '') };
+            } catch { return { rows: 0, hk01: 0, oldest: '' }; }
+          };
+          const a = read('ARCHIVE_01');
+          const b = read('ARCHIVE_02');
+          const oldest = [a.oldest, b.oldest].filter(Boolean).sort()[0] || 'unknown';
           console.log('## HK01 background archive');
           console.log(`- batch: ${process.env.BATCH_ID || 'unknown'}`);
-          console.log(`- total rows: ${Number(row.total_rows || 0)}`);
-          console.log(`- HK01 rows: ${Number(row.hk01_rows || 0)}`);
-          console.log(`- HK01 oldest: ${row.hk01_oldest || 'unknown'}`);
+          console.log(`- active shard: ${process.env.ACTIVE_BINDING || 'none'}`);
+          console.log(`- total rows: ${a.rows + b.rows}`);
+          console.log(`- HK01 rows: ${a.hk01 + b.hk01}`);
+          console.log(`- HK01 oldest: ${oldest}`);
+          console.log(`- ARCHIVE_01 rows: ${a.rows}`);
+          console.log(`- ARCHIVE_02 rows: ${b.rows}`);
           NODE
-        env:
-          BATCH_ID: ${{ steps.control.outputs.batch_id }}
