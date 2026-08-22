@@ -152,19 +152,38 @@ jobs:
           cat /tmp/hk01-background-before.env >> "$GITHUB_OUTPUT"
           source /tmp/hk01-background-before.env
           (( size > 0 )) || { echo '::error::Unable to observe archive size'; exit 1; }
+
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \
+            --command "SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state WHERE source_key='hk01:search'" \
+            > /tmp/hk01-background-state.json
+
+          exhausted=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];process.stdout.write(String(Number(r?.exhausted||0)))")
+
           if (( size >= 300000000 )); then
             echo 'halted=true' >> "$GITHUB_OUTPUT"
             echo "::notice::Background backfill paused at archive start guard: ${size} bytes"
             exit 0
           fi
+          if [[ "$exhausted" == '1' ]]; then
+            echo 'halted=true' >> "$GITHUB_OUTPUT"
+            echo '::notice::Background backfill source is exhausted; no further archive writes are required.'
+            exit 0
+          fi
           echo 'halted=false' >> "$GITHUB_OUTPUT"
 
-          npx wrangler d1 execute ARCHIVE_01 --remote --json \
-            --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC" \
-            > /tmp/hk01-background-existing.json
-          npx wrangler d1 execute ARCHIVE_01 --remote --json \
-            --command "SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state WHERE source_key='hk01:search'" \
-            > /tmp/hk01-background-state.json
+          overlap_start=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];const c=Number.parseInt(r?.cursor||'',10);const e=1451606400;if(Number.isSafeInteger(c)&&c>e)process.stdout.write(new Date(Math.max(e,c-46*86400)*1000).toISOString())")
+
+          if [[ -n "$overlap_start" ]]; then
+            npx wrangler d1 execute ARCHIVE_01 --remote --json \
+              --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' AND pubDate >= '${overlap_start}' ORDER BY pubDate DESC,id DESC" \
+              > /tmp/hk01-background-existing.json
+            echo "Background dedupe snapshot: bounded_46d from=${overlap_start}"
+          else
+            npx wrangler d1 execute ARCHIVE_01 --remote --json \
+              --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC" \
+              > /tmp/hk01-background-existing.json
+            echo 'Background dedupe snapshot: full bootstrap scan'
+          fi
           echo "Background snapshot: rows=${total}, size_bytes=${size}"
 
       - name: Generate HK01 universal-search plan
