@@ -1,4 +1,4 @@
-name: NS2C7 code patch
+name: NS2C7 code patch v2
 
 on:
   push:
@@ -80,11 +80,13 @@ jobs:
                   raise SystemExit('validator source anchor missing')
               text = text.replace(old, new, 1)
 
-          text = text.replace(
-              '    if set(d1_map) != {"DB", "ARCHIVE_01"}:\n        fail(f"expected live + archive D1 bindings, got {sorted(d1_map)}")\n',
-              '    if set(d1_map) != {"DB", "ARCHIVE_01", "ARCHIVE_02"}:\n        fail(f"expected live + two archive D1 bindings, got {sorted(d1_map)}")\n',
-              1,
-          )
+          old = '    if set(d1_map) != {"DB", "ARCHIVE_01"}:\n        fail(f"expected live + archive D1 bindings, got {sorted(d1_map)}")\n'
+          new = '    if set(d1_map) != {"DB", "ARCHIVE_01", "ARCHIVE_02"}:\n        fail(f"expected live + two archive D1 bindings, got {sorted(d1_map)}")\n'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('validator D1 binding set anchor missing')
+
           old = """    archive_d1 = d1_map[\"ARCHIVE_01\"]
     if archive_d1.get(\"database_id\") != \"a3db6dc1-599c-4ace-b12c-142e56c3734a\":
         fail(\"archive D1 database_id mismatch\")
