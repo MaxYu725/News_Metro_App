@@ -1,6 +1,11 @@
 name: NS2C7 post-merge production audit
 
 on:
+  push:
+    branches:
+      - diagnostic/ns2c7-postmerge
+    paths:
+      - .github/workflows/ns2c7-postmerge-audit.yml
   pull_request:
     branches:
       - main
@@ -12,7 +17,7 @@ permissions:
 
 jobs:
   audit:
-    if: github.event.pull_request.head.ref == 'diagnostic/ns2c7-postmerge'
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'diagnostic/ns2c7-postmerge'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
