@@ -1,0 +1,118 @@
+name: NS2C6 PR bootstrap patch
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ns2c6-archive-scale
+          fetch-depth: 0
+      - name: Patch archive scale changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          p = Path('worker/src/index.js')
+          text = p.read_text()
+          text = text.replace("import {\n  decodeSearchCursor,\n", "import { archiveDatabases, sourceCountsAcrossDatabases } from './archive-shards.js';\nimport {\n  decodeSearchCursor,\n", 1)
+          text = text.replace("""        const archiveDb = env.ARCHIVE_01?.withSession
+          ? env.ARCHIVE_01.withSession('first-unconstrained')
+          : env.DB;
+        const { results } = await archiveDb.prepare(
+          `SELECT source, COUNT(*) AS count FROM articles GROUP BY source`,
+        ).all();
+        const bySource = new Map((results || []).map(row => [String(row.source || ''), Number(row.count || 0)]));
+""", """        const archives = archiveDatabases(env);
+        const databases = archives.length > 0 ? archives : [env.DB].filter(Boolean);
+        const bySource = await sourceCountsAcrossDatabases(databases);
+""", 1)
+          text = text.replace("""        const archiveSession = env.ARCHIVE_01.withSession('first-unconstrained');
+        const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
+          [env.DB, archiveSession],
+""", """        const archives = archiveDatabases(env);
+        const { rows, hasMore, nextCursor } = await searchArticlesAcrossDatabases(
+          [env.DB, ...archives],
+""", 1)
+          if "archiveDatabases(env)" not in text:
+              raise SystemExit('index patch failed')
+          p.write_text(text)
+
+          p = Path('.github/workflows/hk01-background-backfill.yml')
+          text = p.read_text()
+          old = """          if (( size >= 300000000 )); then
+            echo 'halted=true' >> \"$GITHUB_OUTPUT\"
+            echo \"::notice::Background backfill paused at archive start guard: ${size} bytes\"
+            exit 0
+          fi
+          echo 'halted=false' >> \"$GITHUB_OUTPUT\"
+
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \\
+            --command \"SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC\" \\
+            > /tmp/hk01-background-existing.json
+          npx wrangler d1 execute ARCHIVE_01 --remote --json \\
+            --command \"SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state WHERE source_key='hk01:search'\" \\
+            > /tmp/hk01-background-state.json
+          echo \"Background snapshot: rows=${total}, size_bytes=${size}\"
+"""
+          new = """          npx wrangler d1 execute ARCHIVE_01 --remote --json \\
+            --command \"SELECT source_key,cursor,pages_fetched,rows_inserted,last_pubDate,exhausted FROM archive_backfill_state WHERE source_key='hk01:search'\" \\
+            > /tmp/hk01-background-state.json
+          exhausted=$(node -e \"const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];process.stdout.write(String(Number(r?.exhausted||0)))\")
+          if (( size >= 300000000 )); then
+            echo 'halted=true' >> \"$GITHUB_OUTPUT\"
+            echo \"::notice::Background backfill paused at archive start guard: ${size} bytes\"
+            exit 0
+          fi
+          if [[ \"$exhausted\" == '1' ]]; then
+            echo 'halted=true' >> \"$GITHUB_OUTPUT\"
+            echo '::notice::Background backfill source is exhausted; no further archive writes are required.'
+            exit 0
+          fi
+          echo 'halted=false' >> \"$GITHUB_OUTPUT\"
+          overlap_start=$(node -e \"const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const f=Array.isArray(p)?p[0]:p?.result?.[0];const r=f?.results?.[0]||f?.result?.results?.[0];const c=Number.parseInt(r?.cursor||'',10);const e=1451606400;if(Number.isSafeInteger(c)&&c>e)process.stdout.write(new Date(Math.max(e,c-46*86400)*1000).toISOString())\")
+          if [[ -n \"$overlap_start\" ]]; then
+            npx wrangler d1 execute ARCHIVE_01 --remote --json \\
+              --command \"SELECT id,link,source,pubDate FROM articles WHERE source='香港01' AND pubDate >= '${overlap_start}' ORDER BY pubDate DESC,id DESC\" \\
+              > /tmp/hk01-background-existing.json
+            echo \"Background dedupe snapshot: bounded_46d from=${overlap_start}\"
+          else
+            npx wrangler d1 execute ARCHIVE_01 --remote --json \\
+              --command \"SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC\" \\
+              > /tmp/hk01-background-existing.json
+            echo 'Background dedupe snapshot: full bootstrap scan'
+          fi
+          echo \"Background snapshot: rows=${total}, size_bytes=${size}\"
+"""
+          if old not in text:
+              raise SystemExit('background patch anchor missing')
+          p.write_text(text.replace(old, new, 1))
+
+          Path('.deploy/worker-production.txt').write_text('NS2C6 production promotion: shard-aware archive registry, bounded HK01 dedupe scans, and daily archive watchdog. No second D1 shard is provisioned by this change.\n')
+          PY
+          node --check worker/src/archive-shards.js
+          node --check worker/src/index.js
+          node --check worker/scripts/hk01-search-backfill.mjs
+      - name: Run Worker tests
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund && npm test
+      - name: Commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/ns2c6-archive-scale-patch.yml .github/workflows/ns2c6-pr-patch.yml
+          git add worker/src/index.js .github/workflows/hk01-background-backfill.yml .deploy/worker-production.txt
+          git commit -m 'NS2C6: scale archive background path'
+          git push origin HEAD:feature/ns2c6-archive-scale
