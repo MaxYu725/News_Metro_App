@@ -137,6 +137,62 @@ test('article-full reads the current HK01 payload shape and returns captions sep
   }
 });
 
+test('article-full falls back to the cleaned live D1 row when publisher fetch is unavailable', async () => {
+  const originalFetch = globalThis.fetch;
+  let outboundCalls = 0;
+  globalThis.fetch = async () => {
+    outboundCalls += 1;
+    return new Response('unavailable', { status: 503 });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request('https://worker.example/api/article-full?url=https%3A%2F%2Fhk01.com%2Fsns%2Farticle%2F60383003', {
+        headers: { Origin: APP_ORIGIN, 'CF-Connecting-IP': '203.0.113.21' },
+      }),
+      baseEnv({
+        DB: {
+          prepare(sql) {
+            assert.match(sql, /SELECT description, images FROM articles/);
+            return {
+              bind(...params) {
+                assert.deepEqual(params, [
+                  'https://hk01.com/sns/article/60383003',
+                  'https://hk01.com/sns/article/60383003',
+                  'https://hk01.com/sns/article/60383003',
+                  'https://hk01.com/sns/article/60383003',
+                ]);
+                return {
+                  all: async () => ({
+                    results: [{
+                      description: '已清理的完整正文。',
+                      images: JSON.stringify({
+                        version: 2,
+                        items: [{ url: 'https://cdn.example/chart.jpg', caption: '圖片說明。' }],
+                      }),
+                    }],
+                  }),
+                };
+              },
+            };
+          },
+        },
+      }),
+      ctx(),
+    );
+
+    assert.equal(outboundCalls, 1);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      success: true,
+      content: '已清理的完整正文。',
+      media: [{ url: 'https://cdn.example/chart.jpg', caption: '圖片說明。' }],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('AI route returns 429 before invoking Workers AI when rate limit rejects', async () => {
   let aiCalled = false;
   const response = await worker.fetch(

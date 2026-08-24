@@ -1,1 +1,1 @@
-RDR1 production promotion: parse current HK01 article blocks, keep image captions with top-reader media, and exclude figure captions from article body text.
+RDR1.1 production promotion: follow the verified HK01 article API response and fall back to cleaned live D1 content when the publisher subrequest is unavailable.
