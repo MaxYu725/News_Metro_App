@@ -69,6 +69,10 @@ test('Bastille RSS parser preserves full text, images and source identity', () =
     'https://example-cdn.invalid/a.jpg',
     'https://example-cdn.invalid/b.jpg',
   ]);
+  assert.deepEqual(rows[0].media, [
+    { url: 'https://example-cdn.invalid/a.jpg', caption: '' },
+    { url: 'https://example-cdn.invalid/b.jpg', caption: '' },
+  ]);
   assert.equal(rows[0].imageUrl, 'https://example-cdn.invalid/a.jpg');
   assert.deepEqual(rows[0].sourceCategories, ['社會事', '熱門']);
   assert.equal(rows[1].category, 'tech');

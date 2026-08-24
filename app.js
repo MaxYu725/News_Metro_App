@@ -74,6 +74,7 @@ let aiSummaryCache = LocalDB.getAISummaries();
 
 const fullArticleRequests = new Map();
 const aiSummaryRequests = new Map();
+const READER_CONTENT_VERSION = 2;
 
 const DOM = {
     newsGrid: document.getElementById('news-grid'),
@@ -630,7 +631,8 @@ export async function loadReaderArticle(newsItem) {
         return { success: false, content: newsItem?.description || '', error: '缺少新聞連結' };
     }
 
-    if (newsItem.isFullContentLoaded) {
+    const hasCurrentReaderContent = newsItem.readerContentVersion === READER_CONTENT_VERSION;
+    if (newsItem.isFullContentLoaded && (newsItem.source === '巴士的報' || hasCurrentReaderContent)) {
         return { success: true, content: newsItem.description || '', cached: true };
     }
 
@@ -643,10 +645,20 @@ export async function loadReaderArticle(newsItem) {
         const result = await fetchFullArticleContent(newsItem.link);
 
         if (result.success) {
-            if (result.content && result.content.length > originalSummary.length) {
-                newsItem.description = result.content;
+            const fullContent = String(result.content || '').trim();
+            if (fullContent) {
+                newsItem.description = fullContent;
+            }
+
+            if (Array.isArray(result.media) && result.media.length > 0) {
+                newsItem.media = result.media;
+                newsItem.images = result.media
+                    .map(item => typeof item === 'string' ? item : (item?.url || item?.src || ''))
+                    .filter(Boolean);
+                if (newsItem.images.length > 0) newsItem.imageUrl = newsItem.images[0];
             }
             newsItem.isFullContentLoaded = true;
+            newsItem.readerContentVersion = READER_CONTENT_VERSION;
 
             if (savedBookmarks[newsItem.link]) {
                 savedBookmarks[newsItem.link] = { ...savedBookmarks[newsItem.link], ...newsItem };

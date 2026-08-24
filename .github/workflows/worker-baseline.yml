@@ -45,10 +45,12 @@ jobs:
       - name: Validate Worker JavaScript syntax
         run: |
           node --check worker/src/index.js
+          node --check worker/src/article-content.js
           node --check worker/src/security.js
           node --check worker/src/search.js
           node --check worker/src/retention.js
           node --check worker/src/sources/bastille.js
+          node --check worker/src/sources/hk01-article.js
           node --check worker/src/archive-backfill.js
           node --check worker/scripts/archive-backfill.mjs
           node --check worker/test/archive-backfill.test.mjs

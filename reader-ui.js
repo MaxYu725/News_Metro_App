@@ -233,38 +233,69 @@ function enableMouseDragScroll(track) {
     }, true);
 }
 
+function readerMediaItems(article) {
+    const source = Array.isArray(article?.media) && article.media.length > 0
+        ? article.media
+        : (Array.isArray(article?.images) ? article.images : []);
+    const candidates = source.length > 0 ? source : (article?.imageUrl ? [article.imageUrl] : []);
+    const seen = new Set();
+    const items = [];
+
+    candidates.forEach(item => {
+        const url = typeof item === 'string' ? item : (item?.url || item?.src || '');
+        if (!url || seen.has(url)) return;
+        seen.add(url);
+        items.push({
+            url,
+            caption: typeof item === 'string' ? '' : String(item?.caption || item?.alt || '').trim()
+        });
+    });
+
+    return items;
+}
+
 function buildReaderMedia(article) {
-    const imageUrls = Array.isArray(article?.images) && article.images.length > 0
-        ? article.images.filter(Boolean)
-        : (article?.imageUrl ? [article.imageUrl] : []);
+    const mediaItems = readerMediaItems(article);
 
     DOM.media.innerHTML = '';
-    DOM.media.classList.toggle('hidden', imageUrls.length === 0);
-    if (imageUrls.length === 0) return;
+    DOM.media.classList.toggle('hidden', mediaItems.length === 0);
+    if (mediaItems.length === 0) return;
 
     const track = document.createElement('div');
     track.className = 'reader-media-track hide-scrollbar';
 
-    imageUrls.forEach((src, index) => {
+    mediaItems.forEach((item, index) => {
+        const figure = document.createElement('figure');
+        figure.className = 'reader-media-item';
+
         const img = document.createElement('img');
         img.className = 'reader-image';
-        img.src = src;
-        img.alt = imageUrls.length > 1 ? `新聞圖片 ${index + 1}` : '新聞圖片';
+        img.src = item.url;
+        img.alt = item.caption || (mediaItems.length > 1 ? `新聞圖片 ${index + 1}` : '新聞圖片');
         img.loading = 'eager';
         img.referrerPolicy = 'no-referrer';
         img.draggable = false;
         img.dataset.readerLightbox = '1';
-        img.dataset.full = src;
-        track.appendChild(img);
+        img.dataset.full = item.url;
+        figure.appendChild(img);
+
+        if (item.caption) {
+            const caption = document.createElement('figcaption');
+            caption.className = 'reader-image-caption';
+            caption.textContent = item.caption;
+            figure.appendChild(caption);
+        }
+
+        track.appendChild(figure);
     });
 
     DOM.media.appendChild(track);
     enableMouseDragScroll(track);
 
-    if (imageUrls.length > 1) {
+    if (mediaItems.length > 1) {
         const count = document.createElement('div');
         count.className = 'reader-media-count';
-        count.textContent = `${imageUrls.length} 圖 · 左右滑動／拖曳`;
+        count.textContent = `${mediaItems.length} 圖 · 左右滑動／拖曳`;
         DOM.media.appendChild(count);
     }
 }
@@ -402,6 +433,7 @@ async function hydrateFullArticle(article, sequence) {
         || !overlay?.classList.contains('open')
     ) return;
 
+    buildReaderMedia(article);
     renderReaderContent(result.content || article.description || '', {
         loading: false,
         error: result.success ? '' : result.error

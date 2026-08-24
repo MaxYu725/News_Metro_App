@@ -97,6 +97,46 @@ test('article-full blocks hostname substring bypass without outbound fetch', asy
   }
 });
 
+test('article-full reads the current HK01 payload shape and returns captions separately', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    assert.equal(String(url), 'https://web-data.api.hk01.com/v2/page/article/123');
+    return Response.json({
+      article: {
+        originalImage: { cdnUrl: 'https://cdn.example/hero.jpg', caption: '' },
+        blocks: [
+          { blockType: 'text', htmlTokens: [[{ type: 'text', content: '完整正文。' }]] },
+          {
+            blockType: 'image',
+            image: { cdnUrl: 'https://cdn.example/chart.jpg', caption: '圖片說明。' },
+          },
+        ],
+      },
+    });
+  };
+
+  try {
+    const response = await worker.fetch(
+      new Request('https://worker.example/api/article-full?url=https%3A%2F%2Fwww.hk01.com%2F123', {
+        headers: { Origin: APP_ORIGIN, 'CF-Connecting-IP': '203.0.113.20' },
+      }),
+      baseEnv(),
+      ctx(),
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      success: true,
+      content: '完整正文。',
+      media: [
+        { url: 'https://cdn.example/hero.jpg', caption: '' },
+        { url: 'https://cdn.example/chart.jpg', caption: '圖片說明。' },
+      ],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('AI route returns 429 before invoking Workers AI when rate limit rejects', async () => {
   let aiCalled = false;
   const response = await worker.fetch(
