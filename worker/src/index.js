@@ -234,11 +234,11 @@ async function syncAllCategoriesAndRetention(env) {
   await enforceAdaptiveRetention(env.DB);
 }
 
-function formatArticleRow(row) {
+function parseStoredArticleMedia(rawValue) {
   let images = [];
   let media = [];
   try {
-    const stored = row.images ? JSON.parse(row.images) : [];
+    const stored = rawValue ? JSON.parse(rawValue) : [];
     const entries = Array.isArray(stored) ? stored : (Array.isArray(stored?.items) ? stored.items : []);
     for (const entry of entries) {
       const url = typeof entry === 'string' ? entry : (entry?.url || entry?.src || '');
@@ -253,6 +253,11 @@ function formatArticleRow(row) {
     images = [];
     media = [];
   }
+  return { images, media };
+}
+
+function formatArticleRow(row) {
+  const { images, media } = parseStoredArticleMedia(row.images);
   return {
     ...row,
     images,
@@ -302,14 +307,38 @@ export default {
           const articleId = hk01Match[1];
           try {
             const apiRes = await fetch(`https://web-data.api.hk01.com/v2/page/article/${articleId}`, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-              redirect: 'error',
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                'Accept': 'application/json',
+                'Accept-Language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
+              },
+              redirect: 'follow',
             });
             if (apiRes.ok) {
-              const apiData = await apiRes.json();
-              const parsed = parseHk01ArticlePayload(apiData);
-              fullText = parsed.content;
-              fullMedia = parsed.media;
+              const finalUrl = new URL(apiRes.url || `https://web-data.api.hk01.com/v2/page/article/${articleId}`);
+              if (finalUrl.protocol === 'https:' && finalUrl.hostname === 'web-data.api.hk01.com') {
+                const apiData = await apiRes.json();
+                const parsed = parseHk01ArticlePayload(apiData);
+                fullText = parsed.content;
+                fullMedia = parsed.media;
+              }
+            }
+          } catch {}
+        }
+
+        if (!fullText && env.DB) {
+          try {
+            const exactUrl = targetUrl.toString();
+            const canonicalUrl = hk01Match ? `https://hk01.com/sns/article/${hk01Match[1]}` : exactUrl;
+            const { results } = await env.DB.prepare(
+              `SELECT description, images FROM articles
+                WHERE id IN (?, ?) OR link IN (?, ?)
+                LIMIT 1`,
+            ).bind(exactUrl, canonicalUrl, exactUrl, canonicalUrl).all();
+            const storedArticle = results?.[0];
+            if (storedArticle?.description) {
+              fullText = String(storedArticle.description).trim();
+              fullMedia = parseStoredArticleMedia(storedArticle.images).media;
             }
           } catch {}
         }
