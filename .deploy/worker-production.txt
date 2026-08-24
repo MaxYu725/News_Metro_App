@@ -1,1 +1,1 @@
-NS2C7 production promotion: bind metro_news_archive_02, search/count across both archive shards, and enable automatic HK01 rollover with cross-shard watchdog coverage.
+RDR1 production promotion: parse current HK01 article blocks, keep image captions with top-reader media, and exclude figure captions from article body text.

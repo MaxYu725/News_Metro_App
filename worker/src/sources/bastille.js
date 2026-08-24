@@ -1,3 +1,5 @@
+import { articleTextFromHtml, extractArticleMedia } from '../article-content.js';
+
 export const BASTILLE_SOURCE_NAME = '巴士的報';
 export const BASTILLE_FEED_URL = 'https://www.bastillepost.com/hongkong/feed';
 export const BASTILLE_TIMEOUT_MS = 15_000;
@@ -66,41 +68,6 @@ export function resolveBastilleCategory(categoryNames = []) {
   return 'hot';
 }
 
-function extractImages(html) {
-  const images = [];
-  const tagRegex = /<img\b[^>]*>/gi;
-  let tagMatch;
-  while ((tagMatch = tagRegex.exec(html)) !== null) {
-    const tag = tagMatch[0];
-    const attrMatch = tag.match(/\bdata-lazy-src=["']([^"']+)["']/i)
-      || tag.match(/\bdata-src=["']([^"']+)["']/i)
-      || tag.match(/\bsrc=["']([^"']+)["']/i);
-    if (!attrMatch) continue;
-    const src = unwrapCdata(attrMatch[1]);
-    if (
-      !src
-      || src.startsWith('data:image')
-      || src.includes('1x1')
-      || src.toLowerCase().includes('blank')
-    ) continue;
-    if (!images.includes(src)) images.push(src);
-  }
-  return images;
-}
-
-function htmlToText(html) {
-  return decodeHtmlEntities(String(html || ''))
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<\/(p|div|h[1-6]|blockquote|li)>/gi, '\n\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]*>?/g, '')
-    .replace(/[\t\r ]+/g, ' ')
-    .replace(/\n[ \t]+/g, '\n')
-    .replace(/\n\s*\n+/g, '\n\n')
-    .trim();
-}
-
 function isoDateOrNow(rawValue, now = () => new Date()) {
   const parsed = new Date(rawValue);
   return Number.isNaN(parsed.getTime()) ? now().toISOString() : parsed.toISOString();
@@ -119,7 +86,8 @@ export function parseBastilleRss(xmlString, options = {}) {
 
     const rawContent = firstTagValue(itemContent, 'content:encoded')
       || firstTagValue(itemContent, 'description');
-    const images = extractImages(rawContent);
+    const media = extractArticleMedia(rawContent);
+    const images = media.map(item => item.url);
     const categories = extractBastilleCategories(itemContent);
 
     items.push({
@@ -127,11 +95,12 @@ export function parseBastilleRss(xmlString, options = {}) {
       title,
       link,
       pubDate: isoDateOrNow(firstTagValue(itemContent, 'pubDate'), options.now),
-      description: htmlToText(rawContent),
+      description: articleTextFromHtml(rawContent),
       category: resolveBastilleCategory(categories),
       source: BASTILLE_SOURCE_NAME,
       imageUrl: images[0] || '',
       images,
+      media,
       sourceCategories: categories,
     });
   }

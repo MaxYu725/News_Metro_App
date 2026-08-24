@@ -13,7 +13,15 @@ import {
   searchArticlesAcrossDatabases,
 } from './search.js';
 import { enforceAdaptiveRetention } from './retention.js';
+import {
+  articleTextFromHtml,
+  decodeArticleHtmlEntities,
+  extractArticleMedia,
+  prependArticleMedia,
+  stripArticleMediaHtml,
+} from './article-content.js';
 import { fetchBastilleArticles, isBastilleSource } from './sources/bastille.js';
+import { parseHk01ArticlePayload } from './sources/hk01-article.js';
 import { NEWS_SOURCES, parseSourceFilter, sourceNamesForIds, sourceFilterSql } from './source-filter.js';
 
 function jsonResponse(request, payload, status = 200, extraHeaders = {}) {
@@ -65,19 +73,7 @@ async function guardTrustedCostRequest(request, limiter, scope) {
   return null;
 }
 
-function decodeHTMLEntities(text) {
-  if (!text) return '';
-  return text
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&nbsp;/g, ' ');
-}
-
-function parseRSS(xmlString, sourceName, categoryName) {
+export function parseRSS(xmlString, sourceName, categoryName) {
   const items = [];
   const itemRegex = /<item>([\s\S]*?)<\/item>/g;
   let match;
@@ -92,15 +88,7 @@ function parseRSS(xmlString, sourceName, categoryName) {
     const descMatch = itemContent.match(/<content:encoded><!\[CDATA\[([\s\S]*?)\]\]><\/content:encoded>/i) || itemContent.match(/<content:encoded>([\s\S]*?)<\/content:encoded>/i) || itemContent.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i) || itemContent.match(/<description>([\s\S]*?)<\/description>/i);
 
     const rawDescription = descMatch ? descMatch[1].trim() : '';
-    const decodedContent = decodeHTMLEntities(rawDescription);
-
-    const imgRegex = /<img[^>]+(?:data-src|src)=["']([^"']+)["']/gi;
-    let imgMatch;
-    const rawImages = [];
-    while ((imgMatch = imgRegex.exec(decodedContent)) !== null) {
-      const image = imgMatch[1];
-      if (!image.startsWith('data:image') && !image.includes('blank') && !image.includes('1x1')) rawImages.push(image);
-    }
+    const decodedContent = decodeArticleHtmlEntities(rawDescription);
 
     const enclosureMatch = itemContent.match(/<enclosure[^>]+url=["']([^"']+)["']/i);
     const mediaMatch = itemContent.match(/<media:content[^>]+url=["']([^"']+)["']/i);
@@ -113,22 +101,13 @@ function parseRSS(xmlString, sourceName, categoryName) {
     else if (mediaThumbMatch) imageUrl = mediaThumbMatch[1];
     else if (imageTagMatch) imageUrl = imageTagMatch[1];
 
-    const images = [];
-    if (imageUrl && !imageUrl.startsWith('data:image') && !imageUrl.includes('1x1')) images.push(imageUrl);
-    for (const image of rawImages) {
-      if (!images.includes(image)) images.push(image);
-    }
+    const media = prependArticleMedia(extractArticleMedia(decodedContent), imageUrl);
+    const images = media.map(item => item.url);
     if (!imageUrl && images.length > 0) imageUrl = images[0];
-
-    const cleanText = decodedContent
-      .replace(/<\/(p|div|h[1-6]|blockquote)>/gi, '\n\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<[^>]*>?/gm, '')
-      .replace(/\n\s*\n/g, '\n\n')
-      .trim();
+    const cleanText = articleTextFromHtml(decodedContent);
 
     if (title && link) {
-      items.push({ id: link, title, link, pubDate, description: cleanText, category: categoryName, source: sourceName, imageUrl: imageUrl || '', images });
+      items.push({ id: link, title, link, pubDate, description: cleanText, category: categoryName, source: sourceName, imageUrl: imageUrl || '', images, media });
     }
   }
   return items;
@@ -184,7 +163,17 @@ async function insertArticles(items, env) {
 
   const statements = items.map(item =>
     env.DB.prepare(
-      `INSERT OR IGNORE INTO articles (id, title, link, pubDate, description, category, source, imageUrl, images) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO articles (id, title, link, pubDate, description, category, source, imageUrl, images)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          title = excluded.title,
+          description = excluded.description,
+          imageUrl = excluded.imageUrl,
+          images = excluded.images
+        WHERE articles.title IS NOT excluded.title
+          OR articles.description IS NOT excluded.description
+          OR articles.imageUrl IS NOT excluded.imageUrl
+          OR articles.images IS NOT excluded.images`,
     ).bind(
       item.id,
       item.title,
@@ -194,7 +183,11 @@ async function insertArticles(items, env) {
       item.category,
       item.source,
       item.imageUrl || '',
-      JSON.stringify(item.images || []),
+      JSON.stringify(
+        Array.isArray(item.media) && item.media.some(media => media?.caption)
+          ? { version: 2, items: item.media }
+          : (item.images || []),
+      ),
     ),
   );
 
@@ -243,14 +236,27 @@ async function syncAllCategoriesAndRetention(env) {
 
 function formatArticleRow(row) {
   let images = [];
+  let media = [];
   try {
-    images = row.images ? JSON.parse(row.images) : [];
+    const stored = row.images ? JSON.parse(row.images) : [];
+    const entries = Array.isArray(stored) ? stored : (Array.isArray(stored?.items) ? stored.items : []);
+    for (const entry of entries) {
+      const url = typeof entry === 'string' ? entry : (entry?.url || entry?.src || '');
+      if (!url || images.includes(url)) continue;
+      images.push(url);
+      media.push({
+        url,
+        caption: typeof entry === 'string' ? '' : String(entry?.caption || entry?.alt || '').trim(),
+      });
+    }
   } catch {
     images = [];
+    media = [];
   }
   return {
     ...row,
     images,
+    media,
     isFullContentLoaded: isBastilleSource(row.source),
   };
 }
@@ -288,6 +294,7 @@ export default {
 
       try {
         let fullText = '';
+        let fullMedia = [];
         const isHk01Article = targetUrl.hostname === 'hk01.com' || targetUrl.hostname === 'www.hk01.com';
         const hk01Match = isHk01Article ? targetUrl.pathname.match(/(?:^|\/)(\d+)(?:\/|$)/) : null;
 
@@ -300,22 +307,9 @@ export default {
             });
             if (apiRes.ok) {
               const apiData = await apiRes.json();
-              const blocks = apiData?.data?.blocks || apiData?.data?.articleData?.blocks || [];
-              if (blocks.length > 0) {
-                const textList = [];
-                for (const block of blocks) {
-                  if (['html', 'p', 'text', 'paragraph', 'heading'].includes(block.type)) {
-                    const htmlContent = block.html || block.content || block.text || '';
-                    const clean = decodeHTMLEntities(htmlContent)
-                      .replace(/<\/(p|div|h[1-6]|blockquote)>/gi, '\n\n')
-                      .replace(/<br\s*\/?>/gi, '\n')
-                      .replace(/<[^>]*>?/gm, '')
-                      .trim();
-                    if (clean) textList.push(clean);
-                  }
-                }
-                fullText = textList.join('\n\n');
-              }
+              const parsed = parseHk01ArticlePayload(apiData);
+              fullText = parsed.content;
+              fullMedia = parsed.media;
             }
           } catch {}
         }
@@ -329,14 +323,14 @@ export default {
           if (pageRes.ok) {
             const contentType = pageRes.headers.get('Content-Type') || '';
             if (contentType.toLowerCase().includes('text/html')) {
-              const html = await pageRes.text();
+              const html = stripArticleMediaHtml(await pageRes.text());
               const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
               let pMatch;
               const pList = [];
               while ((pMatch = pRegex.exec(html)) !== null) {
-                const text = decodeHTMLEntities(pMatch[1]).replace(/<[^>]*>?/gm, '').trim();
+                const text = articleTextFromHtml(pMatch[1]);
                 if (text.length > 10 && !text.includes('版權所有') && !text.includes('hk01.com')) {
-                  pList.push(text);
+                  if (pList.at(-1) !== text) pList.push(text);
                 }
               }
               fullText = pList.join('\n\n');
@@ -344,7 +338,7 @@ export default {
           }
         }
 
-        return jsonResponse(request, { success: true, content: fullText || '' });
+        return jsonResponse(request, { success: true, content: fullText || '', media: fullMedia });
       } catch {
         return jsonResponse(request, { success: false, error: '擷取全文失敗' }, 500);
       }
