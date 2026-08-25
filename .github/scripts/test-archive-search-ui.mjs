@@ -21,7 +21,7 @@ globalThis.fetch = async url => {
   });
 };
 
-const { fetchSearchData } = await import('../../api.js');
+const { fetchSearchData, fetchNewsData } = await import('../../api.js');
 
 let result = await fetchSearchData('婦人油麻地');
 let url = new URL(requested.at(-1));
@@ -47,6 +47,32 @@ assert.equal(url.searchParams.get('cursor'), null);
 assert.equal(url.searchParams.get('sources'), 'hk01,bastille');
 assert.equal(result.mode, 'live');
 
+result = await fetchNewsData('search', 0, false, '周焯華');
+url = new URL(requested.at(-1));
+assert.equal(url.searchParams.get('scope'), 'all');
+assert.equal(url.searchParams.get('page'), null);
+assert.equal(url.searchParams.get('cursor'), null);
+assert.equal(result.mode, 'archive');
+
+result = await fetchNewsData('search', 1, false, '周焯華');
+url = new URL(requested.at(-1));
+assert.equal(url.searchParams.get('scope'), 'all');
+assert.equal(url.searchParams.get('page'), null);
+assert.equal(url.searchParams.get('cursor'), 'cursor-next');
+assert.equal(result.mode, 'archive');
+
+result = await fetchNewsData('search', 2, false, 'AI');
+url = new URL(requested.at(-1));
+assert.equal(url.searchParams.get('scope'), null);
+assert.equal(url.searchParams.get('page'), '2');
+assert.equal(url.searchParams.get('cursor'), null);
+assert.equal(result.mode, 'live');
+
+const apiSource = fs.readFileSync(new URL('../../api.js', import.meta.url), 'utf8');
+assert.match(apiSource, /fetchTrackedTopicSearchData\(searchQuery, page\)/);
+assert.match(apiSource, /trackedTopicCursorPages/);
+assert.match(apiSource, /return fetchSearchData\(query, \{ page, includeArchive: false \}\)/);
+
 const appSource = fs.readFileSync(new URL('../../app.js', import.meta.url), 'utf8');
 assert.match(appSource, /Array\.from\(query\)\.length >= 3/);
 assert.match(appSource, /cursor: '',\s*mode: 'live'/);
@@ -54,4 +80,4 @@ assert.match(appSource, /fetchSearchData\(query, \{/);
 assert.match(appSource, /loadNewsUI\('search', forceSync, isAppendMode, currentCat\.query\)/);
 assert.match(appSource, /3 個字以上可搜尋歷史新聞/);
 
-console.log('Explicit search archive/cursor/source frontend contract: PASS');
+console.log('Search + tracked-topic archive/cursor/source frontend contract: PASS');

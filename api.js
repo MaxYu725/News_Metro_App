@@ -10,6 +10,8 @@ const SOURCE_STATS_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/sou
 
 export const DATA_STATE_EVENT = 'metro:data-state';
 
+const trackedTopicCursorPages = new Map();
+
 function selectedSourceIds() {
     return LocalDB.getVisibleSources().join(',');
 }
@@ -72,6 +74,75 @@ function searchCodePointLength(value) {
     return Array.from(String(value || '')).length;
 }
 
+function trackedTopicCursorState(searchQuery) {
+    const key = sourceCacheKey(searchQuery);
+    let pages = trackedTopicCursorPages.get(key);
+    if (!pages) {
+        pages = new Map([[0, '']]);
+        trackedTopicCursorPages.set(key, pages);
+    }
+    return pages;
+}
+
+async function fetchTrackedTopicSearchData(searchQuery, page = 0) {
+    const query = String(searchQuery || '').trim();
+    if (searchCodePointLength(query) < 3) {
+        return fetchSearchData(query, { page, includeArchive: false });
+    }
+
+    const pages = trackedTopicCursorState(query);
+    if (page === 0) {
+        pages.clear();
+        pages.set(0, '');
+    }
+
+    let cursor = pages.get(page);
+    if (cursor === undefined) {
+        const knownPages = [...pages.keys()]
+            .filter(knownPage => knownPage < page)
+            .sort((a, b) => b - a);
+        let replayPage = knownPages[0] ?? 0;
+        let replayCursor = pages.get(replayPage) || '';
+
+        while (replayPage < page) {
+            const replay = await fetchSearchData(query, {
+                cursor: replayCursor,
+                includeArchive: true
+            });
+            if (!replay.success || !replay.hasMore || !replay.nextCursor) {
+                return {
+                    ...replay,
+                    data: [],
+                    hasMore: false,
+                    nextCursor: '',
+                    page
+                };
+            }
+            replayPage += 1;
+            replayCursor = replay.nextCursor;
+            pages.set(replayPage, replayCursor);
+        }
+        cursor = replayCursor;
+    }
+
+    const result = await fetchSearchData(query, {
+        cursor,
+        includeArchive: true
+    });
+
+    if (result.success) {
+        if (result.hasMore && result.nextCursor) {
+            pages.set(page + 1, result.nextCursor);
+        } else {
+            for (const knownPage of [...pages.keys()]) {
+                if (knownPage > page) pages.delete(knownPage);
+            }
+        }
+    }
+
+    return { ...result, page };
+}
+
 function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live' } = {}) {
     const message = errorMessage(error, '暫時無法連接搜尋服務');
     const cached = !append ? getCachedFeed('search', sourceCacheKey(searchQuery)) : null;
@@ -102,14 +173,12 @@ function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live
 }
 
 export async function fetchNewsData(categoryId, page, forceSync = false, searchQuery = '') {
-    const sources = selectedSourceIds();
-    let url;
     if (categoryId === 'search') {
-        url = `${SEARCH_API_URL}?q=${encodeURIComponent(searchQuery)}&page=${page}&sources=${encodeURIComponent(sources)}`;
-    } else {
-        url = `${API_BASE_URL}${categoryId}?page=${page}${forceSync ? '&sync=1' : ''}&sources=${encodeURIComponent(sources)}`;
+        return fetchTrackedTopicSearchData(searchQuery, page);
     }
 
+    const sources = selectedSourceIds();
+    const url = `${API_BASE_URL}${categoryId}?page=${page}${forceSync ? '&sync=1' : ''}&sources=${encodeURIComponent(sources)}`;
     const context = newsContext(categoryId);
 
     try {
