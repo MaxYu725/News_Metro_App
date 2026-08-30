@@ -9,7 +9,9 @@
     pointer-events: none;
     background: #080b12;
     transform: translateY(10px);
-    transition: opacity 180ms ease, transform 200ms ease, visibility 0s linear 200ms;
+    /* Keep the feed fully covered for one paint while its scroll/focus state is restored.
+       Avoid cross-fading the full Reader over backdrop-filter-heavy feed cards on Android. */
+    transition: opacity 0s linear 34ms, transform 0s linear 34ms, visibility 0s linear 34ms;
 }
 
 .reader-overlay.open {
