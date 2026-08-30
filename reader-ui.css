@@ -5,21 +5,19 @@
     z-index: 90;
     display: block;
     visibility: hidden;
-    opacity: 0;
+    opacity: 1;
     pointer-events: none;
     background: #080b12;
-    transform: translateY(10px);
-    /* Keep the feed fully covered for one paint while its scroll/focus state is restored.
-       Avoid cross-fading the full Reader over backdrop-filter-heavy feed cards on Android. */
-    transition: opacity 0s linear 34ms, transform 0s linear 34ms, visibility 0s linear 34ms;
+    transform: none;
+    transition: none;
 }
 
 .reader-overlay.open {
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(0);
-    transition: opacity 180ms ease, transform 200ms ease;
+    transform: none;
+    transition: none;
 }
 
 .reader-shell {
@@ -30,6 +28,14 @@
     flex-direction: column;
     padding-top: env(safe-area-inset-top, 0px);
     background: linear-gradient(180deg, #0b0f18 0%, #080b12 42%, #080b12 100%);
+    opacity: 0;
+    transform: translateY(6px);
+}
+
+.reader-overlay.open .reader-shell {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 140ms ease-out, transform 160ms ease-out;
 }
 
 .reader-toolbar {
@@ -319,6 +325,49 @@ body.reader-open {
     overscroll-behavior: none;
 }
 
+/* Android/WebView compositor stability.
+   Keep feed cards visually identical while Reader is open, but avoid one GPU layer per card.
+   This prevents cards from being repainted one-by-one when the opaque Reader is removed. */
+body .app-main #news-grid .metro-tile.feed-card {
+    border-color: rgba(255, 255, 255, 0.105);
+    border-left-color: var(--metro-accent-color, #22d3ee) !important;
+    background: linear-gradient(145deg, rgba(18, 23, 39, 0.86), rgba(9, 13, 24, 0.76));
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.025),
+        inset 0 0 0 1px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.022),
+        0 9px 26px rgba(0, 0, 0, 0.27);
+    transform: none;
+    contain: none;
+    animation: none;
+    opacity: 1;
+    will-change: auto;
+}
+
+body .app-main #news-grid .metro-tile.feed-card:active {
+    background: linear-gradient(145deg, rgba(24, 31, 50, 0.91), rgba(12, 17, 30, 0.84));
+    transform: scale(0.992);
+}
+
+body .app-main #news-grid .metro-tile.hero-tile {
+    background: linear-gradient(145deg, rgba(15, 20, 34, 0.91), rgba(8, 12, 22, 0.82));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.03),
+        0 14px 34px rgba(0, 0, 0, 0.32);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    body .app-main #news-grid .metro-tile.feed-card:hover {
+        border-color: rgba(255, 255, 255, 0.14);
+        border-left-color: var(--metro-accent-color, #22d3ee) !important;
+        background: linear-gradient(145deg, rgba(22, 28, 46, 0.90), rgba(11, 16, 29, 0.82));
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.03),
+            0 12px 30px rgba(0, 0, 0, 0.30);
+    }
+}
+
 @media (min-width: 700px) {
     .reader-article {
         padding-left: 28px;
@@ -332,7 +381,8 @@ body.reader-open {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .reader-overlay {
+    .reader-overlay,
+    .reader-shell {
         transform: none !important;
         transition-duration: 0.01ms !important;
     }
