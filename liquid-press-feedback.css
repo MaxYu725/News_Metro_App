@@ -1,8 +1,8 @@
-@import url('./liquid-nav-indicator.css?v=52');
+@import url('./liquid-nav-indicator.css?v=53');
 
-/* v52 controlled motion restoration.
+/* v53 controlled motion restoration.
    Press feedback remains accepted from v51. Bottom-nav selection-indicator
-   motion is restored separately through the imported v52 stylesheet. Page,
+   motion is restored separately through the imported stylesheet. Page,
    card, Reader and category-indicator motion remain disabled. */
 
 /* Stable base state: spring back from the compressed transform. This file is

@@ -1,20 +1,20 @@
-/* v52 controlled motion restoration: bottom-nav selection indicator only.
+/* v53 controlled motion restoration: bottom-nav selection indicator only.
    Uses the fixed four-button layout and section identity; no geometry reads,
    requestAnimationFrame loop, MutationObserver, forced reflow or spotlight
    tracking is involved. */
 
-const NAV_INDEX = Object.freeze({
-    news: 0,
-    search: 1,
-    bookmarks: 2,
-    settings: 3
+const NAV_SHIFT = Object.freeze({
+    news: '0%',
+    search: '100%',
+    bookmarks: '200%',
+    settings: '300%'
 });
 
 function setNavIndicator(section) {
     const nav = document.getElementById('bottom-nav');
-    const index = NAV_INDEX[section];
-    if (!nav || index === undefined) return;
-    nav.style.setProperty('--liquid-nav-index', String(index));
+    const shift = NAV_SHIFT[section];
+    if (!nav || shift === undefined) return;
+    nav.style.setProperty('--liquid-nav-shift', shift);
 }
 
 function initNavIndicator() {
