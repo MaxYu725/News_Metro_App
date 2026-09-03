@@ -2,9 +2,10 @@
 @import url('./liquid-reader-cue.css?v=58');
 @import url('./liquid-reader-tap.css?v=59');
 @import url('./liquid-static-polish.css?v=60');
+@import url('./liquid-news-header-compact.css?v=61');
 
-/* v60 keeps the accepted v59 motion baseline unchanged. Static visual polish is
-   imported above as the final layer; no new motion/compositor path is added. */
+/* v61 keeps the accepted v59 motion baseline unchanged. The v60 static polish
+   remains intact and the compact News header is imported as a static-only layer. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform
