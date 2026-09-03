@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v44-liquid-glass-flicker-fix';
+const SHELL_CACHE = 'metro-news-shell-v45-compositor-stability';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -12,6 +12,7 @@ const SHELL_URLS = [
     './surface-ui.css?v=35',
     './shell-ui.css?v=38',
     './liquid-glass.css?v=44',
+    './compositor-stability.css?v=45',
     './app.js',
     './feed-ui.js',
     './search-ui.js',

@@ -1,0 +1,51 @@
+/* Android/WebView compositor guard — v45.
+   Keep the scroll surface and Reader shell out of opacity/transform transitions.
+   Liquid Glass motion remains on small isolated controls, indicators and cards. */
+
+/* Never animate the full scrolling app-main layer. On Android/WebView a
+   transform/opacity animation on this large layer can disappear for one or
+   more compositor frames while section DOM is replaced or restored. */
+.liquid-glass .app-main,
+.liquid-glass .app-main.liquid-page-enter,
+.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter {
+    opacity: 1 !important;
+    transform: none !important;
+}
+
+.liquid-glass .app-main.liquid-page-enter,
+.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter {
+    animation: none !important;
+}
+
+/* The Reader overlay itself is already opaque. Its full-screen shell must be
+   visible on the very first Reader paint; fading/translating the shell exposed
+   a blank dark frame before the article appeared. */
+.reader-shell,
+.reader-overlay.open .reader-shell,
+.liquid-glass .reader-shell,
+.liquid-glass .reader-overlay.open .reader-shell {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+}
+
+/* Reader close compositor hand-off.
+   When `.open` is removed, keep the last fully-painted Reader frame covering
+   the app briefly while body.reader-open is cleared, scroll is restored and
+   WebView repaints the feed underneath. There is no cross-fade: visibility is
+   switched once after the stabilization window. */
+.reader-overlay {
+    pointer-events: auto !important;
+    transition: visibility 0s linear 180ms !important;
+}
+
+.reader-overlay.open {
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reader-overlay {
+        transition: visibility 0s linear 80ms !important;
+    }
+}
