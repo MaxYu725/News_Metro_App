@@ -1,12 +1,10 @@
 @import url('./liquid-nav-indicator.css?v=53');
 @import url('./liquid-reader-cue.css?v=58');
 @import url('./liquid-reader-tap.css?v=59');
+@import url('./liquid-static-polish.css?v=60');
 
-/* v59 controlled motion restoration.
-   Small-control press feedback remains accepted from v51, Bottom Nav from v53,
-   category island from v54, Reader chrome cue from v58, and a confirmed-tap
-   pre-Reader content compression from v59. Feed-card transforms during unknown
-   pointer gestures and full Reader/page/card transitions remain disabled. */
+/* v60 keeps the accepted v59 motion baseline unchanged. Static visual polish is
+   imported above as the final layer; no new motion/compositor path is added. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform
