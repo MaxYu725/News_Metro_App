@@ -1,9 +1,39 @@
-/* v49 controlled motion restoration: press feedback only.
-   No page/card/Reader/nav-indicator animation is enabled here. Only the
-   currently pressed small control gets a short local transform. */
+/* v50 controlled motion restoration: perceptible press feedback only.
+   Page/card/Reader/nav-indicator motion remains disabled. The only restored
+   transform is a short local scale on the small control being pressed. */
 
+/* Keep a release transition on the stable base state. This file is loaded
+   after compositor-stability.css, so it narrowly re-enables transform timing
+   for these controls without restoring any other motion family. */
+.liquid-glass .bottom-nav-btn,
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link,
+.liquid-glass .metro-btn,
+.liquid-glass .density-btn,
+.liquid-glass .color-btn,
+.liquid-glass .settings-link-row,
+.liquid-glass .search-submit,
+.liquid-glass .search-chip,
+.liquid-glass .search-follow-btn,
+.liquid-glass .subview-back,
+.liquid-glass .page-header-back,
+.liquid-glass #back-to-top,
+.liquid-glass #lightbox-close,
+.liquid-glass #lightbox-quality,
+.liquid-glass .reader-close,
+.liquid-glass .reader-toolbar-btn {
+    transform-origin: center !important;
+    transition: transform 125ms cubic-bezier(0.2, 0.84, 0.25, 1) !important;
+    will-change: auto !important;
+}
+
+/* Navigation/category targets are larger, so use a clearer 8% compression. */
 .liquid-glass .bottom-nav-btn.liquid-press-active,
-.liquid-glass body:not(.reader-open) #nav-menu .nav-link.liquid-press-active,
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link.liquid-press-active {
+    transform: scale(0.92) !important;
+    transition-duration: 70ms !important;
+}
+
+/* Smaller controls use a slightly gentler compression. */
 .liquid-glass .metro-btn.liquid-press-active,
 .liquid-glass .density-btn.liquid-press-active,
 .liquid-glass .color-btn.liquid-press-active,
@@ -18,12 +48,27 @@
 .liquid-glass #lightbox-quality.liquid-press-active,
 .liquid-glass .reader-close.liquid-press-active,
 .liquid-glass .reader-toolbar-btn.liquid-press-active {
-    transform: scale(0.955) !important;
-    transition: transform 110ms cubic-bezier(0.2, 0.84, 0.25, 1) !important;
-    will-change: auto !important;
+    transform: scale(0.94) !important;
+    transition-duration: 70ms !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .liquid-glass .bottom-nav-btn,
+    .liquid-glass body:not(.reader-open) #nav-menu .nav-link,
+    .liquid-glass .metro-btn,
+    .liquid-glass .density-btn,
+    .liquid-glass .color-btn,
+    .liquid-glass .settings-link-row,
+    .liquid-glass .search-submit,
+    .liquid-glass .search-chip,
+    .liquid-glass .search-follow-btn,
+    .liquid-glass .subview-back,
+    .liquid-glass .page-header-back,
+    .liquid-glass #back-to-top,
+    .liquid-glass #lightbox-close,
+    .liquid-glass #lightbox-quality,
+    .liquid-glass .reader-close,
+    .liquid-glass .reader-toolbar-btn,
     .liquid-glass .liquid-press-active {
         transform: none !important;
         transition: none !important;
