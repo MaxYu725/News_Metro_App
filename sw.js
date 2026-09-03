@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v48-reader-image-visibility-fix';
+const SHELL_CACHE = 'metro-news-shell-v49-press-feedback';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -13,6 +13,7 @@ const SHELL_URLS = [
     './shell-ui.css?v=38',
     './liquid-glass.css?v=44',
     './compositor-stability.css?v=45',
+    './liquid-press-feedback.css?v=49',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
@@ -22,7 +23,7 @@ const SHELL_URLS = [
     './pwa-state.js',
     './atmosphere.js?v=34',
     './shell-ui.js?v=37',
-    './liquid-glass.js?v=44',
+    './liquid-glass.js?v=49',
     './api.js',
     './data-cache.js',
     './utils.js',

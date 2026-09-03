@@ -1,0 +1,31 @@
+/* v49 controlled motion restoration: press feedback only.
+   No page/card/Reader/nav-indicator animation is enabled here. Only the
+   currently pressed small control gets a short local transform. */
+
+.liquid-glass .bottom-nav-btn.liquid-press-active,
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link.liquid-press-active,
+.liquid-glass .metro-btn.liquid-press-active,
+.liquid-glass .density-btn.liquid-press-active,
+.liquid-glass .color-btn.liquid-press-active,
+.liquid-glass .settings-link-row.liquid-press-active,
+.liquid-glass .search-submit.liquid-press-active,
+.liquid-glass .search-chip.liquid-press-active,
+.liquid-glass .search-follow-btn.liquid-press-active,
+.liquid-glass .subview-back.liquid-press-active,
+.liquid-glass .page-header-back.liquid-press-active,
+.liquid-glass #back-to-top.liquid-press-active,
+.liquid-glass #lightbox-close.liquid-press-active,
+.liquid-glass #lightbox-quality.liquid-press-active,
+.liquid-glass .reader-close.liquid-press-active,
+.liquid-glass .reader-toolbar-btn.liquid-press-active {
+    transform: scale(0.955) !important;
+    transition: transform 110ms cubic-bezier(0.2, 0.84, 0.25, 1) !important;
+    will-change: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .liquid-glass .liquid-press-active {
+        transform: none !important;
+        transition: none !important;
+    }
+}
