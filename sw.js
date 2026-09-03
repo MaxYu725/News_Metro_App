@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v59-reader-confirmed-tap';
+const SHELL_CACHE = 'metro-news-shell-v60-static-polish';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -18,6 +18,7 @@ const SHELL_URLS = [
     './liquid-category-indicator.css?v=54',
     './liquid-reader-cue.css?v=58',
     './liquid-reader-tap.css?v=59',
+    './liquid-static-polish.css?v=60',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
