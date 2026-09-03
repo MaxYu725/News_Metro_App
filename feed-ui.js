@@ -130,8 +130,10 @@ function decorateTile(tile) {
     if (!tile.querySelector('.tile-preview')) return false;
 
     tile.classList.add('feed-card');
-    tile.style.setProperty('border-left-color', 'var(--metro-accent-color, #22d3ee)', 'important');
-    tile.style.setProperty('border-left-width', '3px', 'important');
+    // The Liquid Glass layer owns the complete edge treatment. Clear legacy
+    // inline Metro bars so the border can respond as one continuous surface.
+    tile.style.removeProperty('border-left-color');
+    tile.style.removeProperty('border-left-width');
 
     const titleText = tile.querySelector('.news-title')?.textContent?.trim() || '新聞';
     tile.tabIndex = 0;

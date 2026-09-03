@@ -1,0 +1,742 @@
+/* Liquid Glass — ColorOS-inspired material and motion layer.
+   Loaded last so it can refine the existing Metro shell without changing data flows. */
+:root {
+    --bottom-nav-height: 72px;
+    --liquid-glass: rgba(16, 22, 37, 0.58);
+    --liquid-glass-soft: rgba(18, 25, 42, 0.46);
+    --liquid-glass-strong: rgba(13, 18, 31, 0.82);
+    --liquid-glass-border: rgba(255, 255, 255, 0.17);
+    --liquid-glass-border-soft: rgba(255, 255, 255, 0.095);
+    --liquid-specular: rgba(255, 255, 255, 0.46);
+    --liquid-shadow: 0 18px 54px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    --liquid-shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.085);
+    --liquid-ease: cubic-bezier(0.2, 0.84, 0.25, 1);
+    --liquid-spring: cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+body {
+    font-family: "Segoe UI Variable", "Segoe UI", "Noto Sans HK", "Microsoft JhengHei", system-ui, -apple-system, sans-serif;
+}
+
+/* Floating top island */
+.liquid-glass body:not(.reader-open) .app-header {
+    flex: 0 0 auto;
+    width: auto;
+    margin: max(8px, env(safe-area-inset-top, 0px)) 12px 5px;
+    padding-top: 0;
+    overflow: hidden;
+    border: 1px solid var(--liquid-glass-border);
+    border-radius: 30px;
+    background:
+        radial-gradient(circle at 76% -28%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.19), transparent 46%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.10), transparent 32%),
+        var(--liquid-glass);
+    box-shadow: var(--liquid-shadow);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+
+.liquid-glass body:not(.reader-open) .app-header::before {
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    left: 12%;
+    width: 76%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--liquid-specular), transparent);
+    content: "";
+    pointer-events: none;
+}
+
+.liquid-glass body:not(.reader-open) .page-heading-row {
+    min-height: 58px;
+    padding: 9px 15px 6px;
+}
+
+.liquid-glass body:not(.reader-open) .page-title {
+    font-size: clamp(1.5rem, 4.6vw, 1.9rem);
+    font-weight: 470;
+    letter-spacing: 0.005em;
+}
+
+.liquid-glass body:not(.reader-open) .page-subtitle {
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.47);
+}
+
+.liquid-glass body:not(.reader-open) .page-header-back,
+.liquid-glass .subview-back {
+    border: 1px solid var(--liquid-glass-border-soft);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.065);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transition: transform 340ms var(--liquid-spring), background 220ms ease, border-color 220ms ease;
+}
+
+.liquid-glass body:not(.reader-open) #category-strip {
+    padding: 0 9px 9px;
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu {
+    position: relative;
+    min-height: 44px;
+    align-items: center;
+    gap: 3px;
+    padding: 4px;
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 23px;
+    background: rgba(5, 9, 17, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu::before {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    left: 0;
+    width: var(--liquid-category-w, 0px);
+    height: var(--liquid-category-h, 36px);
+    border: 1px solid rgba(var(--metro-accent-rgb, 34, 211, 238), 0.26);
+    border-radius: 19px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.11), transparent 48%),
+        rgba(var(--metro-accent-rgb, 34, 211, 238), 0.17);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 7px 18px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.12);
+    content: "";
+    pointer-events: none;
+    transform: translate3d(var(--liquid-category-x, 4px), var(--liquid-category-y, 4px), 0);
+    transition: width 380ms var(--liquid-ease), height 380ms var(--liquid-ease), transform 420ms var(--liquid-spring), border-radius 380ms var(--liquid-ease);
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link {
+    position: relative;
+    z-index: 1;
+    flex: 0 0 auto;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 13px;
+    border-radius: 18px;
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 0.86rem;
+    font-weight: 500;
+    line-height: 1;
+    transition: color 220ms ease, transform 360ms var(--liquid-spring), opacity 220ms ease;
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link.active {
+    background: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.13);
+    color: rgba(255, 255, 255, 0.97);
+    transform: scale(1.025);
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu[data-liquid-indicator="ready"] .nav-link.active {
+    background: transparent;
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link.active::after {
+    content: none;
+}
+
+/* Floating global navigation and morphing selection island */
+.liquid-glass .bottom-nav {
+    --liquid-nav-x: 6px;
+    --liquid-nav-y: 6px;
+    --liquid-nav-w: calc((100% - 12px) / 4);
+    --liquid-nav-h: 60px;
+    left: 12px;
+    right: 12px;
+    bottom: max(9px, env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-width: 570px;
+    height: var(--bottom-nav-height);
+    margin-inline: auto;
+    padding: 6px;
+    overflow: hidden;
+    align-items: stretch;
+    border: 1px solid var(--liquid-glass-border);
+    border-radius: 36px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.11), transparent 34%),
+        var(--liquid-glass-strong);
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(32px) saturate(160%);
+    -webkit-backdrop-filter: blur(32px) saturate(160%);
+}
+
+.liquid-glass .bottom-nav::after {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    left: 12%;
+    width: 76%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--liquid-specular), transparent);
+    content: "";
+    pointer-events: none;
+}
+
+.liquid-nav-indicator {
+    position: absolute;
+    z-index: 0;
+    top: 0;
+    left: 0;
+    width: var(--liquid-nav-w);
+    height: var(--liquid-nav-h);
+    border: 1px solid rgba(var(--metro-accent-rgb, 34, 211, 238), 0.28);
+    border-radius: 30px;
+    background:
+        radial-gradient(circle at 28% 10%, rgba(255, 255, 255, 0.19), transparent 48%),
+        linear-gradient(135deg, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.25), rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 9px 24px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.14);
+    pointer-events: none;
+    transform: translate3d(var(--liquid-nav-x), var(--liquid-nav-y), 0);
+    transition: width 400ms var(--liquid-ease), height 400ms var(--liquid-ease), transform 460ms var(--liquid-spring), border-radius 380ms var(--liquid-ease), background 260ms ease;
+}
+
+.liquid-glass .bottom-nav-btn {
+    z-index: 1;
+    min-height: 0;
+    gap: 3px;
+    border-radius: 30px;
+    color: rgba(255, 255, 255, 0.46);
+    transition: color 240ms ease, transform 360ms var(--liquid-spring);
+}
+
+.liquid-glass .bottom-nav-btn::before {
+    content: none !important;
+}
+
+.liquid-glass .bottom-nav-btn.active {
+    color: rgba(255, 255, 255, 0.98);
+    transform: scale(1.025);
+}
+
+.liquid-glass .bottom-nav-btn:active,
+.liquid-glass .bottom-nav-btn.is-liquid-pressed {
+    background: transparent;
+    transform: scale(0.94);
+}
+
+.liquid-glass .bottom-nav-icon {
+    width: 23px;
+    height: 23px;
+    color: currentColor;
+    font-size: 0;
+    transition: color 240ms ease, transform 380ms var(--liquid-spring);
+}
+
+.liquid-glass .bottom-nav-icon svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.liquid-glass .bottom-nav-btn.active .bottom-nav-icon {
+    color: var(--metro-accent-color, #22d3ee) !important;
+    transform: translateY(-1px) scale(1.08);
+}
+
+.liquid-glass .bottom-nav-label {
+    font-size: 0.62rem;
+    font-weight: 620;
+    letter-spacing: 0.06em;
+}
+
+.liquid-glass .app-main {
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 34px);
+}
+
+.liquid-glass #back-to-top {
+    bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 26px);
+    overflow: hidden;
+    border: 1px solid var(--liquid-glass-border);
+    border-radius: 50%;
+    background: var(--liquid-glass-strong) !important;
+    box-shadow: var(--liquid-shadow-soft);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    transition: opacity 220ms ease, transform 360ms var(--liquid-spring), box-shadow 220ms ease;
+}
+
+/* Editorial glass cards. Backdrop blur remains off on feed cards to preserve
+   the Android Reader compositor fix; layered specular gradients provide depth. */
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card {
+    --liquid-x: 50%;
+    --liquid-y: 50%;
+    margin: 7px 12px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    border-left-width: 1px !important;
+    border-left-color: rgba(255, 255, 255, 0.14) !important;
+    border-radius: 25px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.105), transparent 29%),
+        radial-gradient(circle at 88% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.105), transparent 43%),
+        linear-gradient(145deg, rgba(19, 26, 43, 0.93), rgba(8, 13, 24, 0.87));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.12),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+        0 13px 34px rgba(0, 0, 0, 0.28);
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    transform: none;
+    transition: transform 380ms var(--liquid-spring), border-radius 380ms var(--liquid-ease), border-color 220ms ease, box-shadow 260ms ease, background 260ms ease;
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::before {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 13%;
+    width: 58%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.46), transparent);
+    content: "";
+    pointer-events: none;
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::after {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    background: radial-gradient(circle 145px at var(--liquid-x) var(--liquid-y), rgba(255, 255, 255, 0.11), transparent 72%);
+    content: "";
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card .tile-preview {
+    position: relative;
+    z-index: 2;
+    padding: 15px 16px;
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.hero-tile {
+    margin-top: 10px;
+    border-radius: 31px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.11), transparent 31%),
+        radial-gradient(circle at 82% -10%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.13), transparent 46%),
+        linear-gradient(145deg, rgba(18, 25, 42, 0.97), rgba(7, 11, 21, 0.92));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 18px 46px rgba(0, 0, 0, 0.34);
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:active,
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card.is-liquid-pressed {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.25) !important;
+    border-radius: 29px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.13), transparent 34%),
+        linear-gradient(145deg, rgba(23, 31, 50, 0.97), rgba(10, 16, 29, 0.93));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 6px 20px rgba(0, 0, 0, 0.24);
+    transform: scale(0.985) !important;
+}
+
+.liquid-glass .metro-tile.liquid-reveal > .tile-preview {
+    animation: liquid-content-rise 420ms var(--liquid-ease) both;
+    animation-delay: var(--liquid-reveal-delay, 0ms);
+}
+
+/* Search, settings and secondary surfaces */
+.liquid-glass body:not(.reader-open) #search-view:not(.hidden),
+.liquid-glass body:not(.reader-open) #gallery-view:not(.hidden),
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) {
+    overflow: hidden;
+    border: 1px solid var(--liquid-glass-border-soft);
+    border-radius: 27px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.085), transparent 32%),
+        radial-gradient(circle at 86% -10%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10), transparent 43%),
+        var(--liquid-glass-soft);
+    box-shadow: var(--liquid-shadow-soft);
+    backdrop-filter: blur(22px) saturate(142%);
+    -webkit-backdrop-filter: blur(22px) saturate(142%);
+}
+
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) {
+    padding: 16px 15px;
+}
+
+.liquid-glass .search-form {
+    min-height: 52px;
+    overflow: hidden;
+    border: 1px solid var(--liquid-glass-border) !important;
+    border-radius: 27px;
+    background: rgba(7, 11, 20, 0.46) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075);
+    transition: border-color 220ms ease, box-shadow 260ms ease, background 220ms ease;
+}
+
+.liquid-glass .search-form:focus-within {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.62) !important;
+    background: rgba(8, 13, 24, 0.63) !important;
+    box-shadow: 0 0 0 4px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.11), inset 0 1px 0 rgba(255, 255, 255, 0.11);
+}
+
+.liquid-glass .search-submit {
+    min-width: 72px;
+    margin: 5px;
+    border: 1px solid rgba(var(--metro-accent-rgb, 34, 211, 238), 0.25) !important;
+    border-radius: 21px;
+    background: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.15) !important;
+    transition: transform 340ms var(--liquid-spring), background 220ms ease, box-shadow 220ms ease;
+}
+
+.liquid-glass .metro-btn,
+.liquid-glass .density-btn,
+.liquid-glass .settings-link-row,
+.liquid-glass #settings-view #new-cat-input,
+.liquid-glass #settings-view #font-size-display,
+.liquid-glass .search-chip,
+.liquid-glass .search-follow-btn {
+    border: 1px solid var(--liquid-glass-border-soft) !important;
+    border-radius: 20px;
+    background: rgba(9, 14, 25, 0.37) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055) !important;
+    transition: transform 340ms var(--liquid-spring), border-color 220ms ease, background 220ms ease, box-shadow 220ms ease !important;
+}
+
+.liquid-glass .density-btn.active,
+.liquid-glass .search-chip.search-chip-tracked,
+.liquid-glass .search-follow-btn.is-tracked {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.38) !important;
+    background: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.15) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.11), 0 7px 18px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10) !important;
+}
+
+.liquid-glass .color-btn {
+    overflow: hidden;
+    border-radius: 50% !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52), 0 8px 20px rgba(0, 0, 0, 0.22);
+    transition: transform 360ms var(--liquid-spring), box-shadow 240ms ease;
+}
+
+.liquid-glass .color-btn[aria-pressed="true"] {
+    transform: scale(1.09);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.11), 0 9px 24px rgba(0, 0, 0, 0.25);
+}
+
+.liquid-glass .settings-link-row,
+.liquid-glass .density-btn {
+    min-height: 66px;
+}
+
+.liquid-glass .nav-link.is-liquid-pressed,
+.liquid-glass .search-chip.is-liquid-pressed,
+.liquid-glass .search-follow-btn.is-liquid-pressed,
+.liquid-glass .color-btn.is-liquid-pressed,
+.liquid-glass #back-to-top.is-liquid-pressed,
+.liquid-glass #lightbox-close.is-liquid-pressed,
+.liquid-glass #lightbox-quality.is-liquid-pressed {
+    transform: scale(0.93);
+}
+
+.liquid-glass .metro-btn:active,
+.liquid-glass .metro-btn.is-liquid-pressed,
+.liquid-glass .density-btn:active,
+.liquid-glass .density-btn.is-liquid-pressed,
+.liquid-glass .settings-link-row:active,
+.liquid-glass .settings-link-row.is-liquid-pressed,
+.liquid-glass .search-submit:active,
+.liquid-glass .search-submit.is-liquid-pressed,
+.liquid-glass .subview-back.is-liquid-pressed,
+.liquid-glass .page-header-back.is-liquid-pressed {
+    transform: scale(0.955);
+}
+
+.liquid-glass #gallery-view:not(.hidden) ~ #news-grid .metro-tile {
+    border-radius: 22px;
+}
+
+.liquid-glass #gallery-view:not(.hidden) ~ #news-grid .gallery-img {
+    transition: transform 420ms var(--liquid-ease), filter 220ms ease;
+}
+
+.liquid-glass #gallery-view:not(.hidden) ~ #news-grid .metro-tile.liquid-reveal {
+    animation: liquid-content-rise 420ms var(--liquid-ease) both;
+    animation-delay: var(--liquid-reveal-delay, 0ms);
+}
+
+/* Reader stays opaque for compositor stability; only its chrome becomes glass. */
+.liquid-glass .reader-shell {
+    background:
+        radial-gradient(circle at 86% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10), transparent 34%),
+        linear-gradient(180deg, #0b101a 0%, #070a11 48%, #080b12 100%);
+    transform: translateY(8px) scale(0.997);
+}
+
+.liquid-glass .reader-overlay.open .reader-shell {
+    transform: translateY(0) scale(1);
+    transition: opacity 180ms ease-out, transform 260ms var(--liquid-ease);
+}
+
+.liquid-glass .reader-toolbar {
+    min-height: 56px;
+    margin: 8px 10px 4px;
+    padding: 0 5px;
+    overflow: hidden;
+    border: 1px solid var(--liquid-glass-border);
+    border-radius: 28px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.095), transparent 40%),
+        var(--liquid-glass-strong);
+    box-shadow: var(--liquid-shadow-soft);
+    backdrop-filter: blur(28px) saturate(152%);
+    -webkit-backdrop-filter: blur(28px) saturate(152%);
+}
+
+.liquid-glass .reader-close,
+.liquid-glass .reader-toolbar-btn {
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 22px;
+    transition: transform 340ms var(--liquid-spring), color 220ms ease, background 220ms ease;
+}
+
+.liquid-glass .reader-close:active,
+.liquid-glass .reader-close.is-liquid-pressed,
+.liquid-glass .reader-toolbar-btn:active,
+.liquid-glass .reader-toolbar-btn.is-liquid-pressed {
+    background: rgba(255, 255, 255, 0.085);
+    transform: scale(0.91);
+}
+
+.liquid-glass .reader-feedback {
+    top: calc(env(safe-area-inset-top, 0px) + 76px);
+    padding: 9px 14px;
+    border: 1px solid var(--liquid-glass-border);
+    border-radius: 20px;
+    background: var(--liquid-glass-strong);
+    box-shadow: var(--liquid-shadow-soft);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+}
+
+.liquid-glass .reader-media {
+    margin-top: 22px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 28px;
+    background: rgba(3, 6, 11, 0.76);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+}
+
+.liquid-glass .reader-image-caption {
+    background: rgba(12, 17, 27, 0.88);
+}
+
+.liquid-glass .reader-media-count {
+    padding: 5px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    background: rgba(5, 8, 14, 0.68);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+}
+
+.liquid-glass .reader-ai {
+    margin-top: 20px;
+    padding: 16px;
+    border: 1px solid rgba(217, 70, 239, 0.25);
+    border-radius: 24px;
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.07), transparent 34%),
+        rgba(88, 28, 135, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+/* Lightbox controls use isolated glass islands. */
+.liquid-glass #lightbox-overlay {
+    background: rgba(2, 4, 8, 0.96) !important;
+}
+
+.liquid-glass #lightbox-close,
+.liquid-glass #lightbox-quality {
+    border: 1px solid var(--liquid-glass-border);
+    background: var(--liquid-glass-strong);
+    box-shadow: var(--liquid-shadow-soft);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    transition: transform 340ms var(--liquid-spring), background 220ms ease, border-color 220ms ease, opacity 180ms ease;
+}
+
+.liquid-glass #lightbox-close {
+    border-radius: 50%;
+}
+
+.liquid-glass #lightbox-quality {
+    border-radius: 21px;
+}
+
+.liquid-glass #lightbox-quality[aria-pressed="true"] {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.7);
+    background: var(--metro-accent-color, #22d3ee);
+    box-shadow: 0 8px 28px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.24);
+}
+
+.liquid-glass #lightbox-hint {
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 18px;
+    background: rgba(7, 10, 17, 0.62);
+    color: rgba(255, 255, 255, 0.62);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+/* Direction-aware page motion. The old page is replaced synchronously by app.js;
+   this gives the incoming content a short, low-amplitude fluid settle. */
+.liquid-glass .app-main.liquid-page-enter {
+    animation: liquid-page-forward 390ms var(--liquid-ease) both;
+}
+
+.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter {
+    animation-name: liquid-page-backward;
+}
+
+.liquid-glass .page-heading-copy.liquid-heading-enter {
+    animation: liquid-heading-in 330ms var(--liquid-ease) both;
+}
+
+@keyframes liquid-page-forward {
+    from { opacity: 0.72; transform: translate3d(18px, 0, 0) scale(0.995); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes liquid-page-backward {
+    from { opacity: 0.72; transform: translate3d(-18px, 0, 0) scale(0.995); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes liquid-heading-in {
+    from { opacity: 0.56; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes liquid-content-rise {
+    from { opacity: 0; transform: translateY(9px) scale(0.992); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:hover {
+        border-color: rgba(255, 255, 255, 0.20) !important;
+        border-left-color: rgba(255, 255, 255, 0.20) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 18px 42px rgba(0, 0, 0, 0.32);
+        transform: translateY(-2px) !important;
+    }
+
+    .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:hover::after {
+        opacity: 1;
+    }
+
+    .liquid-glass .metro-btn:hover,
+    .liquid-glass .density-btn:hover,
+    .liquid-glass .settings-link-row:hover,
+    .liquid-glass .search-submit:hover {
+        border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.30) !important;
+        background: rgba(255, 255, 255, 0.075) !important;
+    }
+}
+
+@media (min-width: 700px) {
+    .liquid-glass body:not(.reader-open) .app-header {
+        margin-inline: 16px;
+    }
+
+    .liquid-glass body:not(.reader-open) #news-grid > .metro-tile.feed-card {
+        margin: 0;
+    }
+
+    .liquid-glass .reader-toolbar {
+        width: min(calc(100% - 24px), 1080px);
+        margin-inline: auto;
+    }
+
+    .liquid-glass .reader-media {
+        margin-left: 0;
+        margin-right: 0;
+    }
+}
+
+@media (min-width: 900px) {
+    .liquid-glass .bottom-nav {
+        --liquid-nav-x: 7px;
+        --liquid-nav-y: 7px;
+        --liquid-nav-w: 66px;
+        --liquid-nav-h: 72px;
+        left: max(12px, env(safe-area-inset-left, 0px));
+        right: auto;
+        top: 50%;
+        bottom: auto;
+        width: 80px;
+        height: 332px;
+        max-width: none;
+        margin: 0;
+        padding: 7px;
+        flex-direction: column;
+        gap: 0;
+        border-right: 1px solid var(--liquid-glass-border);
+        border-radius: 40px;
+        transform: translateY(-50%);
+    }
+
+    .liquid-glass .bottom-nav-btn {
+        flex: 1 1 0;
+        width: 100%;
+        min-height: 0;
+    }
+
+    .liquid-glass .liquid-nav-indicator {
+        border-radius: 33px;
+    }
+
+    .liquid-glass .app-header {
+        margin-left: calc(var(--adaptive-rail-width) + env(safe-area-inset-left, 0px) + 16px) !important;
+        margin-right: 16px !important;
+    }
+
+    .liquid-glass .app-main {
+        padding-bottom: 28px;
+    }
+
+    .liquid-glass #back-to-top {
+        bottom: 24px;
+    }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .liquid-glass body:not(.reader-open) .app-header,
+    .liquid-glass .bottom-nav,
+    .liquid-glass .reader-toolbar,
+    .liquid-glass #lightbox-close,
+    .liquid-glass #lightbox-quality {
+        background-color: rgba(12, 17, 29, 0.96);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .liquid-glass *,
+    .liquid-glass *::before,
+    .liquid-glass *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .liquid-glass .app-main.liquid-page-enter,
+    .liquid-glass .page-heading-copy.liquid-heading-enter,
+    .liquid-glass .metro-tile.liquid-reveal > .tile-preview {
+        animation: none !important;
+    }
+}

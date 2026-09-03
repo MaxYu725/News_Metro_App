@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="zh-HK" class="liquid-glass">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0a0d1a">
-    <link rel="manifest" href="./manifest.json?v=36">
+    <link rel="manifest" href="./manifest.json?v=37">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="./atmosphere.css?v=34">
     <link rel="stylesheet" href="./surface-ui.css?v=35">
     <link rel="stylesheet" href="./shell-ui.css?v=38">
+    <link rel="stylesheet" href="./liquid-glass.css?v=43">
 </head>
 <body class="h-screen w-screen flex flex-col relative bg-[#0a0d1a] text-white select-none overflow-hidden app-shell">
 
@@ -179,20 +180,29 @@
     </main>
 
     <nav id="bottom-nav" class="bottom-nav z-50" aria-label="主要導覽">
+        <span class="liquid-nav-indicator" aria-hidden="true"></span>
         <button class="bottom-nav-btn active" data-section="news" aria-label="新聞" aria-current="page">
-            <span class="bottom-nav-icon" aria-hidden="true">▤</span>
+            <span class="bottom-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M5 5.5h14v13H5zM8 9h3m-3 3h8m-8 3h8m-2-6h2"/></svg>
+            </span>
             <span class="bottom-nav-label">新聞</span>
         </button>
         <button class="bottom-nav-btn" data-section="search" aria-label="搜尋">
-            <span class="bottom-nav-icon" aria-hidden="true">⌕</span>
+            <span class="bottom-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><circle cx="10.8" cy="10.8" r="5.8"/><path d="m15.2 15.2 4 4"/></svg>
+            </span>
             <span class="bottom-nav-label">搜尋</span>
         </button>
         <button class="bottom-nav-btn" data-section="bookmarks" aria-label="收藏">
-            <span class="bottom-nav-icon" aria-hidden="true">☆</span>
+            <span class="bottom-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M7 4.5h10v15l-5-3.2-5 3.2z"/></svg>
+            </span>
             <span class="bottom-nav-label">收藏</span>
         </button>
         <button class="bottom-nav-btn" data-section="settings" aria-label="設定">
-            <span class="bottom-nav-icon" aria-hidden="true">⚙</span>
+            <span class="bottom-nav-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M5 7h14M5 17h14M8 4v6m8 4v6"/><circle cx="8" cy="7" r="1.6"/><circle cx="16" cy="17" r="1.6"/></svg>
+            </span>
             <span class="bottom-nav-label">設定</span>
         </button>
     </nav>
@@ -205,5 +215,6 @@
     <script type="module" src="./source-settings.js"></script>
     <script type="module" src="./atmosphere.js?v=34"></script>
     <script type="module" src="./shell-ui.js?v=37"></script>
+    <script type="module" src="./liquid-glass.js?v=43"></script>
 </body>
 </html>
