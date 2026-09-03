@@ -1,0 +1,87 @@
+/* v62 — unified top-island height and first-content rhythm.
+   Static layout only: no new animation, transform, opacity choreography,
+   will-change, observer, or compositor promotion. */
+
+:root {
+    --liquid-top-island-height: 58px;
+    --liquid-top-content-gap: 10px;
+}
+
+/* All top-level title islands become title-only. The page name remains the
+   primary identifier; descriptive copy is redundant once the page is selected
+   from Bottom Nav. Bookmark count/meta remains available on the right. */
+.liquid-glass body:not(.reader-open) .page-heading-row {
+    min-height: var(--liquid-top-island-height) !important;
+    height: var(--liquid-top-island-height);
+    padding: 0 15px !important;
+    align-items: center;
+}
+
+.liquid-glass body:not(.reader-open) .page-subtitle {
+    display: none !important;
+}
+
+/* News already communicates identity through its category control. Keep the
+   semantic page heading in the DOM for assistive technology, but remove it from
+   visual layout and make the category strip itself the same 58px island. */
+.liquid-glass body:not(.reader-open) .page-header-shell:has(> #category-strip:not(.hidden)) > .page-heading-row {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    min-height: 0 !important;
+    margin: -1px !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+.liquid-glass body:not(.reader-open) .page-header-shell:has(> #category-strip:not(.hidden)) > #category-strip {
+    height: var(--liquid-top-island-height);
+    padding: 7px 9px !important;
+}
+
+.liquid-glass body:not(.reader-open) .page-header-shell:has(> #category-strip:not(.hidden)) #nav-menu {
+    min-height: 44px;
+    height: 44px;
+    align-items: center;
+}
+
+/* One optical distance from the top island to the first primary surface.
+   The app-header already contributes a 5px bottom margin, so 10px content-side
+   spacing yields a consistent ~15px visual gap across the main tabs. */
+.liquid-glass body:not(.reader-open) #search-view:not(.hidden),
+.liquid-glass body:not(.reader-open) #gallery-view:not(.hidden),
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) {
+    margin-top: var(--liquid-top-content-gap) !important;
+}
+
+/* News/Bookmarks render through #news-grid. Remove the older 12px grid pad and
+   give the first card the same 10px content-side start used by tool pages. */
+.liquid-glass body:not(.reader-open) #news-grid {
+    padding-top: 0 !important;
+}
+
+.liquid-glass body:not(.reader-open) #news-grid > .metro-tile.feed-card:first-of-type {
+    margin-top: var(--liquid-top-content-gap) !important;
+}
+
+/* Tablet/desktop shell rules previously increased title-row height. Keep the
+   same top-island height at every breakpoint so switching pages never changes
+   the vertical shell rhythm. */
+@media (min-width: 700px) {
+    .liquid-glass body:not(.reader-open) .page-heading-row {
+        min-height: var(--liquid-top-island-height) !important;
+        height: var(--liquid-top-island-height);
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    .liquid-glass body:not(.reader-open) .page-header-shell:has(> #category-strip:not(.hidden)) > #category-strip {
+        height: var(--liquid-top-island-height);
+        padding-top: 7px !important;
+        padding-bottom: 7px !important;
+    }
+}
