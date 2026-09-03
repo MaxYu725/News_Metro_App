@@ -1,7 +1,9 @@
-/* v51 controlled motion restoration: press feedback only.
-   Page/card/Reader/nav-indicator motion remains disabled. The down-state now
-   snaps immediately so even a short mobile tap is visible; only the release
-   gets a short local spring. */
+@import url('./liquid-nav-indicator.css?v=52');
+
+/* v52 controlled motion restoration.
+   Press feedback remains accepted from v51. Bottom-nav selection-indicator
+   motion is restored separately through the imported v52 stylesheet. Page,
+   card, Reader and category-indicator motion remain disabled. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform

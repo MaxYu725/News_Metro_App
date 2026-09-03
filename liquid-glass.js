@@ -1,11 +1,12 @@
 import './reader-image-stability.js';
+import './liquid-nav-indicator.js';
 
-/* v51 controlled motion restoration.
-   The zero-motion baseline remains in force except for one effect family:
-   local press feedback on small controls. v51 changes timing only: press-down
-   snaps immediately, while release uses a short spring. No page/card/Reader
-   transition, MutationObserver/rAF motion controller, forced reflow, spotlight
-   tracking or morphing navigation indicator is restored. */
+/* v52 controlled motion restoration.
+   The accepted v51 local press feedback remains enabled. v52 restores one
+   additional family only: the bottom-nav selection island, implemented from
+   fixed button indices without geometry reads, rAF loops, MutationObserver,
+   forced reflow or spotlight tracking. Page/card/Reader/category motion stays
+   disabled. */
 
 const PRESSABLE_SELECTOR = [
     '.bottom-nav-btn',
@@ -26,8 +27,8 @@ const PRESSABLE_SELECTOR = [
     '.reader-toolbar-btn'
 ].join(',');
 
-/* With the down-state now applied without transition, only a short hold is
-   needed to guarantee several 90 Hz frames before spring release. */
+/* With the down-state applied without transition, only a short hold is needed
+   to guarantee several 90 Hz frames before spring release. */
 const MIN_PRESS_VISIBLE_MS = 66;
 let pressedControl = null;
 let pressedAt = 0;
@@ -89,8 +90,8 @@ function installPressFeedback() {
 }
 
 function initLiquidGlassStaticBaseline() {
-    document.documentElement.dataset.liquidReady = 'static-press';
-    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-press-snap-release';
+    document.documentElement.dataset.liquidReady = 'static-press-nav';
+    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-press-plus-nav-indicator';
     installPressFeedback();
 }
 
