@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v56-card-motion-rollback';
+const SHELL_CACHE = 'metro-news-shell-v57-reader-toolbar-cue';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -16,6 +16,7 @@ const SHELL_URLS = [
     './liquid-press-feedback.css?v=49',
     './liquid-nav-indicator.css?v=53',
     './liquid-category-indicator.css?v=54',
+    './liquid-reader-cue.css?v=57',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
