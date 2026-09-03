@@ -1,7 +1,7 @@
 {
   "name": "Metro News",
   "short_name": "News",
-  "description": "極簡無廣告的 Metro UI 新聞閱讀器",
+  "description": "Liquid Glass 介面的極簡無廣告新聞閱讀器",
   "start_url": "./index.html",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],

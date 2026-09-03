@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v42-reader-compositor-fix';
+const SHELL_CACHE = 'metro-news-shell-v43-liquid-glass';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -11,6 +11,7 @@ const SHELL_URLS = [
     './atmosphere.css?v=34',
     './surface-ui.css?v=35',
     './shell-ui.css?v=38',
+    './liquid-glass.css?v=43',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
@@ -19,6 +20,7 @@ const SHELL_URLS = [
     './pwa-state.js',
     './atmosphere.js?v=34',
     './shell-ui.js?v=37',
+    './liquid-glass.js?v=43',
     './api.js',
     './data-cache.js',
     './utils.js',
@@ -27,7 +29,7 @@ const SHELL_URLS = [
     './settings.js',
     './source-settings.js',
     './lightbox.js',
-    './manifest.json?v=36',
+    './manifest.json?v=37',
     './ic_launcher.png'
 ];
 
