@@ -1,6 +1,7 @@
-/* v47 reader image decode stability.
-   Keeps Reader images hidden until the browser has fully decoded them, so
-   progressive JPEG/intermediate decode frames never appear as a flash. */
+/* v48 Reader image decode stability.
+   Keep Reader images transparent until decoding finishes. Do NOT override
+   `visibility`: the Reader overlay itself closes via `visibility: hidden`, and
+   a child with inline `visibility: visible` can escape that hidden ancestor. */
 
 const stabilized = new WeakSet();
 
@@ -8,14 +9,18 @@ function revealDecodedImage(img) {
     if (!(img instanceof HTMLImageElement) || stabilized.has(img)) return;
     stabilized.add(img);
 
-    img.style.visibility = 'hidden';
+    // Clear any v47 inline visibility override and isolate decode gating to
+    // opacity only. Parent Reader visibility therefore always remains authoritative.
+    img.style.removeProperty('visibility');
+    img.style.opacity = '0';
+    img.style.transition = 'none';
     img.decoding = 'async';
 
     let revealed = false;
     const reveal = () => {
         if (revealed) return;
         revealed = true;
-        img.style.visibility = 'visible';
+        img.style.opacity = '1';
     };
 
     const decodeThenReveal = () => {
