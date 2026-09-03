@@ -1,10 +1,11 @@
 import './reader-image-stability.js';
 
-/* v50 controlled motion restoration.
+/* v51 controlled motion restoration.
    The zero-motion baseline remains in force except for one effect family:
-   local press feedback on small controls. No MutationObserver/rAF motion
-   controller, forced reflow, spotlight tracking, page/card/Reader transition,
-   or morphing navigation indicator is restored. */
+   local press feedback on small controls. v51 changes timing only: press-down
+   snaps immediately, while release uses a short spring. No page/card/Reader
+   transition, MutationObserver/rAF motion controller, forced reflow, spotlight
+   tracking or morphing navigation indicator is restored. */
 
 const PRESSABLE_SELECTOR = [
     '.bottom-nav-btn',
@@ -25,7 +26,9 @@ const PRESSABLE_SELECTOR = [
     '.reader-toolbar-btn'
 ].join(',');
 
-const MIN_PRESS_VISIBLE_MS = 135;
+/* With the down-state now applied without transition, only a short hold is
+   needed to guarantee several 90 Hz frames before spring release. */
+const MIN_PRESS_VISIBLE_MS = 66;
 let pressedControl = null;
 let pressedAt = 0;
 let releaseTimer = 0;
@@ -80,9 +83,6 @@ function installPressFeedback() {
         pressControl(findPressable(event.target));
     }, true);
 
-    /* A normal mobile tap can be shorter than the CSS compression duration.
-       Keep the pressed state on screen for a minimum time so the feedback is
-       perceptible instead of being removed almost immediately on pointerup. */
     document.addEventListener('pointerup', () => releasePressedControl(), true);
     document.addEventListener('pointercancel', () => releasePressedControl({ immediate: true }), true);
     window.addEventListener('blur', () => releasePressedControl({ immediate: true }));
@@ -90,7 +90,7 @@ function installPressFeedback() {
 
 function initLiquidGlassStaticBaseline() {
     document.documentElement.dataset.liquidReady = 'static-press';
-    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-visible-press';
+    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-press-snap-release';
     installPressFeedback();
 }
 
