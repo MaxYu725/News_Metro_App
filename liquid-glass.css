@@ -291,6 +291,14 @@ body {
     transition: transform 380ms var(--liquid-spring), border-radius 380ms var(--liquid-ease), border-color 220ms ease, box-shadow 260ms ease, background 260ms ease;
 }
 
+/* The base theme staggers each tile from opacity: 0. Liquid Glass already
+   animates the containing page, so retaining that second fade exposed empty
+   glass shells during list replacement on Android/WebView. */
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile {
+    opacity: 1;
+    animation: none;
+}
+
 .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::before {
     position: absolute;
     z-index: 1;
@@ -341,8 +349,8 @@ body {
     transform: scale(0.985) !important;
 }
 
-.liquid-glass .metro-tile.liquid-reveal > .tile-preview {
-    animation: liquid-content-rise 420ms var(--liquid-ease) both;
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.liquid-reveal {
+    animation: liquid-card-settle 300ms var(--liquid-ease) both;
     animation-delay: var(--liquid-reveal-delay, 0ms);
 }
 
@@ -462,7 +470,7 @@ body {
 }
 
 .liquid-glass #gallery-view:not(.hidden) ~ #news-grid .metro-tile.liquid-reveal {
-    animation: liquid-content-rise 420ms var(--liquid-ease) both;
+    animation: liquid-card-settle 300ms var(--liquid-ease) both;
     animation-delay: var(--liquid-reveal-delay, 0ms);
 }
 
@@ -596,7 +604,7 @@ body {
 /* Direction-aware page motion. The old page is replaced synchronously by app.js;
    this gives the incoming content a short, low-amplitude fluid settle. */
 .liquid-glass .app-main.liquid-page-enter {
-    animation: liquid-page-forward 390ms var(--liquid-ease) both;
+    animation: liquid-page-forward 330ms var(--liquid-ease) both;
 }
 
 .liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter {
@@ -604,26 +612,26 @@ body {
 }
 
 .liquid-glass .page-heading-copy.liquid-heading-enter {
-    animation: liquid-heading-in 330ms var(--liquid-ease) both;
+    animation: liquid-heading-in 300ms var(--liquid-ease) both;
 }
 
 @keyframes liquid-page-forward {
-    from { opacity: 0.72; transform: translate3d(18px, 0, 0) scale(0.995); }
+    from { opacity: 0.92; transform: translate3d(12px, 0, 0) scale(0.998); }
     to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
 @keyframes liquid-page-backward {
-    from { opacity: 0.72; transform: translate3d(-18px, 0, 0) scale(0.995); }
+    from { opacity: 0.92; transform: translate3d(-12px, 0, 0) scale(0.998); }
     to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
 @keyframes liquid-heading-in {
-    from { opacity: 0.56; transform: translateY(5px); }
+    from { opacity: 0.84; transform: translateY(3px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes liquid-content-rise {
-    from { opacity: 0; transform: translateY(9px) scale(0.992); }
+@keyframes liquid-card-settle {
+    from { opacity: 0.9; transform: translateY(5px) scale(0.997); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
@@ -736,7 +744,7 @@ body {
 
     .liquid-glass .app-main.liquid-page-enter,
     .liquid-glass .page-heading-copy.liquid-heading-enter,
-    .liquid-glass .metro-tile.liquid-reveal > .tile-preview {
+    .liquid-glass #news-grid > .metro-tile.liquid-reveal {
         animation: none !important;
     }
 }

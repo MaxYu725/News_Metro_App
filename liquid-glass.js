@@ -114,11 +114,13 @@ function revealTiles(nodes) {
         tiles.push(...node.querySelectorAll('.metro-tile'));
     });
 
-    tiles.slice(0, 18).forEach((tile, index) => {
-        const delay = Math.min(index, 8) * 24;
+    tiles.slice(0, 12).forEach((tile, index) => {
+        const delay = Math.min(index, 4) * 18;
         tile.style.setProperty('--liquid-reveal-delay', `${delay}ms`);
-        requestAnimationFrame(() => tile.classList.add('liquid-reveal'));
-        window.setTimeout(() => tile.classList.remove('liquid-reveal'), 620 + delay);
+        // MutationObserver runs before paint. Apply the class immediately so a
+        // card can never paint once, disappear, and then animate back in.
+        tile.classList.add('liquid-reveal');
+        window.setTimeout(() => tile.classList.remove('liquid-reveal'), 420 + delay);
     });
 }
 
@@ -160,6 +162,11 @@ function installObservers() {
 
     if (grid) {
         new MutationObserver(records => {
+            // A full list replacement already receives the page-level motion.
+            // Re-animating every child used to leave visible glass shells while
+            // their text and images were temporarily transparent.
+            const replacesExistingList = records.some(record => record.removedNodes.length > 0);
+            if (replacesExistingList) return;
             const added = records.flatMap(record => [...record.addedNodes]);
             revealTiles(added);
         }).observe(grid, { childList: true });
