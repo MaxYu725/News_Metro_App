@@ -2,11 +2,14 @@ import './reader-image-stability.js';
 import './liquid-nav-indicator.js?v=53';
 import './liquid-category-indicator.js?v=54';
 import './liquid-reader-cue.js?v=58';
+import './liquid-reader-tap.js?v=59';
 
-/* v58 controlled motion restoration.
+/* v59 controlled motion restoration.
    Accepted motion remains limited to local control feedback, Bottom Nav island,
-   category island, and an explicit post-paint Reader chrome cue. Feed-card
-   transforms, full-page motion and full Reader-shell transitions remain disabled. */
+   category island, the post-paint Reader chrome cue, and a confirmed-tap feed
+   content compression before Reader opens. No transform runs while a scroll
+   gesture is still being classified. Full-page/feed-card/Reader-shell motion
+   remains disabled. */
 
 const PRESSABLE_SELECTOR = [
     '.bottom-nav-btn',
@@ -88,8 +91,8 @@ function installPressFeedback() {
 }
 
 function initLiquidGlassStaticBaseline() {
-    document.documentElement.dataset.liquidReady = 'static-press-nav-category-reader-chrome';
-    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-press-plus-nav-plus-category-plus-reader-chrome-v58';
+    document.documentElement.dataset.liquidReady = 'static-press-nav-category-reader-chrome-reader-tap';
+    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-press-plus-nav-plus-category-plus-reader-chrome-plus-reader-tap-v59';
     installPressFeedback();
 }
 
