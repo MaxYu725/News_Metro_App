@@ -1,10 +1,9 @@
 @import url('./liquid-nav-indicator.css?v=53');
-@import url('./liquid-card-feedback.css?v=55');
 
-/* v55 controlled motion restoration.
+/* v56 stability rollback.
    Small-control press feedback remains accepted from v51, Bottom Nav from v53,
-   category indicator from v54, and feed-card press micro-motion is imported
-   separately. Page/card reveal/Reader transitions remain disabled. */
+   and the category island from v54. Feed-card transform feedback from v55 is
+   intentionally removed. Page/card reveal/Reader transitions remain disabled. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform
