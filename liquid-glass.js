@@ -1,10 +1,12 @@
 import './reader-image-stability.js';
 import './liquid-nav-indicator.js?v=53';
+import './liquid-category-indicator.js?v=54';
 
-/* v53 controlled motion restoration.
-   The accepted v51 local press feedback remains enabled. v53 keeps the
-   bottom-nav selection island isolated and cache-busts its module. No page,
-   card, Reader or category-indicator motion is restored. */
+/* v54 controlled motion restoration.
+   Accepted families: v51 local press feedback, v53 bottom-nav selection island,
+   and now the category selection island. Category geometry is sampled only on
+   selection/resync; no animation loop, MutationObserver or full-page transform
+   is restored. Page/card/Reader motion remains disabled. */
 
 const PRESSABLE_SELECTOR = [
     '.bottom-nav-btn',
@@ -25,8 +27,6 @@ const PRESSABLE_SELECTOR = [
     '.reader-toolbar-btn'
 ].join(',');
 
-/* With the down-state applied without transition, only a short hold is needed
-   to guarantee several 90 Hz frames before spring release. */
 const MIN_PRESS_VISIBLE_MS = 66;
 let pressedControl = null;
 let pressedAt = 0;
@@ -88,8 +88,8 @@ function installPressFeedback() {
 }
 
 function initLiquidGlassStaticBaseline() {
-    document.documentElement.dataset.liquidReady = 'static-press-nav';
-    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-press-plus-nav-indicator-v53';
+    document.documentElement.dataset.liquidReady = 'static-press-nav-category';
+    document.documentElement.dataset.liquidDebug = 'zero-motion-plus-press-plus-nav-plus-category-v54';
     installPressFeedback();
 }
 

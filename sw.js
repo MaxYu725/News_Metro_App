@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v53-nav-indicator-cache-fix';
+const SHELL_CACHE = 'metro-news-shell-v54-category-indicator';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -15,12 +15,14 @@ const SHELL_URLS = [
     './compositor-stability.css?v=45',
     './liquid-press-feedback.css?v=49',
     './liquid-nav-indicator.css?v=53',
+    './liquid-category-indicator.css?v=54',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
     './reader-ui.js',
     './reader-image-stability.js',
     './liquid-nav-indicator.js?v=53',
+    './liquid-category-indicator.js?v=54',
     './data-state-ui.js',
     './pwa-state.js',
     './atmosphere.js?v=34',
@@ -45,9 +47,8 @@ const OPTIONAL_RUNTIME_URLS = [
 async function precacheShell() {
     const shellCache = await caches.open(SHELL_CACHE);
 
-    /* Some shell URLs intentionally retain their historical query versions in
-       index.html. Force a network revalidation while installing a new shell so
-       changed CSS/JS cannot be silently satisfied by the browser HTTP cache. */
+    /* Force fresh shell bytes during each version install so changed CSS/JS
+       cannot be satisfied by stale browser HTTP cache entries. */
     const shellRequests = SHELL_URLS.map(url => new Request(url, { cache: 'reload' }));
     await shellCache.addAll(shellRequests);
 
