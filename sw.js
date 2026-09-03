@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v51-press-snap-release';
+const SHELL_CACHE = 'metro-news-shell-v52-bottom-nav-indicator';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -14,11 +14,13 @@ const SHELL_URLS = [
     './liquid-glass.css?v=44',
     './compositor-stability.css?v=45',
     './liquid-press-feedback.css?v=49',
+    './liquid-nav-indicator.css?v=52',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
     './reader-ui.js',
     './reader-image-stability.js',
+    './liquid-nav-indicator.js',
     './data-state-ui.js',
     './pwa-state.js',
     './atmosphere.js?v=34',
