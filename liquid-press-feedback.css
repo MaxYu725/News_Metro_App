@@ -1,10 +1,11 @@
-/* v50 controlled motion restoration: perceptible press feedback only.
-   Page/card/Reader/nav-indicator motion remains disabled. The only restored
-   transform is a short local scale on the small control being pressed. */
+/* v51 controlled motion restoration: press feedback only.
+   Page/card/Reader/nav-indicator motion remains disabled. The down-state now
+   snaps immediately so even a short mobile tap is visible; only the release
+   gets a short local spring. */
 
-/* Keep a release transition on the stable base state. This file is loaded
-   after compositor-stability.css, so it narrowly re-enables transform timing
-   for these controls without restoring any other motion family. */
+/* Stable base state: spring back from the compressed transform. This file is
+   loaded after compositor-stability.css, so it narrowly re-enables transform
+   timing for these controls only. */
 .liquid-glass .bottom-nav-btn,
 .liquid-glass body:not(.reader-open) #nav-menu .nav-link,
 .liquid-glass .metro-btn,
@@ -22,15 +23,27 @@
 .liquid-glass .reader-close,
 .liquid-glass .reader-toolbar-btn {
     transform-origin: center !important;
-    transition: transform 125ms cubic-bezier(0.2, 0.84, 0.25, 1) !important;
+    transition: transform 175ms cubic-bezier(0.18, 1.32, 0.32, 1) !important;
     will-change: auto !important;
 }
 
-/* Navigation/category targets are larger, so use a clearer 8% compression. */
+/* The nav icon also participates so feedback remains visible while the active
+   selection background changes during a normal navigation tap. */
+.liquid-glass .bottom-nav-btn .bottom-nav-icon {
+    transform-origin: center !important;
+    transition: transform 185ms cubic-bezier(0.18, 1.32, 0.32, 1) !important;
+}
+
+/* Press-down is immediate, not animated toward the compressed state. */
 .liquid-glass .bottom-nav-btn.liquid-press-active,
 .liquid-glass body:not(.reader-open) #nav-menu .nav-link.liquid-press-active {
     transform: scale(0.92) !important;
-    transition-duration: 70ms !important;
+    transition: none !important;
+}
+
+.liquid-glass .bottom-nav-btn.liquid-press-active .bottom-nav-icon {
+    transform: scale(0.80) !important;
+    transition: none !important;
 }
 
 /* Smaller controls use a slightly gentler compression. */
@@ -49,11 +62,12 @@
 .liquid-glass .reader-close.liquid-press-active,
 .liquid-glass .reader-toolbar-btn.liquid-press-active {
     transform: scale(0.94) !important;
-    transition-duration: 70ms !important;
+    transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .liquid-glass .bottom-nav-btn,
+    .liquid-glass .bottom-nav-btn .bottom-nav-icon,
     .liquid-glass body:not(.reader-open) #nav-menu .nav-link,
     .liquid-glass .metro-btn,
     .liquid-glass .density-btn,
