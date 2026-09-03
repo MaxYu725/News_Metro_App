@@ -1,51 +1,113 @@
-/* Android/WebView compositor guard — v45.
-   Keep the scroll surface and Reader shell out of opacity/transform transitions.
-   Liquid Glass motion remains on small isolated controls, indicators and cards. */
+/* Zero-based flicker baseline — v46.
+   One variable is isolated here: Liquid Glass motion/compositor orchestration.
+   Material stays enabled; motion, layer promotion hints and animated selection
+   islands are disabled. No delayed overlay hand-off from v45 remains. */
 
-/* Never animate the full scrolling app-main layer. On Android/WebView a
-   transform/opacity animation on this large layer can disappear for one or
-   more compositor frames while section DOM is replaced or restored. */
+/* Full application and Reader surfaces must paint in their final geometry. */
 .liquid-glass .app-main,
 .liquid-glass .app-main.liquid-page-enter,
-.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter {
-    opacity: 1 !important;
-    transform: none !important;
-}
-
-.liquid-glass .app-main.liquid-page-enter,
-.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter {
-    animation: none !important;
-}
-
-/* The Reader overlay itself is already opaque. Its full-screen shell must be
-   visible on the very first Reader paint; fading/translating the shell exposed
-   a blank dark frame before the article appeared. */
+.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter,
+.liquid-glass .page-heading-copy,
 .reader-shell,
 .reader-overlay.open .reader-shell,
 .liquid-glass .reader-shell,
 .liquid-glass .reader-overlay.open .reader-shell {
     opacity: 1 !important;
     transform: none !important;
+    animation: none !important;
     transition: none !important;
     will-change: auto !important;
 }
 
-/* Reader close compositor hand-off.
-   When `.open` is removed, keep the last fully-painted Reader frame covering
-   the app briefly while body.reader-open is cleared, scroll is restored and
-   WebView repaints the feed underneath. There is no cross-fade: visibility is
-   switched once after the stabilization window. */
+/* Restore immediate Reader visibility semantics. v45 intentionally delayed
+   visibility after close; the recording showed that hand-off increased the
+   perceived flash, so the baseline removes it completely. */
 .reader-overlay {
-    pointer-events: auto !important;
-    transition: visibility 0s linear 180ms !important;
-}
-
-.reader-overlay.open {
+    pointer-events: none !important;
     transition: none !important;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .reader-overlay {
-        transition: visibility 0s linear 80ms !important;
+.reader-overlay.open {
+    pointer-events: auto !important;
+    transition: none !important;
+}
+
+/* Remove the morphing shared selection layer. Active items keep a static glass
+   island, preserving hierarchy while avoiding a continuously transformed GPU
+   surface during section changes. */
+.liquid-glass .liquid-nav-indicator,
+.liquid-glass body:not(.reader-open) #nav-menu::before {
+    display: none !important;
+}
+
+.liquid-glass .bottom-nav-btn,
+.liquid-glass .bottom-nav-btn.active,
+.liquid-glass .bottom-nav-btn:active,
+.liquid-glass .bottom-nav-btn.is-liquid-pressed,
+.liquid-glass .bottom-nav-icon,
+.liquid-glass .bottom-nav-btn.active .bottom-nav-icon,
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link,
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link.active,
+.liquid-glass .reader-close,
+.liquid-glass .reader-toolbar-btn,
+.liquid-glass .reader-close:active,
+.liquid-glass .reader-toolbar-btn:active,
+.liquid-glass .reader-close.is-liquid-pressed,
+.liquid-glass .reader-toolbar-btn.is-liquid-pressed {
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+    will-change: auto !important;
+}
+
+.liquid-glass .bottom-nav-btn.active {
+    background:
+        radial-gradient(circle at 28% 10%, rgba(255, 255, 255, 0.16), transparent 48%),
+        linear-gradient(135deg, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.23), rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10)) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link.active {
+    background: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.16) !important;
+}
+
+/* The feed must not create per-card compositing layers in the baseline. */
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile,
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card,
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.liquid-reveal,
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile .tile-preview {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+    transition: none !important;
+    contain: none !important;
+    will-change: auto !important;
+}
+
+/* Loading placeholders stay visible but static, eliminating another opacity
+   animation while measuring the section-switch path. */
+.liquid-glass .skeleton-pulse {
+    animation: none !important;
+    opacity: 0.24 !important;
+}
+
+/* Disable press scaling on the remaining mobile controls during this isolation
+   run. Their color/background state still changes normally. */
+@media (max-width: 899px) {
+    .liquid-glass .metro-btn,
+    .liquid-glass .density-btn,
+    .liquid-glass .settings-link-row,
+    .liquid-glass .search-submit,
+    .liquid-glass .search-chip,
+    .liquid-glass .search-follow-btn,
+    .liquid-glass .subview-back,
+    .liquid-glass .page-header-back,
+    .liquid-glass #back-to-top,
+    .liquid-glass #lightbox-close,
+    .liquid-glass #lightbox-quality {
+        transform: none !important;
+        animation: none !important;
+        transition: none !important;
+        will-change: auto !important;
     }
 }
