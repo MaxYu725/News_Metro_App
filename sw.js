@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v46-zero-motion-baseline';
+const SHELL_CACHE = 'metro-news-shell-v47-reader-image-decode';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -17,6 +17,7 @@ const SHELL_URLS = [
     './feed-ui.js',
     './search-ui.js',
     './reader-ui.js',
+    './reader-image-stability.js',
     './data-state-ui.js',
     './pwa-state.js',
     './atmosphere.js?v=34',
