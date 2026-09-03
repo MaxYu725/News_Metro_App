@@ -1,1 +1,62 @@
-placeholder
+/* v57 controlled restoration: Reader chrome entrance cue only.
+   The full Reader surface and article content still paint immediately in final
+   geometry. Only the small toolbar receives a short local settle animation,
+   avoiding the full-screen opacity/transform path that previously caused
+   Android/WebView compositor flicker. */
+
+@keyframes liquid-reader-toolbar-enter {
+    0% {
+        opacity: 0.78;
+        transform: translateY(-7px);
+    }
+    72% {
+        opacity: 1;
+        transform: translateY(1px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes liquid-reader-toolbar-glint {
+    0% {
+        opacity: 0;
+        transform: translate3d(-38%, 0, 0) scaleX(0.45);
+    }
+    35% {
+        opacity: 0.42;
+    }
+    100% {
+        opacity: 0;
+        transform: translate3d(42%, 0, 0) scaleX(1);
+    }
+}
+
+.reader-overlay.open .reader-toolbar {
+    position: relative;
+    animation: liquid-reader-toolbar-enter 230ms cubic-bezier(0.18, 0.88, 0.26, 1.05) both;
+    will-change: auto;
+}
+
+.reader-overlay.open .reader-toolbar::after {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    bottom: -1px;
+    height: 1px;
+    content: "";
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.55), transparent);
+    transform-origin: center;
+    animation: liquid-reader-toolbar-glint 260ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reader-overlay.open .reader-toolbar,
+    .reader-overlay.open .reader-toolbar::after {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+}
