@@ -1,11 +1,10 @@
 @import url('./liquid-nav-indicator.css?v=53');
-@import url('./liquid-reader-cue.css?v=57');
+@import url('./liquid-reader-cue.css?v=58');
 
-/* v57 controlled motion restoration.
+/* v58 controlled motion restoration.
    Small-control press feedback remains accepted from v51, Bottom Nav from v53,
-   category island from v54, and Reader chrome entrance cue from v57. Feed-card
-   transform feedback remains disabled. Full Reader/page/card transitions remain
-   disabled. */
+   category island from v54, and Reader chrome cue is now explicitly post-paint.
+   Feed-card transforms and full Reader/page/card transitions remain disabled. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform

@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v57-reader-toolbar-cue';
+const SHELL_CACHE = 'metro-news-shell-v58-reader-postpaint-cue';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -16,7 +16,7 @@ const SHELL_URLS = [
     './liquid-press-feedback.css?v=49',
     './liquid-nav-indicator.css?v=53',
     './liquid-category-indicator.css?v=54',
-    './liquid-reader-cue.css?v=57',
+    './liquid-reader-cue.css?v=58',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
@@ -24,6 +24,7 @@ const SHELL_URLS = [
     './reader-image-stability.js',
     './liquid-nav-indicator.js?v=53',
     './liquid-category-indicator.js?v=54',
+    './liquid-reader-cue.js?v=58',
     './data-state-ui.js',
     './pwa-state.js',
     './atmosphere.js?v=34',
