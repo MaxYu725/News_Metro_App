@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v54-category-indicator';
+const SHELL_CACHE = 'metro-news-shell-v55-card-press-feedback';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -16,6 +16,7 @@ const SHELL_URLS = [
     './liquid-press-feedback.css?v=49',
     './liquid-nav-indicator.css?v=53',
     './liquid-category-indicator.css?v=54',
+    './liquid-card-feedback.css?v=55',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
@@ -23,6 +24,7 @@ const SHELL_URLS = [
     './reader-image-stability.js',
     './liquid-nav-indicator.js?v=53',
     './liquid-category-indicator.js?v=54',
+    './liquid-card-feedback.js?v=55',
     './data-state-ui.js',
     './pwa-state.js',
     './atmosphere.js?v=34',
