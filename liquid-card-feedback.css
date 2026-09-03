@@ -1,0 +1,22 @@
+/* v55 controlled restoration: feed-card press micro-motion only.
+   Cards remain fully painted and static at rest. Only an actively pressed card
+   gets a small local scale; no opacity/reveal/stagger animation is restored. */
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card {
+    transform-origin: center !important;
+    transition: transform 180ms cubic-bezier(0.18, 1.24, 0.32, 1) !important;
+    will-change: auto !important;
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card.liquid-card-press-active {
+    transform: scale(0.985) !important;
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card,
+    .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card.liquid-card-press-active {
+        transform: none !important;
+        transition: none !important;
+    }
+}
