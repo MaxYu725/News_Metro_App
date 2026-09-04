@@ -4,10 +4,11 @@
 @import url('./liquid-static-polish.css?v=60');
 @import url('./liquid-top-island-unified.css?v=62');
 @import url('./liquid-settings-hierarchy.css?v=63');
+@import url('./liquid-search-hierarchy.css?v=64');
 
-/* v63 keeps the accepted v59 motion baseline unchanged. v60 static polish and
-   v62 unified top-island geometry remain intact; only Settings hierarchy is
-   refined through a final static-only layer. */
+/* v64 keeps the accepted v59 motion baseline unchanged. v60 static polish,
+   v62 top-island geometry and v63 Settings hierarchy remain intact; only Search
+   hierarchy is refined through a final static-only layer. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform
