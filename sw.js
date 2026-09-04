@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v66-gallery-hierarchy';
+const SHELL_CACHE = 'metro-news-shell-v68-dead-layer-cleanup-c1';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
