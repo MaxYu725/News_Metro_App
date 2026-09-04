@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v62-top-island-unified';
+const SHELL_CACHE = 'metro-news-shell-v63-settings-hierarchy';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -20,6 +20,7 @@ const SHELL_URLS = [
     './liquid-reader-tap.css?v=59',
     './liquid-static-polish.css?v=60',
     './liquid-top-island-unified.css?v=62',
+    './liquid-settings-hierarchy.css?v=63',
     './app.js',
     './feed-ui.js',
     './search-ui.js',

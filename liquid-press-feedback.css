@@ -3,9 +3,11 @@
 @import url('./liquid-reader-tap.css?v=59');
 @import url('./liquid-static-polish.css?v=60');
 @import url('./liquid-top-island-unified.css?v=62');
+@import url('./liquid-settings-hierarchy.css?v=63');
 
-/* v62 keeps the accepted v59 motion baseline unchanged. The v60 static polish
-   remains intact; only top-island geometry and first-content spacing are unified. */
+/* v63 keeps the accepted v59 motion baseline unchanged. v60 static polish and
+   v62 unified top-island geometry remain intact; only Settings hierarchy is
+   refined through a final static-only layer. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform
