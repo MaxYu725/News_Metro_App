@@ -78,20 +78,57 @@ if (liquidRuntime.includes('MutationObserver')) {
   fail('MutationObserver must not return to the accepted Liquid Glass runtime');
 }
 
-const pressCss = read('liquid-press-feedback.css');
-for (const required of [
+const acceptedLayerManifest = read('liquid-accepted-layers.css');
+const acceptedLayerImports = [
+  "@import url('./liquid-category-indicator.css?v=54');",
   "@import url('./liquid-nav-indicator.css?v=53');",
   "@import url('./liquid-reader-cue.css?v=58');",
   "@import url('./liquid-reader-tap.css?v=59');",
+  "@import url('./liquid-static-polish.css?v=60');",
   "@import url('./liquid-top-island-unified.css?v=62');",
   "@import url('./liquid-settings-hierarchy.css?v=63');",
   "@import url('./liquid-search-hierarchy.css?v=64');",
   "@import url('./liquid-bookmarks-hierarchy.css?v=65');",
   "@import url('./liquid-gallery-hierarchy.css?v=66');",
-]) {
-  if (!pressCss.includes(required)) {
-    fail(`accepted CSS layer missing: ${required}`);
+];
+
+let previousLayerIndex = -1;
+for (const required of acceptedLayerImports) {
+  const layerIndex = acceptedLayerManifest.indexOf(required);
+  if (layerIndex === -1) {
+    fail(`accepted CSS layer missing from manifest: ${required}`);
   }
+  if (layerIndex <= previousLayerIndex) {
+    fail(`accepted CSS layer order changed around: ${required}`);
+  }
+  previousLayerIndex = layerIndex;
+}
+
+const pressCss = read('liquid-press-feedback.css');
+if (pressCss.includes('@import')) {
+  fail('liquid-press-feedback.css must stay import-free; use liquid-accepted-layers.css');
+}
+
+const navIndicatorCss = read('liquid-nav-indicator.css');
+if (navIndicatorCss.includes('@import')) {
+  fail('liquid-nav-indicator.css must stay import-free; category layer belongs in the manifest');
+}
+
+const indexHtml = read('index.html');
+const manifestLink = './liquid-accepted-layers.css?v=70';
+const pressLink = './liquid-press-feedback.css?v=49';
+const manifestLinkIndex = indexHtml.indexOf(manifestLink);
+const pressLinkIndex = indexHtml.indexOf(pressLink);
+if (manifestLinkIndex === -1 || pressLinkIndex === -1 || manifestLinkIndex >= pressLinkIndex) {
+  fail('index.html must load the accepted layer manifest before press feedback');
+}
+
+const serviceWorker = read('sw.js');
+if (!serviceWorker.includes("metro-news-shell-v70-layer-manifest")) {
+  fail('service worker cache version is not v70 layer manifest');
+}
+if (!serviceWorker.includes("'./liquid-accepted-layers.css?v=70'")) {
+  fail('service worker does not precache the accepted layer manifest');
 }
 
 for (const required of [

@@ -1,16 +1,7 @@
-@import url('./liquid-nav-indicator.css?v=53');
-@import url('./liquid-reader-cue.css?v=58');
-@import url('./liquid-reader-tap.css?v=59');
-@import url('./liquid-static-polish.css?v=60');
-@import url('./liquid-top-island-unified.css?v=62');
-@import url('./liquid-settings-hierarchy.css?v=63');
-@import url('./liquid-search-hierarchy.css?v=64');
-@import url('./liquid-bookmarks-hierarchy.css?v=65');
-@import url('./liquid-gallery-hierarchy.css?v=66');
-
-/* v66 keeps the accepted v59 motion baseline unchanged. v60 static polish,
-   v62 top-island geometry, v63 Settings, v64 Search and v65 Bookmarks hierarchy
-   remain intact; only Gallery hierarchy is refined through a static-only layer. */
+/* Accepted local-control press feedback.
+   The v53-v66 indicator/Reader/static layer chain is declared separately in
+   liquid-accepted-layers.css. This sheet stays focused on control compression
+   and is linked after that manifest so its transform timing remains final. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform
