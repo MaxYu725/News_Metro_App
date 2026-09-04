@@ -1,1 +1,1 @@
-RDR1.1 production promotion: follow the verified HK01 article API response and fall back to cleaned live D1 content when the publisher subrequest is unavailable.
+v67 gallery API hotfix: route Pixabay requests through a Cloudflare-safe entrypoint using redirect follow with final-host validation, bounded timeout, JSON validation, and regression coverage.
