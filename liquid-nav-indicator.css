@@ -1,5 +1,3 @@
-@import url('./liquid-category-indicator.css?v=54');
-
 /* v53 controlled restoration: bottom-nav selection indicator only.
    Mobile bottom navigation has four equal flex items, so the indicator can move
    by a precomputed percentage shift without measuring DOM geometry. */
