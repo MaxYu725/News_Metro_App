@@ -1,5 +1,7 @@
-/* Liquid Glass — ColorOS-inspired material and motion layer.
-   Loaded last so it can refine the existing Metro shell without changing data flows. */
+/* Liquid Glass — ColorOS-inspired material layer.
+   Accepted motion lives in the dedicated v51-v59 control/indicator/Reader files;
+   this base sheet now keeps material and layout only for the previously retired
+   full-page, feed-card reveal and Reader-shell motion paths. */
 :root {
     --bottom-nav-height: 72px;
     --liquid-glass: rgba(16, 22, 37, 0.58);
@@ -214,8 +216,7 @@ body {
     transform: scale(1.025);
 }
 
-.liquid-glass .bottom-nav-btn:active,
-.liquid-glass .bottom-nav-btn.is-liquid-pressed {
+.liquid-glass .bottom-nav-btn:active {
     background: transparent;
     transform: scale(0.94);
 }
@@ -287,16 +288,6 @@ body {
         0 13px 34px rgba(0, 0, 0, 0.28);
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
-    transform: none;
-    transition: transform 380ms var(--liquid-spring), border-radius 380ms var(--liquid-ease), border-color 220ms ease, box-shadow 260ms ease, background 260ms ease;
-}
-
-/* The base theme staggers each tile from opacity: 0. Liquid Glass already
-   animates the containing page, so retaining that second fade exposed empty
-   glass shells during list replacement on Android/WebView. */
-.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile {
-    opacity: 1;
-    animation: none;
 }
 
 .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::before {
@@ -338,20 +329,13 @@ body {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 18px 46px rgba(0, 0, 0, 0.34);
 }
 
-.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:active,
-.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card.is-liquid-pressed {
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:active {
     border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.25) !important;
     border-radius: 29px;
     background:
         linear-gradient(145deg, rgba(255, 255, 255, 0.13), transparent 34%),
         linear-gradient(145deg, rgba(23, 31, 50, 0.97), rgba(10, 16, 29, 0.93));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 6px 20px rgba(0, 0, 0, 0.24);
-    transform: scale(0.985) !important;
-}
-
-.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.liquid-reveal {
-    animation: liquid-card-settle 300ms var(--liquid-ease) both;
-    animation-delay: var(--liquid-reveal-delay, 0ms);
 }
 
 /* Search, settings and secondary surfaces */
@@ -438,26 +422,10 @@ body {
     min-height: 66px;
 }
 
-.liquid-glass .nav-link.is-liquid-pressed,
-.liquid-glass .search-chip.is-liquid-pressed,
-.liquid-glass .search-follow-btn.is-liquid-pressed,
-.liquid-glass .color-btn.is-liquid-pressed,
-.liquid-glass #back-to-top.is-liquid-pressed,
-.liquid-glass #lightbox-close.is-liquid-pressed,
-.liquid-glass #lightbox-quality.is-liquid-pressed {
-    transform: scale(0.93);
-}
-
 .liquid-glass .metro-btn:active,
-.liquid-glass .metro-btn.is-liquid-pressed,
 .liquid-glass .density-btn:active,
-.liquid-glass .density-btn.is-liquid-pressed,
 .liquid-glass .settings-link-row:active,
-.liquid-glass .settings-link-row.is-liquid-pressed,
-.liquid-glass .search-submit:active,
-.liquid-glass .search-submit.is-liquid-pressed,
-.liquid-glass .subview-back.is-liquid-pressed,
-.liquid-glass .page-header-back.is-liquid-pressed {
+.liquid-glass .search-submit:active {
     transform: scale(0.955);
 }
 
@@ -469,22 +437,11 @@ body {
     transition: transform 420ms var(--liquid-ease), filter 220ms ease;
 }
 
-.liquid-glass #gallery-view:not(.hidden) ~ #news-grid .metro-tile.liquid-reveal {
-    animation: liquid-card-settle 300ms var(--liquid-ease) both;
-    animation-delay: var(--liquid-reveal-delay, 0ms);
-}
-
 /* Reader stays opaque for compositor stability; only its chrome becomes glass. */
 .liquid-glass .reader-shell {
     background:
         radial-gradient(circle at 86% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10), transparent 34%),
         linear-gradient(180deg, #0b101a 0%, #070a11 48%, #080b12 100%);
-    transform: translateY(8px) scale(0.997);
-}
-
-.liquid-glass .reader-overlay.open .reader-shell {
-    transform: translateY(0) scale(1);
-    transition: opacity 180ms ease-out, transform 260ms var(--liquid-ease);
 }
 
 .liquid-glass .reader-toolbar {
@@ -511,11 +468,8 @@ body {
 }
 
 .liquid-glass .reader-close:active,
-.liquid-glass .reader-close.is-liquid-pressed,
-.liquid-glass .reader-toolbar-btn:active,
-.liquid-glass .reader-toolbar-btn.is-liquid-pressed {
+.liquid-glass .reader-toolbar-btn:active {
     background: rgba(255, 255, 255, 0.085);
-    transform: scale(0.91);
 }
 
 .liquid-glass .reader-feedback {
@@ -599,40 +553,6 @@ body {
     color: rgba(255, 255, 255, 0.62);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
-}
-
-/* Direction-aware page motion. The old page is replaced synchronously by app.js;
-   this gives the incoming content a short, low-amplitude fluid settle. */
-.liquid-glass .app-main.liquid-page-enter {
-    animation: liquid-page-forward 330ms var(--liquid-ease) both;
-}
-
-.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter {
-    animation-name: liquid-page-backward;
-}
-
-.liquid-glass .page-heading-copy.liquid-heading-enter {
-    animation: liquid-heading-in 300ms var(--liquid-ease) both;
-}
-
-@keyframes liquid-page-forward {
-    from { opacity: 0.92; transform: translate3d(12px, 0, 0) scale(0.998); }
-    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-}
-
-@keyframes liquid-page-backward {
-    from { opacity: 0.92; transform: translate3d(-12px, 0, 0) scale(0.998); }
-    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-}
-
-@keyframes liquid-heading-in {
-    from { opacity: 0.84; transform: translateY(3px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes liquid-card-settle {
-    from { opacity: 0.9; transform: translateY(5px) scale(0.997); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -740,11 +660,5 @@ body {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
-    }
-
-    .liquid-glass .app-main.liquid-page-enter,
-    .liquid-glass .page-heading-copy.liquid-heading-enter,
-    .liquid-glass #news-grid > .metro-tile.liquid-reveal {
-        animation: none !important;
     }
 }
