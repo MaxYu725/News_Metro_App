@@ -6,10 +6,11 @@
 @import url('./liquid-settings-hierarchy.css?v=63');
 @import url('./liquid-search-hierarchy.css?v=64');
 @import url('./liquid-bookmarks-hierarchy.css?v=65');
+@import url('./liquid-gallery-hierarchy.css?v=66');
 
-/* v65 keeps the accepted v59 motion baseline unchanged. v60 static polish,
-   v62 top-island geometry, v63 Settings and v64 Search hierarchy remain intact;
-   only Bookmarks hierarchy is refined through a final static-only layer. */
+/* v66 keeps the accepted v59 motion baseline unchanged. v60 static polish,
+   v62 top-island geometry, v63 Settings, v64 Search and v65 Bookmarks hierarchy
+   remain intact; only Gallery hierarchy is refined through a static-only layer. */
 
 /* Stable base state: spring back from the compressed transform. This file is
    loaded after compositor-stability.css, so it narrowly re-enables transform
