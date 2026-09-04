@@ -10,11 +10,7 @@
     --liquid-polish-muted: rgba(255, 255, 255, 0.42);
 }
 
-/* Header hierarchy: keep the glass island unchanged, improve small-text legibility. */
-.liquid-glass body:not(.reader-open) .page-subtitle {
-    color: rgba(255, 255, 255, 0.53);
-}
-
+/* Header hierarchy: keep the glass island unchanged, improve category legibility. */
 .liquid-glass body:not(.reader-open) #nav-menu .nav-link {
     color: rgba(255, 255, 255, 0.55);
 }
@@ -56,9 +52,8 @@
     color: rgba(255, 255, 255, 0.34);
 }
 
-.liquid-glass body:not(.reader-open) #settings-view #category-visibility-list > label,
-.liquid-glass body:not(.reader-open) #settings-view #source-visibility-list > *,
-.liquid-glass body:not(.reader-open) #settings-view #category-manager-list > *,
+/* Settings row polish that is still owned by v60. Category/source/tracking-row
+   borders were superseded by the accepted v63 hierarchy layer. */
 .liquid-glass body:not(.reader-open) #settings-view .settings-link-row {
     border-color: rgba(255, 255, 255, 0.08) !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
