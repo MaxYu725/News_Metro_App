@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v65-bookmarks-hierarchy';
+const SHELL_CACHE = 'metro-news-shell-v66-gallery-hierarchy';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -23,6 +23,7 @@ const SHELL_URLS = [
     './liquid-settings-hierarchy.css?v=63',
     './liquid-search-hierarchy.css?v=64',
     './liquid-bookmarks-hierarchy.css?v=65',
+    './liquid-gallery-hierarchy.css?v=66',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
