@@ -19,5 +19,7 @@ jobs:
             echo "Checking $file"
             node --check "$file"
           done
+      - name: Validate Liquid Glass stability contract
+        run: node .github/scripts/validate-liquid-motion-contract.mjs
       - name: Validate archive search frontend contract
         run: node .github/scripts/test-archive-search-ui.mjs

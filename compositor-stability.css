@@ -1,12 +1,10 @@
-/* Zero-based flicker baseline — v46.
-   One variable is isolated here: Liquid Glass motion/compositor orchestration.
-   Material stays enabled; motion, layer promotion hints and animated selection
-   islands are disabled. No delayed overlay hand-off from v45 remains. */
+/* Stable compositor floor — v68 cleanup C1.
+   This file preserves the accepted zero-based flicker fix while removing only
+   selectors for legacy motion classes that are no longer produced by runtime JS.
+   Material stays enabled; full-page/feed-card/Reader-shell motion stays off. */
 
-/* Full application and Reader surfaces must paint in their final geometry. */
+/* Full application and Reader surfaces paint in final geometry. */
 .liquid-glass .app-main,
-.liquid-glass .app-main.liquid-page-enter,
-.liquid-glass[data-liquid-direction="backward"] .app-main.liquid-page-enter,
 .liquid-glass .page-heading-copy,
 .reader-shell,
 .reader-overlay.open .reader-shell,
@@ -19,9 +17,7 @@
     will-change: auto !important;
 }
 
-/* Restore immediate Reader visibility semantics. v45 intentionally delayed
-   visibility after close; the recording showed that hand-off increased the
-   perceived flash, so the baseline removes it completely. */
+/* Reader visibility remains immediate. */
 .reader-overlay {
     pointer-events: none !important;
     transition: none !important;
@@ -32,9 +28,8 @@
     transition: none !important;
 }
 
-/* Remove the morphing shared selection layer. Active items keep a static glass
-   island, preserving hierarchy while avoiding a continuously transformed GPU
-   surface during section changes. */
+/* Shared selection layers are disabled by default here. The accepted v53/v54
+   files selectively re-enable the mobile Bottom Nav/category indicators. */
 .liquid-glass .liquid-nav-indicator,
 .liquid-glass body:not(.reader-open) #nav-menu::before {
     display: none !important;
@@ -43,7 +38,6 @@
 .liquid-glass .bottom-nav-btn,
 .liquid-glass .bottom-nav-btn.active,
 .liquid-glass .bottom-nav-btn:active,
-.liquid-glass .bottom-nav-btn.is-liquid-pressed,
 .liquid-glass .bottom-nav-icon,
 .liquid-glass .bottom-nav-btn.active .bottom-nav-icon,
 .liquid-glass body:not(.reader-open) #nav-menu .nav-link,
@@ -51,9 +45,7 @@
 .liquid-glass .reader-close,
 .liquid-glass .reader-toolbar-btn,
 .liquid-glass .reader-close:active,
-.liquid-glass .reader-toolbar-btn:active,
-.liquid-glass .reader-close.is-liquid-pressed,
-.liquid-glass .reader-toolbar-btn.is-liquid-pressed {
+.liquid-glass .reader-toolbar-btn:active {
     transform: none !important;
     animation: none !important;
     transition: none !important;
@@ -71,10 +63,9 @@
     background: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.16) !important;
 }
 
-/* The feed must not create per-card compositing layers in the baseline. */
+/* Feed content must not create per-card compositing layers. */
 .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile,
 .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card,
-.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.liquid-reveal,
 .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile .tile-preview {
     opacity: 1 !important;
     transform: none !important;
@@ -84,15 +75,14 @@
     will-change: auto !important;
 }
 
-/* Loading placeholders stay visible but static, eliminating another opacity
-   animation while measuring the section-switch path. */
+/* Loading placeholders stay visible but static. */
 .liquid-glass .skeleton-pulse {
     animation: none !important;
     opacity: 0.24 !important;
 }
 
-/* Disable press scaling on the remaining mobile controls during this isolation
-   run. Their color/background state still changes normally. */
+/* Small-control motion is disabled at the floor on mobile. The accepted v51
+   press-feedback layer loaded later selectively restores only transform timing. */
 @media (max-width: 899px) {
     .liquid-glass .metro-btn,
     .liquid-glass .density-btn,
