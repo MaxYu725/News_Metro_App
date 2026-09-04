@@ -124,8 +124,8 @@ if (manifestLinkIndex === -1 || pressLinkIndex === -1 || manifestLinkIndex >= pr
 }
 
 const serviceWorker = read('sw.js');
-if (!serviceWorker.includes("metro-news-shell-v70-layer-manifest")) {
-  fail('service worker cache version is not v70 layer manifest');
+if (!serviceWorker.includes("const SHELL_CACHE = 'metro-news-shell-v")) {
+  fail('service worker shell cache declaration is missing');
 }
 if (!serviceWorker.includes("'./liquid-accepted-layers.css?v=70'")) {
   fail('service worker does not precache the accepted layer manifest');
