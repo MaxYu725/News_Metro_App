@@ -1,1 +1,77 @@
-/* placeholder */
+/* v65 — Bookmarks hierarchy polish only.
+   Static layout/material adjustments: no new animation, transform, opacity choreography,
+   observer, forced reflow, will-change or compositor promotion. */
+
+/* The shared top island already carries the page title and bookmark count.
+   Keep the in-grid section heading in the DOM so shell-ui can read the count,
+   but remove the duplicated visual heading from the content flow. */
+.liquid-glass body:not(.reader-open)
+#app-bg-container[data-section="bookmarks"] ~ .app-main
+#news-grid > .section-heading {
+    display: none !important;
+}
+
+/* With the duplicate heading gone, let the first saved card begin at the same
+   optical distance used by the other top-level tabs. */
+.liquid-glass body:not(.reader-open)
+#app-bg-container[data-section="bookmarks"] ~ .app-main
+#news-grid > .metro-tile.feed-card:first-of-type {
+    margin-top: 0 !important;
+}
+
+/* Bookmark cards should read as the same editorial cards used in News/Search;
+   the page identity and saved state are already communicated by the top island
+   and star control, so avoid adding another bookmarks-only surface treatment. */
+.liquid-glass body:not(.reader-open)
+#app-bg-container[data-section="bookmarks"] ~ .app-main
+#news-grid > .metro-tile.feed-card {
+    border-color: var(--liquid-polish-border, rgba(255, 255, 255, 0.11)) !important;
+}
+
+/* Empty bookmarks: remove the old secondary Glass card. Match the lighter v64
+   Search landing state so an empty tab feels intentional rather than boxed-in. */
+.liquid-glass body:not(.reader-open)
+#app-bg-container[data-section="bookmarks"] ~ .app-main
+#news-grid > .px-5.py-10.text-center {
+    width: min(calc(100% - 36px), 460px) !important;
+    margin: clamp(54px, 10vh, 108px) auto 0 !important;
+    padding: 18px 16px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.liquid-glass body:not(.reader-open)
+#app-bg-container[data-section="bookmarks"] ~ .app-main
+#news-grid > .px-5.py-10.text-center::before {
+    content: '☆';
+    display: block;
+    margin-bottom: 13px;
+    color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.82);
+    font-size: 2rem;
+    font-weight: 300;
+    line-height: 1;
+}
+
+.liquid-glass body:not(.reader-open)
+#app-bg-container[data-section="bookmarks"] ~ .app-main
+#news-grid > .px-5.py-10.text-center p {
+    color: rgba(255, 255, 255, 0.48) !important;
+    font-size: 0.82rem !important;
+    letter-spacing: 0.03em !important;
+}
+
+.liquid-glass body:not(.reader-open)
+#app-bg-container[data-section="bookmarks"] ~ .app-main
+#news-grid > .px-5.py-10.text-center::after {
+    content: '在新聞或 Reader 點選星號後會顯示在這裡';
+    display: block;
+    margin-top: 8px;
+    color: rgba(255, 255, 255, 0.30);
+    font-size: 0.70rem;
+    line-height: 1.55;
+    letter-spacing: 0.025em;
+}
