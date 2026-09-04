@@ -1,0 +1,127 @@
+/* v63 — Settings hierarchy polish only.
+   Static layout/material adjustments: no new animation, transform, opacity choreography,
+   observer, will-change or compositor promotion. */
+
+:root {
+    --settings-group-gap: 12px;
+    --settings-row-radius: 18px;
+}
+
+/* Reduce the vertical heaviness between large Settings groups. */
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > * + * {
+    margin-top: var(--settings-group-gap) !important;
+}
+
+/* Keep each outer group as the primary glass surface, but make it slightly calmer. */
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) {
+    padding: 14px 13px !important;
+    border-color: rgba(255, 255, 255, 0.075) !important;
+    box-shadow:
+        inset 1px 0 0 rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10),
+        inset 0 1px 0 rgba(255, 255, 255, 0.024),
+        0 10px 24px rgba(0, 0, 0, 0.16) !important;
+}
+
+/* One section-heading treatment throughout Settings. */
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) > p:first-child,
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) > .flex:first-child p:first-child {
+    color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.86) !important;
+    font-size: 0.78rem !important;
+    font-weight: 650 !important;
+    letter-spacing: 0.11em !important;
+}
+
+/* Category choices: keep the two-column scan pattern but demote each cell from
+   “card” to a soft control row. */
+.liquid-glass body:not(.reader-open) #settings-view #category-visibility-list {
+    gap: 7px !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view #category-visibility-list > label {
+    min-height: 54px;
+    padding: 8px 11px !important;
+    border-color: rgba(255, 255, 255, 0.032) !important;
+    border-radius: var(--settings-row-radius) !important;
+    background: rgba(255, 255, 255, 0.018) !important;
+    box-shadow: none !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view #category-visibility-list > label > span {
+    font-size: 0.94rem !important;
+    color: rgba(255, 255, 255, 0.84) !important;
+}
+
+/* Source and tracking rows share the same quieter tertiary-surface language. */
+.liquid-glass body:not(.reader-open) #settings-view #source-visibility-list,
+.liquid-glass body:not(.reader-open) #settings-view #category-manager-list {
+    gap: 7px !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view #source-visibility-list > *,
+.liquid-glass body:not(.reader-open) #settings-view #category-manager-list > * {
+    margin-bottom: 0 !important;
+    padding: 10px 12px !important;
+    border-color: rgba(255, 255, 255, 0.032) !important;
+    border-radius: var(--settings-row-radius) !important;
+    background: rgba(255, 255, 255, 0.018) !important;
+    box-shadow: none !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view #source-visibility-list > * span:first-child,
+.liquid-glass body:not(.reader-open) #settings-view #category-manager-list > * span:first-child {
+    color: rgba(255, 255, 255, 0.88) !important;
+}
+
+/* Remove buttons should read as secondary destructive actions, not boxed fields. */
+.liquid-glass body:not(.reader-open) #settings-view #category-manager-list button {
+    min-width: 64px;
+    padding-inline: 14px !important;
+    border-color: rgba(248, 113, 113, 0.20) !important;
+    border-radius: 999px !important;
+    background: rgba(248, 113, 113, 0.055) !important;
+    color: rgba(254, 202, 202, 0.82) !important;
+}
+
+/* Tracking input/action becomes one compact, coherent control row. */
+.liquid-glass body:not(.reader-open) #settings-view #new-cat-input {
+    min-height: 46px !important;
+    border-color: rgba(255, 255, 255, 0.09) !important;
+    border-radius: 23px !important;
+    background: rgba(5, 9, 17, 0.24) !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view #btn-add-cat,
+.liquid-glass body:not(.reader-open) #settings-view #btn-apply-sources {
+    border-radius: 22px !important;
+}
+
+/* The disabled Apply action should remain visible without competing with content. */
+.liquid-glass body:not(.reader-open) #settings-view #btn-apply-sources:disabled {
+    border-color: rgba(255, 255, 255, 0.055) !important;
+    background: rgba(255, 255, 255, 0.018) !important;
+    color: rgba(255, 255, 255, 0.34) !important;
+}
+
+/* Other/theme/font controls use the same rounded language as the rest of Settings. */
+.liquid-glass body:not(.reader-open) #settings-view .settings-link-row {
+    border-radius: var(--settings-row-radius) !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view .color-btn {
+    border-radius: 50% !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 5px 14px rgba(0, 0, 0, 0.18) !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view .settings-font-controls .metro-btn,
+.liquid-glass body:not(.reader-open) #settings-view #font-size-display {
+    border-radius: 18px !important;
+}
+
+/* Status/help copy should sit quietly under the control it describes. */
+.liquid-glass body:not(.reader-open) #settings-view [data-tracking-help],
+.liquid-glass body:not(.reader-open) #settings-view #source-visibility-status,
+.liquid-glass body:not(.reader-open) #settings-view [data-category-status],
+.liquid-glass body:not(.reader-open) #settings-view [data-tracking-status] {
+    color: rgba(255, 255, 255, 0.38) !important;
+    line-height: 1.45;
+}
