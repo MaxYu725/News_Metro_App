@@ -41,6 +41,25 @@ for (const token of legacyRuntimeTokens) {
   }
 }
 
+const liquidBaseCss = read('liquid-glass.css');
+for (const token of legacyRuntimeTokens) {
+  if (liquidBaseCss.includes(token)) {
+    fail(`liquid-glass.css still carries retired runtime selector ${token}`);
+  }
+}
+
+for (const retiredMotion of [
+  'liquid-page-forward',
+  'liquid-page-backward',
+  'liquid-heading-in',
+  'liquid-card-settle',
+  'translateY(8px) scale(0.997)',
+]) {
+  if (liquidBaseCss.includes(retiredMotion)) {
+    fail(`liquid-glass.css still carries retired motion primitive ${retiredMotion}`);
+  }
+}
+
 const liquidRuntime = read('liquid-glass.js');
 for (const required of [
   "import './reader-image-stability.js';",
