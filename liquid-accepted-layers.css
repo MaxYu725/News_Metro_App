@@ -1,0 +1,16 @@
+@import url('./liquid-category-indicator.css?v=54');
+@import url('./liquid-nav-indicator.css?v=53');
+@import url('./liquid-reader-cue.css?v=58');
+@import url('./liquid-reader-tap.css?v=59');
+@import url('./liquid-static-polish.css?v=60');
+@import url('./liquid-top-island-unified.css?v=62');
+@import url('./liquid-settings-hierarchy.css?v=63');
+@import url('./liquid-search-hierarchy.css?v=64');
+@import url('./liquid-bookmarks-hierarchy.css?v=65');
+@import url('./liquid-gallery-hierarchy.css?v=66');
+
+/* Accepted Liquid Glass layer manifest.
+   Order is deliberate: category geometry is established before Bottom Nav,
+   Reader motion follows the indicator layers, and the static v60-v66 polish
+   remains later in the cascade. Press feedback is loaded after this manifest
+   by index.html so its transform timing remains the final control override. */
