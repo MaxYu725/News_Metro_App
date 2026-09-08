@@ -23,3 +23,5 @@ jobs:
         run: node .github/scripts/validate-liquid-motion-contract.mjs
       - name: Validate archive search frontend contract
         run: node .github/scripts/test-archive-search-ui.mjs
+      - name: Validate feed cursor pagination contract
+        run: node .github/scripts/test-feed-pagination-ui.mjs
