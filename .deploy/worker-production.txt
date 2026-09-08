@@ -1,1 +1,1 @@
-v67 gallery API hotfix: route Pixabay requests through a Cloudflare-safe entrypoint using redirect follow with final-host validation, bounded timeout, JSON validation, and regression coverage.
+v72 feed pagination fix: deploy cursor/keyset pagination for /api/news, deterministic pubDate+id ordering, nextCursor responses, and frontend identity dedupe to prevent repeated news blocks during live ingestion.
