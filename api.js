@@ -11,6 +11,7 @@ const SOURCE_STATS_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/sou
 export const DATA_STATE_EVENT = 'metro:data-state';
 
 const trackedTopicCursorPages = new Map();
+const newsCursorStates = new Map();
 
 function selectedSourceIds() {
     return LocalDB.getVisibleSources().join(',');
@@ -18,6 +19,32 @@ function selectedSourceIds() {
 
 function sourceCacheKey(query = '') {
     return `${String(query || '')}::sources=${selectedSourceIds()}`;
+}
+
+function newsPagingKey(categoryId) {
+    return `${String(categoryId || 'latest')}::sources=${selectedSourceIds()}`;
+}
+
+function articleIdentity(item) {
+    const direct = String(item?.id || item?.link || '').trim();
+    if (direct) return direct;
+    const source = String(item?.source || '').trim();
+    const title = String(item?.title || '').trim();
+    const pubDate = String(item?.pubDate || '').trim();
+    return source || title || pubDate ? `${source}\u0000${title}\u0000${pubDate}` : '';
+}
+
+function newsPagingState(categoryId) {
+    const key = newsPagingKey(categoryId);
+    let state = newsCursorStates.get(key);
+    if (!state) {
+        state = {
+            pages: new Map([[0, '']]),
+            seen: new Set()
+        };
+        newsCursorStates.set(key, state);
+    }
+    return state;
 }
 
 function emitDataState(detail) {
@@ -54,6 +81,7 @@ function fallbackNewsResult(categoryId, page, searchQuery, error, append = false
             success: true,
             data: cached.data,
             hasMore: false,
+            nextCursor: '',
             stale: true,
             cachedAt: cached.savedAt,
             error: message
@@ -67,7 +95,7 @@ function fallbackNewsResult(categoryId, page, searchQuery, error, append = false
         query: searchQuery,
         append
     });
-    return { success: false, data: [], hasMore: false, error: message };
+    return { success: false, data: [], hasMore: false, nextCursor: '', error: message };
 }
 
 function searchCodePointLength(value) {
@@ -177,8 +205,23 @@ export async function fetchNewsData(categoryId, page, forceSync = false, searchQ
         return fetchTrackedTopicSearchData(searchQuery, page);
     }
 
+    const state = newsPagingState(categoryId);
+    if (page === 0) {
+        state.pages.clear();
+        state.pages.set(0, '');
+        state.seen.clear();
+    }
+
+    const cursor = state.pages.get(page);
     const sources = selectedSourceIds();
-    const url = `${API_BASE_URL}${categoryId}?page=${page}${forceSync ? '&sync=1' : ''}&sources=${encodeURIComponent(sources)}`;
+    const params = new URLSearchParams({
+        page: String(page),
+        sources
+    });
+    if (forceSync) params.set('sync', '1');
+    if (page > 0 && cursor) params.set('cursor', cursor);
+
+    const url = `${API_BASE_URL}${categoryId}?${params.toString()}`;
     const context = newsContext(categoryId);
 
     try {
@@ -202,11 +245,37 @@ export async function fetchNewsData(categoryId, page, forceSync = false, searchQ
 
         if (result.success) {
             const updatedAt = Date.now();
-            if (page === 0 && Array.isArray(result.data) && result.data.length > 0) {
-                saveCachedFeed(categoryId, sourceCacheKey(searchQuery), result.data, result.hasMore);
+            const rawData = Array.isArray(result.data) ? result.data : [];
+            const data = [];
+
+            for (const item of rawData) {
+                const key = articleIdentity(item);
+                if (key && state.seen.has(key)) continue;
+                if (key) state.seen.add(key);
+                data.push(item);
+            }
+
+            const nextCursor = String(result.nextCursor || '');
+            if (result.hasMore && nextCursor) {
+                state.pages.set(page + 1, nextCursor);
+            } else {
+                for (const knownPage of [...state.pages.keys()]) {
+                    if (knownPage > page) state.pages.delete(knownPage);
+                }
+            }
+
+            if (page === 0 && data.length > 0) {
+                saveCachedFeed(categoryId, sourceCacheKey(searchQuery), data, !!result.hasMore);
             }
             emitDataState({ context, status: 'ok', query: searchQuery, append: page > 0, updatedAt });
-            return { success: true, data: result.data || [], hasMore: !!result.hasMore, updatedAt };
+            return {
+                success: true,
+                data,
+                hasMore: !!result.hasMore,
+                nextCursor,
+                pagination: result.pagination || (nextCursor ? 'cursor' : 'legacy'),
+                updatedAt
+            };
         }
 
         return fallbackNewsResult(
