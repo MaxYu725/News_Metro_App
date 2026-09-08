@@ -5,10 +5,27 @@ import {
   isTrustedAppRequest,
   rateLimitKey,
 } from './security.js';
+import { decodeSearchCursor, encodeSearchCursor } from './search.js';
+import { isBastilleSource } from './sources/bastille.js';
+import { parseSourceFilter, sourceNamesForIds, sourceFilterSql } from './source-filter.js';
 
 const PIXABAY_API_URL = 'https://pixabay.com/api/';
 const PIXABAY_HOSTNAMES = new Set(['pixabay.com', 'www.pixabay.com']);
 const PIXABAY_TIMEOUT_MS = 10_000;
+const FEED_LIMIT = 20;
+const FEED_CATEGORIES = new Set([
+  'latest',
+  'local',
+  'global',
+  'ent',
+  'sports',
+  'china',
+  'hot',
+  'life',
+  'community',
+  'tech',
+  'video',
+]);
 
 function jsonResponse(request, payload, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(payload), {
@@ -145,6 +162,135 @@ async function fetchPixabayImages(request, env, url) {
   }
 }
 
+function parseStoredArticleMedia(rawValue) {
+  let images = [];
+  let media = [];
+  try {
+    const stored = rawValue ? JSON.parse(rawValue) : [];
+    const entries = Array.isArray(stored) ? stored : (Array.isArray(stored?.items) ? stored.items : []);
+    for (const entry of entries) {
+      const mediaUrl = typeof entry === 'string' ? entry : (entry?.url || entry?.src || '');
+      if (!mediaUrl || images.includes(mediaUrl)) continue;
+      images.push(mediaUrl);
+      media.push({
+        url: mediaUrl,
+        caption: typeof entry === 'string' ? '' : String(entry?.caption || entry?.alt || '').trim(),
+      });
+    }
+  } catch {
+    images = [];
+    media = [];
+  }
+  return { images, media };
+}
+
+function formatFeedRow(row) {
+  const { images, media } = parseStoredArticleMedia(row.images);
+  return {
+    ...row,
+    images,
+    media,
+    isFullContentLoaded: isBastilleSource(row.source),
+  };
+}
+
+async function fetchCursorFeed(request, env, ctx, url) {
+  if (request.method !== 'GET') return worker.fetch(request, env, ctx);
+
+  const category = url.pathname.split('/').pop();
+  if (!FEED_CATEGORIES.has(category)) return worker.fetch(request, env, ctx);
+
+  const page = Number.parseInt(url.searchParams.get('page') || '0', 10);
+  if (!Number.isInteger(page) || page < 0 || page > 500) {
+    return jsonResponse(request, { success: false, error: '新聞頁碼無效' }, 400);
+  }
+
+  const rawCursor = url.searchParams.get('cursor') || '';
+
+  // Keep backward compatibility for an older cached frontend that requests
+  // page > 0 without a cursor. v72 clients always use cursor/keyset paging.
+  if (page > 0 && !rawCursor) {
+    return worker.fetch(request, env, ctx);
+  }
+
+  let cursor;
+  try {
+    cursor = decodeSearchCursor(rawCursor);
+  } catch {
+    return jsonResponse(request, { success: false, error: '新聞游標無效' }, 400);
+  }
+
+  const sourceIds = parseSourceFilter(url.searchParams.get('sources'));
+  if (!sourceIds) return jsonResponse(request, { success: false, error: '新聞來源參數無效' }, 400);
+  const sourceNames = sourceNamesForIds(sourceIds);
+  const sourceFilter = sourceFilterSql('source', sourceNames);
+
+  // Preserve the legacy sync/empty-database behaviour before taking the first
+  // deterministic keyset snapshot. The legacy response itself is discarded.
+  if (page === 0 && !cursor) {
+    const legacyResponse = await worker.fetch(request, env, ctx);
+    if (!legacyResponse.ok) return legacyResponse;
+  }
+
+  const fetchLimit = FEED_LIMIT + 1;
+  const cursorDate = cursor?.pubDate || null;
+  const cursorId = cursor?.id || null;
+  let query;
+  let params;
+
+  if (category === 'latest') {
+    query = `SELECT * FROM articles
+      WHERE 1 = 1${sourceFilter.sql}
+        AND (? IS NULL OR pubDate < ? OR (pubDate = ? AND id < ?))
+      ORDER BY pubDate DESC, id DESC
+      LIMIT ?`;
+    params = [
+      ...sourceFilter.params,
+      cursorDate,
+      cursorDate,
+      cursorDate,
+      cursorId,
+      fetchLimit,
+    ];
+  } else {
+    query = `SELECT * FROM articles
+      WHERE category = ?${sourceFilter.sql}
+        AND (? IS NULL OR pubDate < ? OR (pubDate = ? AND id < ?))
+      ORDER BY pubDate DESC, id DESC
+      LIMIT ?`;
+    params = [
+      category,
+      ...sourceFilter.params,
+      cursorDate,
+      cursorDate,
+      cursorDate,
+      cursorId,
+      fetchLimit,
+    ];
+  }
+
+  try {
+    const { results } = await env.DB.prepare(query).bind(...params).all();
+    const rows = (Array.isArray(results) ? results : []).slice(0, FEED_LIMIT);
+    const hasMore = Array.isArray(results) && results.length > FEED_LIMIT;
+    const nextCursor = hasMore && rows.length > 0 ? encodeSearchCursor(rows.at(-1)) : '';
+
+    return jsonResponse(request, {
+      success: true,
+      count: rows.length,
+      page,
+      hasMore,
+      nextCursor,
+      pagination: 'cursor',
+      timestamp: new Date().toISOString(),
+      data: rows.map(formatFeedRow),
+    });
+  } catch (error) {
+    console.warn('feed-cursor-query-failed', { category, message: String(error?.message || error) });
+    return jsonResponse(request, { success: false, error: '存取資料庫時發生錯誤' }, 500);
+  }
+}
+
 export default {
   async scheduled(event, env, ctx) {
     return worker.scheduled(event, env, ctx);
@@ -161,6 +307,10 @@ export default {
         return new Response(null, { status: 204, headers: corsHeaders(request) });
       }
       return fetchPixabayImages(request, env, url);
+    }
+
+    if (url.pathname.startsWith('/api/news/')) {
+      return fetchCursorFeed(request, env, ctx, url);
     }
 
     return worker.fetch(request, env, ctx);

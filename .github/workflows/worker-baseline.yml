@@ -44,6 +44,7 @@ jobs:
 
       - name: Validate Worker JavaScript syntax
         run: |
+          node --check worker/src/entry.js
           node --check worker/src/index.js
           node --check worker/src/article-content.js
           node --check worker/src/security.js
@@ -54,6 +55,7 @@ jobs:
           node --check worker/src/archive-backfill.js
           node --check worker/scripts/archive-backfill.mjs
           node --check worker/test/archive-backfill.test.mjs
+          node --check worker/test/feed-cursor-pagination.test.mjs
           bash -n .github/scripts/validate-search-fts.sh
           bash -n .github/scripts/validate-adaptive-retention.sh
           bash -n .github/scripts/validate-archive-search.sh

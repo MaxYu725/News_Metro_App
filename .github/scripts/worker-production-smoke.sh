@@ -54,15 +54,32 @@ request 400 -G \
   "${WORKER_ORIGIN}/api/article-full"
 jq -e '.success == false' "$tmp_body" >/dev/null
 
-echo 'Smoke: latest news remains readable'
+echo 'Smoke: latest news remains readable with cursor metadata'
 request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/latest?page=0"
-jq -e '.success == true and (.data | type == "array") and (.data | length > 0)' "$tmp_body" >/dev/null
+jq -e '.success == true and .pagination == "cursor" and (.nextCursor | type == "string") and (.data | type == "array") and (.data | length > 0)' "$tmp_body" >/dev/null
 grep -Fqi "access-control-allow-origin: ${APP_ORIGIN}" "$tmp_headers"
 latest_id=$(jq -r '.data[0].id // .data[0].link // empty' "$tmp_body")
 latest_title=$(jq -r '.data[0].title // empty' "$tmp_body")
+latest_cursor=$(jq -r '.nextCursor // empty' "$tmp_body")
+page0_ids=$(jq -r '.data[] | (.id // .link // empty)' "$tmp_body" | sort -u)
 search_probe=$(printf '%s' "$latest_title" | python3 -c 'import sys; print("".join(list(sys.stdin.read())[:6]))')
-if [[ -z "$latest_id" || ${#search_probe} -lt 3 ]]; then
-  echo 'Unable to derive FTS smoke probe from latest article' >&2
+if [[ -z "$latest_id" || -z "$latest_cursor" || ${#search_probe} -lt 3 ]]; then
+  echo 'Unable to derive feed/search smoke probe from latest article' >&2
+  exit 1
+fi
+
+echo 'Smoke: cursor page 2 does not repeat page 1 articles'
+request 200 -G \
+  -H "Origin: ${APP_ORIGIN}" \
+  --data-urlencode 'page=1' \
+  --data-urlencode "cursor=${latest_cursor}" \
+  "${WORKER_ORIGIN}/api/news/latest"
+jq -e '.success == true and .pagination == "cursor" and (.data | type == "array")' "$tmp_body" >/dev/null
+page1_ids=$(jq -r '.data[] | (.id // .link // empty)' "$tmp_body" | sort -u)
+duplicates=$(comm -12 <(printf '%s\n' "$page0_ids" | sort -u) <(printf '%s\n' "$page1_ids" | sort -u))
+if [[ -n "$duplicates" ]]; then
+  echo 'Cursor pagination repeated article IDs across adjacent feed pages:' >&2
+  printf '%s\n' "$duplicates" >&2
   exit 1
 fi
 
@@ -101,10 +118,10 @@ if [[ "$status" != '200' ]]; then
   cat "$tmp_body" >&2 || true
   exit 1
 fi
-jq -e '.success == true and (.data | type == "array")' "$tmp_body" >/dev/null
+jq -e '.success == true and .pagination == "cursor" and (.data | type == "array")' "$tmp_body" >/dev/null
 
 echo 'Smoke: image archive remains populated after controlled sync'
 request 200 -H "Origin: ${APP_ORIGIN}" "${WORKER_ORIGIN}/api/news/video?page=0"
-jq -e '.success == true and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null
+jq -e '.success == true and .pagination == "cursor" and (.data | type == "array") and (.data | length > 1)' "$tmp_body" >/dev/null
 
 echo 'Production Worker smoke tests: PASS'
