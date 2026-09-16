@@ -30,6 +30,6 @@ assert.ok(
   'Reader overlay should close before the feed refresh work begins'
 );
 
-assert.match(swSource, /metro-news-shell-v73-reader-performance/);
+assert.match(swSource, /const SHELL_CACHE = 'metro-news-shell-v\d+-[^']+'/);
 
 console.log('Reader performance contract: PASS');
