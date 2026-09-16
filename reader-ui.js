@@ -21,6 +21,7 @@ let restoreFocusTarget = null;
 let openSequence = 0;
 let bookmarkChanged = false;
 let feedbackTimer = 0;
+let renderedMediaSignature = '';
 
 const DOM = {};
 const APP_SHELL_IDS = ['app-header', 'main-container', 'bottom-nav'];
@@ -254,8 +255,15 @@ function readerMediaItems(article) {
     return items;
 }
 
+function readerMediaSignature(article) {
+    return readerMediaItems(article)
+        .map(item => `${item.url}\n${item.caption}`)
+        .join('\n---\n');
+}
+
 function buildReaderMedia(article) {
     const mediaItems = readerMediaItems(article);
+    renderedMediaSignature = readerMediaSignature(article);
 
     DOM.media.innerHTML = '';
     DOM.media.classList.toggle('hidden', mediaItems.length === 0);
@@ -272,7 +280,8 @@ function buildReaderMedia(article) {
         img.className = 'reader-image';
         img.src = item.url;
         img.alt = item.caption || (mediaItems.length > 1 ? `新聞圖片 ${index + 1}` : '新聞圖片');
-        img.loading = 'eager';
+        img.loading = index === 0 ? 'eager' : 'lazy';
+        img.decoding = 'async';
         img.referrerPolicy = 'no-referrer';
         img.draggable = false;
         img.dataset.readerLightbox = '1';
@@ -409,15 +418,23 @@ async function shareCurrentArticle() {
     }
 }
 
-function fillReader(article, tile) {
+function prepareReader(article, tile) {
     const state = getReaderArticleState(article);
     DOM.category.textContent = readerCategory(tile, article, state);
     DOM.time.textContent = article.pubDate ? timeAgo(article.pubDate) : '';
     DOM.title.textContent = article.title || '新聞';
-    buildReaderMedia(article);
     syncBookmarkState(state.saved);
     syncAIState(state.aiSummary);
     showReaderFeedback('');
+
+    renderedMediaSignature = '';
+    DOM.media.innerHTML = '';
+    DOM.media.classList.add('hidden');
+    DOM.content.innerHTML = '';
+}
+
+function fillReader(article) {
+    buildReaderMedia(article);
     renderReaderContent(article.description || '暫無詳細內文。', {
         loading: !article.isFullContentLoaded
     });
@@ -433,7 +450,9 @@ async function hydrateFullArticle(article, sequence) {
         || !overlay?.classList.contains('open')
     ) return;
 
-    buildReaderMedia(article);
+    if (readerMediaSignature(article) !== renderedMediaSignature) {
+        buildReaderMedia(article);
+    }
     renderReaderContent(result.content || article.description || '', {
         loading: false,
         error: result.success ? '' : result.error
@@ -455,7 +474,7 @@ function openReader(tile, scrollTop) {
     bookmarkChanged = false;
 
     markReaderArticleRead(article, tile);
-    fillReader(article, tile);
+    prepareReader(article, tile);
 
     DOM.scroll.scrollTop = 0;
     setAppShellInert(true);
@@ -468,8 +487,12 @@ function openReader(tile, scrollTop) {
         historyPushed = true;
     }
 
-    hydrateFullArticle(article, sequence);
-    requestAnimationFrame(() => DOM.close.focus({ preventScroll: true }));
+    requestAnimationFrame(() => {
+        if (sequence !== openSequence || currentArticle !== article || !overlay?.classList.contains('open')) return;
+        fillReader(article);
+        hydrateFullArticle(article, sequence);
+        DOM.close.focus({ preventScroll: true });
+    });
 }
 
 function finalizeClose() {
@@ -479,15 +502,15 @@ function finalizeClose() {
     const closingArticle = currentArticle;
     ++openSequence;
 
-    if (closingTile && closingArticle) {
-        refreshReaderViewAfterClose(closingTile, closingArticle, { bookmarkChanged });
-    }
-
     overlay.classList.remove('open');
     document.body.classList.remove('reader-open');
     setAppShellInert(false);
     setArticleReaderActive(false);
     showReaderFeedback('');
+
+    if (closingTile && closingArticle) {
+        refreshReaderViewAfterClose(closingTile, closingArticle, { bookmarkChanged });
+    }
 
     const main = document.getElementById('main-container');
     requestAnimationFrame(() => {
@@ -502,6 +525,7 @@ function finalizeClose() {
     restoreFocusTarget = null;
     historyPushed = false;
     bookmarkChanged = false;
+    renderedMediaSignature = '';
 }
 
 function closeReader({ fromPopState = false } = {}) {

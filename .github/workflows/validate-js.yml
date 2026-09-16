@@ -25,3 +25,5 @@ jobs:
         run: node .github/scripts/test-archive-search-ui.mjs
       - name: Validate feed cursor pagination contract
         run: node .github/scripts/test-feed-pagination-ui.mjs
+      - name: Validate Reader performance contract
+        run: node .github/scripts/test-reader-performance-ui.mjs
