@@ -8,9 +8,11 @@
 @import url('./liquid-search-hierarchy.css?v=64');
 @import url('./liquid-bookmarks-hierarchy.css?v=65');
 @import url('./liquid-gallery-hierarchy.css?v=66');
+@import url('./liquid-performance.css?v=74');
 
 /* Accepted Liquid Glass layer manifest.
    Order is deliberate: category geometry is established before Bottom Nav,
    Reader motion follows the indicator layers, and the static v60-v66 polish
-   remains later in the cascade. Press feedback is linked after this manifest
-   so its transform timing remains the final control override. */
+   remains later in the cascade. v74 is a paint-only fixed-surface override.
+   Press feedback is linked after this manifest so its transform timing remains
+   the final control override. */
