@@ -27,3 +27,5 @@ jobs:
         run: node .github/scripts/test-feed-pagination-ui.mjs
       - name: Validate Reader performance contract
         run: node .github/scripts/test-reader-performance-ui.mjs
+      - name: Validate feed image delivery contract
+        run: node .github/scripts/test-feed-image-delivery.mjs
