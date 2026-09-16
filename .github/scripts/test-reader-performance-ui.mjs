@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const readerSource = await readFile(new URL('../../reader-ui.js', import.meta.url), 'utf8');
+const swSource = await readFile(new URL('../../sw.js', import.meta.url), 'utf8');
 
 assert.match(
   readerSource,
@@ -28,5 +29,7 @@ assert.ok(
   closeSource.indexOf("overlay.classList.remove('open')") < closeSource.indexOf('refreshReaderViewAfterClose('),
   'Reader overlay should close before the feed refresh work begins'
 );
+
+assert.match(swSource, /metro-news-shell-v73-reader-performance/);
 
 console.log('Reader performance contract: PASS');
