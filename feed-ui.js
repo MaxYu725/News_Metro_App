@@ -153,17 +153,20 @@ function decorateFeed() {
     const tiles = [...grid.querySelectorAll(':scope > .metro-tile')]
         .filter(decorateTile);
 
-    tiles.forEach(tile => tile.classList.remove('hero-tile'));
-
-    if (isNewsSection() && activeCategoryId() === 'latest' && tiles.length > 0) {
-        tiles[0].classList.add('hero-tile');
-    }
+    const showHero = isNewsSection() && activeCategoryId() === 'latest';
+    tiles.forEach((tile, index) => {
+        const shouldBeHero = showHero && index === 0;
+        tile.classList.toggle('hero-tile', shouldBeHero);
+    });
 }
 
 function scheduleDecorate() {
     if (decorateQueued) return;
     decorateQueued = true;
-    requestAnimationFrame(decorateFeed);
+    // MutationObserver callbacks already run before rendering. Keep the feed
+    // enhancer in that microtask checkpoint instead of deferring geometry to a
+    // later animation frame, which can create a second style/layout/paint pass.
+    queueMicrotask(decorateFeed);
 }
 
 function installFeedKeyboardInteraction(grid) {
