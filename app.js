@@ -51,6 +51,7 @@ let currentPage = 0;
 let isLoadingMore = false;
 let hasMoreNews = true;
 let currentSearchQuery = '';
+let mainScrollFrame = 0;
 
 const searchState = {
     query: '',
@@ -1027,20 +1028,26 @@ DOM.bottomNav?.addEventListener('click', e => {
     showAppSection(btn.dataset.section);
 });
 
-DOM.mainContainer?.addEventListener('scroll', () => {
-    if (activeAppSection !== 'settings' && DOM.mainContainer.scrollTop > window.innerHeight * 1.5) {
-        DOM.backToTopBtn?.classList.remove('hidden-fab');
-    } else {
-        DOM.backToTopBtn?.classList.add('hidden-fab');
-    }
+function processMainScroll() {
+    mainScrollFrame = 0;
+    const main = DOM.mainContainer;
+    if (!main) return;
 
-    if (activeAppSection === 'news') {
-        if (
-            DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight
-            >= DOM.mainContainer.scrollHeight - 180
-            && !isLoadingMore
-            && hasMoreNews
-        ) {
+    // Snapshot all layout-dependent values before any class/style writes. This
+    // prevents the back-to-top visibility update from invalidating layout just
+    // before clientHeight/scrollHeight are read for infinite scrolling.
+    const scrollTop = main.scrollTop;
+    const clientHeight = main.clientHeight;
+    const scrollHeight = main.scrollHeight;
+    const viewportHeight = window.innerHeight;
+    const section = activeAppSection;
+    const nearEnd = scrollTop + clientHeight >= scrollHeight - 180;
+    const showBackToTop = section !== 'settings' && scrollTop > viewportHeight * 1.5;
+
+    DOM.backToTopBtn?.classList.toggle('hidden-fab', !showBackToTop);
+
+    if (section === 'news') {
+        if (nearEnd && !isLoadingMore && hasMoreNews) {
             isLoadingMore = true;
             currentPage++;
             loadCurrentCategory(false, true);
@@ -1048,32 +1055,26 @@ DOM.mainContainer?.addEventListener('scroll', () => {
         return;
     }
 
-    if (activeAppSection === 'search') {
-        if (
-            DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight
-            >= DOM.mainContainer.scrollHeight - 180
-            && !isLoadingMore
-            && searchState.hasMore
-            && searchState.query
-        ) {
+    if (section === 'search') {
+        if (nearEnd && !isLoadingMore && searchState.hasMore && searchState.query) {
             isLoadingMore = true;
             loadSearchUI(true);
         }
+        return;
     }
 
-    if (activeAppSection === 'gallery') {
-        if (
-            DOM.mainContainer.scrollTop + DOM.mainContainer.clientHeight
-            >= DOM.mainContainer.scrollHeight - 180
-            && !isLoadingMore
-            && galleryState.hasMore
-            && galleryState.query
-        ) {
-            isLoadingMore = true;
-            loadGalleryUI(true);
-        }
+    if (section === 'gallery' && nearEnd && !isLoadingMore && galleryState.hasMore && galleryState.query) {
+        isLoadingMore = true;
+        loadGalleryUI(true);
     }
-}, { passive: true });
+}
+
+function scheduleMainScroll() {
+    if (mainScrollFrame) return;
+    mainScrollFrame = requestAnimationFrame(processMainScroll);
+}
+
+DOM.mainContainer?.addEventListener('scroll', scheduleMainScroll, { passive: true });
 
 DOM.backToTopBtn?.addEventListener('click', () => {
     DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' });
