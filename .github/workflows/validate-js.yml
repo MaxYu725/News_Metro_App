@@ -29,3 +29,5 @@ jobs:
         run: node .github/scripts/test-reader-performance-ui.mjs
       - name: Validate fixed glass paint contract
         run: node .github/scripts/test-fixed-glass-paint.mjs
+      - name: Validate scroll reflow contract
+        run: node .github/scripts/test-scroll-reflow.mjs
