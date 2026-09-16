@@ -31,3 +31,5 @@ jobs:
         run: node .github/scripts/test-scroll-reflow.mjs
       - name: Validate feed first-paint contract
         run: node .github/scripts/test-feed-first-paint.mjs
+      - name: Validate feed image delivery contract
+        run: node .github/scripts/test-feed-image-delivery.mjs
