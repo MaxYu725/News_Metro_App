@@ -1,0 +1,152 @@
+/* v82 — Liquid Glass Phase 3.
+   Secondary tool surfaces inherit the stronger v80/v81 glass language while
+   keeping repeated result tiles and long scrolling lists compositor-cheap. */
+
+:root {
+    --secondary-glass-rim: rgba(255, 255, 255, 0.16);
+    --secondary-glass-rim-strong: rgba(255, 255, 255, 0.22);
+    --secondary-glass-sheen: rgba(255, 255, 255, 0.13);
+    --secondary-glass-bg: rgba(10, 15, 27, 0.58);
+    --secondary-glass-shadow: 0 14px 36px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* Search / Gallery tool panels */
+.liquid-glass body:not(.reader-open) #search-view:not(.hidden),
+.liquid-glass body:not(.reader-open) #gallery-view:not(.hidden) {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--secondary-glass-rim) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent 35%),
+        radial-gradient(circle at 14% -20%, rgba(255, 255, 255, 0.12), transparent 42%),
+        radial-gradient(circle at 88% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.11), transparent 45%),
+        var(--secondary-glass-bg) !important;
+    box-shadow: var(--secondary-glass-shadow) !important;
+    backdrop-filter: blur(24px) saturate(158%);
+    -webkit-backdrop-filter: blur(24px) saturate(158%);
+}
+
+.liquid-glass body:not(.reader-open) #search-view:not(.hidden)::before,
+.liquid-glass body:not(.reader-open) #gallery-view:not(.hidden)::before,
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child)::before {
+    position: absolute;
+    z-index: 0;
+    inset: 1px;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--secondary-glass-sheen), transparent 32%);
+    content: "";
+    opacity: 0.72;
+    pointer-events: none;
+}
+
+.liquid-glass body:not(.reader-open) #search-view:not(.hidden) > *,
+.liquid-glass body:not(.reader-open) #gallery-view:not(.hidden) > *,
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) > * {
+    position: relative;
+    z-index: 1;
+}
+
+.liquid-glass body:not(.reader-open) #search-view .search-form,
+.liquid-glass body:not(.reader-open) #gallery-view .search-form {
+    border-color: rgba(255, 255, 255, 0.13) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
+        rgba(4, 8, 16, 0.42) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.10),
+        0 7px 22px rgba(0, 0, 0, 0.16) !important;
+}
+
+.liquid-glass body:not(.reader-open) #search-view .search-form:focus-within,
+.liquid-glass body:not(.reader-open) #gallery-view .search-form:focus-within {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.54) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 55%),
+        rgba(var(--metro-accent-rgb, 34, 211, 238), 0.065) !important;
+    box-shadow:
+        0 0 0 3px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.09),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+.liquid-glass body:not(.reader-open) #search-view .search-submit,
+.liquid-glass body:not(.reader-open) #gallery-view .search-submit {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.34) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent 60%),
+        rgba(var(--metro-accent-rgb, 34, 211, 238), 0.15) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+/* Settings groups become medium glass; nested rows stay deliberately lighter. */
+.liquid-glass body:not(.reader-open) #settings-view:not(.hidden) > div:not(:first-child) {
+    position: relative;
+    overflow: hidden;
+    border-color: var(--secondary-glass-rim) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.065), transparent 34%),
+        radial-gradient(circle at 88% -8%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.09), transparent 42%),
+        rgba(9, 14, 25, 0.54) !important;
+    box-shadow: var(--secondary-glass-shadow) !important;
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+}
+
+.liquid-glass body:not(.reader-open) #settings-view #new-cat-input,
+.liquid-glass body:not(.reader-open) #settings-view .settings-link-row,
+.liquid-glass body:not(.reader-open) #settings-view .density-btn,
+.liquid-glass body:not(.reader-open) #settings-view .metro-btn,
+.liquid-glass body:not(.reader-open) #settings-view #font-size-display {
+    border-color: rgba(255, 255, 255, 0.095) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 55%),
+        rgba(5, 9, 17, 0.28) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075) !important;
+}
+
+.liquid-glass body:not(.reader-open) #settings-view .density-btn.active {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.32) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent 58%),
+        rgba(var(--metro-accent-rgb, 34, 211, 238), 0.12) !important;
+}
+
+/* Small floating glass islands */
+.liquid-glass #back-to-top,
+.liquid-glass .reader-feedback,
+.liquid-glass .reader-media-count,
+.liquid-glass #lightbox-close,
+.liquid-glass #lightbox-quality,
+.liquid-glass #lightbox-hint {
+    border-color: var(--secondary-glass-rim-strong) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.018) 55%, transparent),
+        radial-gradient(circle at 24% 0%, rgba(255, 255, 255, 0.13), transparent 46%),
+        rgba(9, 14, 25, 0.76) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.20),
+        0 10px 28px rgba(0, 0, 0, 0.27) !important;
+    backdrop-filter: blur(24px) saturate(168%);
+    -webkit-backdrop-filter: blur(24px) saturate(168%);
+}
+
+.liquid-glass #lightbox-quality[aria-pressed="true"] {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.65) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 62%),
+        rgba(var(--metro-accent-rgb, 34, 211, 238), 0.72) !important;
+    color: #07111c;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.26),
+        0 8px 26px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.22) !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .liquid-glass #back-to-top:hover,
+    .liquid-glass #lightbox-close:hover,
+    .liquid-glass #lightbox-quality:hover {
+        border-color: rgba(255, 255, 255, 0.30) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.24),
+            0 12px 30px rgba(0, 0, 0, 0.30) !important;
+    }
+}
