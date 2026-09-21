@@ -43,3 +43,5 @@ jobs:
         run: node .github/scripts/test-feed-image-delivery.mjs
       - name: Validate low-end browser performance contract
         run: node .github/scripts/test-low-end-performance.mjs
+      - name: Validate Liquid Glass phase 1 contract
+        run: node .github/scripts/test-liquid-glass-phase1.mjs
