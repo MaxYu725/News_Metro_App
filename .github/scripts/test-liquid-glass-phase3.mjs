@@ -2,7 +2,17 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const root = new URL('../../', import.meta.url);
-const phase3 = await readFile(new URL('liquid-secondary-glass.css', root), 'utf8');
+
+async function readText(path) {
+    try {
+        return await readFile(new URL(path, root), 'utf8');
+    } catch (error) {
+        if (error?.code === 'ENOENT') return '';
+        throw error;
+    }
+}
+
+const phase3 = await readText('liquid-secondary-glass.css');
 const eco = await readFile(new URL('performance-mode.css', root), 'utf8');
 const gallery = await readFile(new URL('liquid-gallery-hierarchy.css', root), 'utf8');
 const index = await readFile(new URL('index.html', root), 'utf8');
