@@ -799,3 +799,94 @@ body {
         linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
         rgba(var(--metro-accent-rgb, 34, 211, 238), 0.045);
 }
+
+
+/* v81 — Liquid Glass Phase 2.
+   Feed surfaces gain clearer rim/specular depth while retaining the compositor
+   rule that forbids live backdrop blur on scrolling cards. */
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card {
+    --feed-glass-rim: rgba(255, 255, 255, 0.16);
+    --feed-glass-highlight: rgba(255, 255, 255, 0.44);
+    --feed-glass-depth: rgba(5, 9, 18, 0.76);
+    border-color: var(--feed-glass-rim) !important;
+    border-left-color: var(--feed-glass-rim) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.016) 34%, transparent 58%),
+        radial-gradient(circle at 13% -18%, rgba(255, 255, 255, 0.12), transparent 42%),
+        radial-gradient(circle at 90% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.12), transparent 44%),
+        linear-gradient(145deg, rgba(20, 29, 48, 0.88), var(--feed-glass-depth));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.025),
+        0 12px 32px rgba(0, 0, 0, 0.27);
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::before {
+    top: 0;
+    left: 9%;
+    width: 68%;
+    height: 2px;
+    background:
+        linear-gradient(90deg, transparent, var(--feed-glass-highlight) 22%, rgba(255, 255, 255, 0.18) 68%, transparent);
+    filter: drop-shadow(0 1px 5px rgba(255, 255, 255, 0.08));
+    opacity: 0.88;
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::after {
+    background:
+        radial-gradient(circle 170px at var(--liquid-x) var(--liquid-y), rgba(255, 255, 255, 0.105), transparent 70%),
+        linear-gradient(115deg, transparent 8%, rgba(255, 255, 255, 0.035) 35%, transparent 58%);
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.hero-tile {
+    --feed-glass-rim: rgba(255, 255, 255, 0.20);
+    --hero-glass-highlight: rgba(255, 255, 255, 0.56);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.018) 38%, transparent 62%),
+        radial-gradient(circle at 14% -24%, rgba(255, 255, 255, 0.16), transparent 40%),
+        radial-gradient(circle at 84% -8%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.17), transparent 46%),
+        linear-gradient(145deg, rgba(20, 29, 49, 0.91), rgba(7, 12, 23, 0.80));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.19),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+        0 18px 46px rgba(0, 0, 0, 0.32);
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.hero-tile::before {
+    background:
+        linear-gradient(90deg, transparent, var(--hero-glass-highlight) 24%, rgba(255, 255, 255, 0.20) 72%, transparent);
+    opacity: 0.96;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:hover {
+        border-color: rgba(255, 255, 255, 0.23) !important;
+        border-left-color: rgba(255, 255, 255, 0.23) !important;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.02) 36%, transparent 60%),
+            radial-gradient(circle at 13% -18%, rgba(255, 255, 255, 0.14), transparent 42%),
+            radial-gradient(circle at 90% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.15), transparent 44%),
+            linear-gradient(145deg, rgba(22, 31, 51, 0.90), rgba(7, 12, 23, 0.79));
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.19),
+            inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+            0 16px 38px rgba(0, 0, 0, 0.31);
+    }
+
+    .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:hover::before {
+        opacity: 1;
+    }
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:active {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.28) !important;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent 44%),
+        radial-gradient(circle at 86% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.13), transparent 45%),
+        linear-gradient(145deg, rgba(18, 27, 46, 0.92), rgba(7, 12, 22, 0.84));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        0 7px 20px rgba(0, 0, 0, 0.24);
+}
