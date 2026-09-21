@@ -149,13 +149,28 @@ function optimizeFeedImage(tile, shouldBeHero) {
         image.dataset.feedOriginalSrc = originalSrc;
     }
 
+    if (image.dataset.feedFallbackReady !== '1') {
+        image.dataset.feedFallbackReady = '1';
+        image.addEventListener('error', () => {
+            if (image.dataset.feedFallbackUsed === '1') return;
+            const fallbackOriginal = image.dataset.feedOriginalSrc || '';
+            if (!fallbackOriginal) return;
+
+            image.dataset.feedFallbackUsed = '1';
+            image.removeAttribute('srcset');
+            image.removeAttribute('sizes');
+            image.src = fallbackOriginal;
+        });
+    }
+
+    if (image.dataset.feedFallbackUsed === '1') return;
     if (!originalSrc || !buildHk01FeedVariant(originalSrc, 320)) return;
 
     const mode = shouldBeHero ? 'hero' : 'thumb';
     if (image.dataset.feedImageMode === mode) return;
 
-    const widths = shouldBeHero ? [480, 960, 1440] : [160, 320, 480];
-    const fallbackWidth = shouldBeHero ? 960 : 320;
+    const widths = shouldBeHero ? [640, 1280, 1920] : [320, 640];
+    const fallbackWidth = shouldBeHero ? 1280 : 320;
     const sizes = shouldBeHero
         ? '(min-width: 1200px) 820px, (min-width: 700px) calc(100vw - 64px), calc(100vw - 24px)'
         : '(min-width: 700px) 96px, 80px';
