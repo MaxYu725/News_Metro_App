@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v82-liquid-glass-phase3';
+const SHELL_CACHE = 'metro-news-shell-v83-liquid-glass-phase4';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -18,6 +18,7 @@ const SHELL_URLS = [
     './liquid-accepted-layers.css?v=70',
     './liquid-secondary-glass.css?v=82',
     './liquid-press-feedback.css?v=49',
+    './liquid-motion-glass.css?v=83',
     './liquid-nav-indicator.css?v=53',
     './liquid-category-indicator.css?v=54',
     './liquid-reader-cue.css?v=58',
