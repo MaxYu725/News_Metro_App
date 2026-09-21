@@ -49,3 +49,5 @@ jobs:
         run: node .github/scripts/test-liquid-glass-phase2.mjs
       - name: Validate Liquid Glass phase 3 contract
         run: node .github/scripts/test-liquid-glass-phase3.mjs
+      - name: Validate Liquid Glass phase 4 contract
+        run: node .github/scripts/test-liquid-glass-phase4.mjs

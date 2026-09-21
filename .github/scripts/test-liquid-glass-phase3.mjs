@@ -54,7 +54,7 @@ const phase3At = index.indexOf('liquid-secondary-glass.css?v=82');
 const ecoAt = index.indexOf('performance-mode.css');
 assert.ok(acceptedAt >= 0 && phase3At > acceptedAt && ecoAt > phase3At);
 
-assert.match(sw, /metro-news-shell-v82-liquid-glass-phase3/);
+assert.match(sw, /metro-news-shell-v8[2-9]-liquid-glass-phase[3-4]/);
 assert.match(sw, /liquid-secondary-glass\.css\?v=82/);
 
 console.log('Liquid Glass phase 3 contract: PASS');
