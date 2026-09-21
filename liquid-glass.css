@@ -10,6 +10,8 @@
     --liquid-glass-border: rgba(255, 255, 255, 0.17);
     --liquid-glass-border-soft: rgba(255, 255, 255, 0.095);
     --liquid-specular: rgba(255, 255, 255, 0.46);
+    --liquid-glass-rim: rgba(255, 255, 255, 0.24);
+    --liquid-glass-sheen: rgba(255, 255, 255, 0.16);
     --liquid-shadow: 0 18px 54px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     --liquid-shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.085);
     --liquid-ease: cubic-bezier(0.2, 0.84, 0.25, 1);
@@ -661,4 +663,139 @@ body {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+
+/* v80 — Liquid Glass Phase 1.
+   Strengthen only the chrome islands that benefit from obvious glass depth:
+   category strip, Bottom Nav and Reader toolbar. Feed cards remain unchanged. */
+
+.liquid-glass body:not(.reader-open) #nav-menu {
+    border-color: rgba(255, 255, 255, 0.14);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 48%, transparent 72%),
+        radial-gradient(circle at 18% -42%, rgba(255, 255, 255, 0.13), transparent 48%),
+        rgba(5, 9, 17, 0.42);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+        0 8px 28px rgba(0, 0, 0, 0.18);
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu::after {
+    position: absolute;
+    z-index: 0;
+    inset: 1px;
+    border-radius: 21px;
+    background:
+        linear-gradient(180deg, var(--liquid-glass-sheen), transparent 34%),
+        radial-gradient(circle at 72% 0%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.08), transparent 42%);
+    content: "";
+    opacity: 0.78;
+    pointer-events: none;
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu::before {
+    z-index: 1;
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.38);
+    background:
+        radial-gradient(circle at 28% 8%, rgba(255, 255, 255, 0.22), transparent 52%),
+        linear-gradient(135deg, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.27), rgba(var(--metro-accent-rgb, 34, 211, 238), 0.12));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+        0 7px 22px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.16);
+}
+
+.liquid-glass body:not(.reader-open) #nav-menu .nav-link {
+    z-index: 2;
+}
+
+.liquid-glass .bottom-nav {
+    border-color: var(--liquid-glass-rim);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.018) 45%, transparent 68%),
+        radial-gradient(circle at 18% -14%, rgba(255, 255, 255, 0.15), transparent 40%),
+        radial-gradient(circle at 82% 6%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.10), transparent 44%),
+        rgba(11, 16, 28, 0.80);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+        0 20px 58px rgba(0, 0, 0, 0.36);
+    backdrop-filter: blur(30px) saturate(176%);
+    -webkit-backdrop-filter: blur(30px) saturate(176%);
+}
+
+.liquid-glass .bottom-nav::before {
+    position: absolute;
+    z-index: 0;
+    inset: 1px;
+    border-radius: inherit;
+    background:
+        linear-gradient(180deg, var(--liquid-glass-sheen), transparent 36%),
+        radial-gradient(circle at 24% 4%, rgba(255, 255, 255, 0.09), transparent 36%);
+    content: "";
+    opacity: 0.82;
+    pointer-events: none;
+}
+
+.liquid-glass .liquid-nav-indicator {
+    border-color: rgba(var(--metro-accent-rgb, 34, 211, 238), 0.42);
+    background:
+        radial-gradient(circle at 28% 8%, rgba(255, 255, 255, 0.26), transparent 50%),
+        linear-gradient(135deg, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.31), rgba(var(--metro-accent-rgb, 34, 211, 238), 0.12));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        0 10px 28px rgba(var(--metro-accent-rgb, 34, 211, 238), 0.16);
+}
+
+.liquid-glass .reader-toolbar {
+    position: relative;
+    border-color: var(--liquid-glass-rim);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.018) 46%, transparent 70%),
+        radial-gradient(circle at 20% -25%, rgba(255, 255, 255, 0.14), transparent 42%),
+        radial-gradient(circle at 82% 10%, rgba(var(--metro-accent-rgb, 34, 211, 238), 0.09), transparent 42%),
+        rgba(11, 16, 28, 0.78);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.035),
+        0 14px 38px rgba(0, 0, 0, 0.30);
+    backdrop-filter: blur(30px) saturate(174%);
+    -webkit-backdrop-filter: blur(30px) saturate(174%);
+}
+
+.liquid-glass .reader-toolbar::before {
+    position: absolute;
+    z-index: 0;
+    inset: 1px;
+    border-radius: inherit;
+    background:
+        linear-gradient(180deg, var(--liquid-glass-sheen), transparent 38%),
+        radial-gradient(circle at 78% 0%, rgba(255, 255, 255, 0.08), transparent 34%);
+    content: "";
+    opacity: 0.78;
+    pointer-events: none;
+}
+
+.liquid-glass .reader-toolbar > * {
+    position: relative;
+    z-index: 1;
+}
+
+.liquid-glass .reader-close,
+.liquid-glass .reader-toolbar-btn {
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)),
+        rgba(255, 255, 255, 0.018);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.085);
+}
+
+.liquid-glass .reader-close:active,
+.liquid-glass .reader-toolbar-btn:active {
+    border-color: rgba(255, 255, 255, 0.14);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
+        rgba(var(--metro-accent-rgb, 34, 211, 238), 0.045);
 }
