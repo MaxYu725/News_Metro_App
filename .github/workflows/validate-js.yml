@@ -33,3 +33,5 @@ jobs:
         run: node .github/scripts/test-feed-first-paint.mjs
       - name: Validate feed image delivery contract
         run: node .github/scripts/test-feed-image-delivery.mjs
+      - name: Validate low-end browser performance contract
+        run: node .github/scripts/test-low-end-performance.mjs
