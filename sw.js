@@ -1,10 +1,12 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v76-feed-first-paint';
+const SHELL_CACHE = 'metro-news-shell-v78-low-end-performance';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
     './',
     './index.html',
+    './tailwind-generated.css',
+    './performance-mode.css',
     './style.css',
     './feed-ui.css',
     './reader-ui.css',
@@ -25,6 +27,7 @@ const SHELL_URLS = [
     './liquid-search-hierarchy.css?v=64',
     './liquid-bookmarks-hierarchy.css?v=65',
     './liquid-gallery-hierarchy.css?v=66',
+    './performance-mode.js',
     './app.js',
     './feed-ui.js',
     './search-ui.js',
@@ -51,9 +54,7 @@ const SHELL_URLS = [
     './ic_launcher.png'
 ];
 
-const OPTIONAL_RUNTIME_URLS = [
-    'https://cdn.tailwindcss.com'
-];
+const OPTIONAL_RUNTIME_URLS = [];
 
 async function precacheShell() {
     const shellCache = await caches.open(SHELL_CACHE);

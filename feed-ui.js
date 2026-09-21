@@ -126,6 +126,54 @@ function decorateFreshState(tile) {
     }
 }
 
+function buildHk01FeedVariant(src, width) {
+    try {
+        const url = new URL(src, location.href);
+        if (url.protocol !== 'https:' || url.hostname !== 'cdn.hk01.com') return '';
+        if (!url.pathname.includes('/di/media/images/')) return '';
+        url.searchParams.set('v', `w${width}`);
+        return url.toString();
+    } catch {
+        return '';
+    }
+}
+
+function optimizeFeedImage(tile, shouldBeHero) {
+    const image = tile.querySelector('.tile-preview img');
+    if (!image) return;
+
+    image.decoding = 'async';
+
+    const originalSrc = image.dataset.feedOriginalSrc || image.getAttribute('src') || '';
+    if (!image.dataset.feedOriginalSrc && originalSrc) {
+        image.dataset.feedOriginalSrc = originalSrc;
+    }
+
+    if (!originalSrc || !buildHk01FeedVariant(originalSrc, 320)) return;
+
+    const mode = shouldBeHero ? 'hero' : 'thumb';
+    if (image.dataset.feedImageMode === mode) return;
+
+    const widths = shouldBeHero ? [480, 960, 1440] : [160, 320, 480];
+    const fallbackWidth = shouldBeHero ? 960 : 320;
+    const sizes = shouldBeHero
+        ? '(min-width: 1200px) 820px, (min-width: 700px) calc(100vw - 64px), calc(100vw - 24px)'
+        : '(min-width: 700px) 96px, 80px';
+
+    const srcset = widths
+        .map(width => `${buildHk01FeedVariant(originalSrc, width)} ${width}w`)
+        .filter(candidate => !candidate.startsWith(' '))
+        .join(', ');
+
+    const fallback = buildHk01FeedVariant(originalSrc, fallbackWidth);
+    if (!fallback || !srcset) return;
+
+    image.src = fallback;
+    image.setAttribute('srcset', srcset);
+    image.setAttribute('sizes', sizes);
+    image.dataset.feedImageMode = mode;
+}
+
 function decorateTile(tile) {
     if (!tile.querySelector('.tile-preview')) return false;
 
@@ -157,6 +205,7 @@ function decorateFeed() {
     tiles.forEach((tile, index) => {
         const shouldBeHero = showHero && index === 0;
         tile.classList.toggle('hero-tile', shouldBeHero);
+        optimizeFeedImage(tile, shouldBeHero);
     });
 }
 

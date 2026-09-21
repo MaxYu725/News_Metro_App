@@ -1,4 +1,4 @@
-import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
+import { timeAgo, LocalDB } from './utils.js';
 import { fetchNewsData, fetchSearchData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 import { initLightbox, openLightbox } from './lightbox.js';
 import { initGestures } from './gestures.js';
@@ -100,13 +100,6 @@ const DOM = {
     bottomNav: document.getElementById('bottom-nav'),
     appBgContainer: document.getElementById('app-bg-container')
 };
-
-function initRandomBackground() {
-    if (DOM.appBgContainer) {
-        DOM.appBgContainer.innerHTML = generateGeometricBackground()
-            + '<div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/20 via-transparent to-[#0a0d1a]/70"></div>';
-    }
-}
 
 let wakeLock = null;
 let isArticleReaderActive = false;
@@ -597,6 +590,43 @@ function deckText(newsItem) {
     return escapeHtml(text);
 }
 
+function buildInitialHk01FeedVariant(src, width) {
+    try {
+        const url = new URL(src, location.href);
+        if (url.protocol !== 'https:' || url.hostname !== 'cdn.hk01.com') return '';
+        if (!url.pathname.includes('/di/media/images/')) return '';
+        url.searchParams.set('v', `w${width}`);
+        return url.toString();
+    } catch {
+        return '';
+    }
+}
+
+function buildInitialFeedImageMarkup(src, isHeroImage) {
+    const originalSrc = String(src || '').trim();
+    if (!originalSrc) return '';
+
+    const escapedOriginal = escapeHtml(originalSrc);
+    const widths = isHeroImage ? [480, 960, 1440] : [160, 320, 480];
+    const fallbackWidth = isHeroImage ? 960 : 320;
+    const fallback = buildInitialHk01FeedVariant(originalSrc, fallbackWidth);
+    const loading = isHeroImage ? 'eager' : 'lazy';
+    const priority = isHeroImage ? ' fetchpriority="high"' : '';
+
+    if (!fallback) {
+        return `<div class="flex-shrink-0 ml-3"><img src="${escapedOriginal}" data-feed-original-src="${escapedOriginal}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/15 shadow-sm bg-black/30" alt="縮圖" loading="${loading}" decoding="async"${priority} referrerpolicy="no-referrer" /></div>`;
+    }
+
+    const srcset = widths
+        .map(width => `${buildInitialHk01FeedVariant(originalSrc, width)} ${width}w`)
+        .join(', ');
+    const sizes = isHeroImage
+        ? '(min-width: 1200px) 820px, (min-width: 700px) calc(100vw - 64px), calc(100vw - 24px)'
+        : '(min-width: 700px) 96px, 80px';
+
+    return `<div class="flex-shrink-0 ml-3"><img src="${escapeHtml(fallback)}" srcset="${escapeHtml(srcset)}" sizes="${sizes}" data-feed-original-src="${escapedOriginal}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/15 shadow-sm bg-black/30" alt="縮圖" loading="${loading}" decoding="async"${priority} referrerpolicy="no-referrer" /></div>`;
+}
+
 export function getReaderArticle(tile) {
     const index = Number.parseInt(tile?.dataset?.index || '', 10);
     if (!Number.isInteger(index) || index < 0) return null;
@@ -957,9 +987,10 @@ function renderTiles(articlesToRender, isAppendMode = false, startIndex = 0) {
         const sourceName = stripHtml(news.source || '香港01');
         const deck = deckText(news);
 
-        const thumbHtml = news.imageUrl
-            ? `<div class="flex-shrink-0 ml-3"><img src="${news.imageUrl}" class="w-20 h-20 md:w-24 md:h-24 object-cover border border-white/15 shadow-sm bg-black/30" alt="縮圖" loading="lazy" referrerpolicy="no-referrer" /></div>`
-            : '';
+        const isHeroImage = activeAppSection === 'news'
+            && categories[currentIndex]?.id === 'latest'
+            && index === 0;
+        const thumbHtml = buildInitialFeedImageMarkup(news.imageUrl, isHeroImage);
 
         htmlContent += `
             <article class="metro-tile ${currentThemeBorder}" data-index="${index}" ${animationDelay}>
@@ -1081,7 +1112,6 @@ DOM.backToTopBtn?.addEventListener('click', () => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
-    initRandomBackground();
     initLightbox();
 
     initGestures({
