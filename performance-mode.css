@@ -95,3 +95,18 @@ html.low-end-mode .settings-link-row,
 html.low-end-mode .metro-btn {
     box-shadow: none !important;
 }
+
+
+/* v82 secondary glass Eco fallback: remove residual decorative shadows too. */
+html.low-end-mode #back-to-top,
+html.low-end-mode .search-form,
+html.low-end-mode body:not(.reader-open) #search-view:not(.hidden),
+html.low-end-mode body:not(.reader-open) #gallery-view:not(.hidden),
+html.low-end-mode body:not(.reader-open) #settings-view:not(.hidden) > div,
+html.low-end-mode .reader-feedback,
+html.low-end-mode .reader-media-count,
+html.low-end-mode #lightbox-close,
+html.low-end-mode #lightbox-quality,
+html.low-end-mode #lightbox-hint {
+    box-shadow: none !important;
+}
