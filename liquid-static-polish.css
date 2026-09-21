@@ -21,15 +21,28 @@
 
 /* Feed: reduce the outlined look and strengthen editorial typography instead. */
 .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card {
-    border-color: var(--liquid-polish-border) !important;
+    border-color: var(--feed-glass-rim, var(--liquid-polish-border)) !important;
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.09),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-        0 12px 30px rgba(0, 0, 0, 0.26);
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.025),
+        0 12px 32px rgba(0, 0, 0, 0.27);
 }
 
 .liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::before {
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
+    background: linear-gradient(90deg, transparent, var(--feed-glass-highlight, rgba(255, 255, 255, 0.44)) 22%, rgba(255, 255, 255, 0.18) 68%, transparent);
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.hero-tile {
+    --hero-glass-highlight: rgba(255, 255, 255, 0.56);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.19),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.03),
+        0 18px 46px rgba(0, 0, 0, 0.32);
+}
+
+.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.hero-tile::before {
+    background: linear-gradient(90deg, transparent, var(--hero-glass-highlight) 24%, rgba(255, 255, 255, 0.20) 72%, transparent);
+    opacity: 0.96;
 }
 
 .liquid-glass body:not(.reader-open) .metro-tile.feed-card .news-title {

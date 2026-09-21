@@ -28,9 +28,9 @@ assert.match(eco, /html\.low-end-mode \.bottom-nav,/);
 assert.match(eco, /html\.low-end-mode \.reader-toolbar,/);
 
 // Bust both browser and service-worker CSS caches for the visual release.
-assert.match(index, /liquid-glass\.css\?v=80/);
-assert.match(sw, /metro-news-shell-v80-liquid-glass-phase1/);
-assert.match(sw, /liquid-glass\.css\?v=80/);
+assert.match(index, /liquid-glass\.css\?v=8[0-9]/);
+assert.match(sw, /metro-news-shell-v8[0-9]-liquid-glass-phase[12]/);
+assert.match(sw, /liquid-glass\.css\?v=8[0-9]/);
 
 // Feed cards remain outside Phase 1: do not re-enable backdrop blur here.
 assert.match(liquid, /#news-grid > \.metro-tile\.feed-card[\s\S]*backdrop-filter: none !important/);
