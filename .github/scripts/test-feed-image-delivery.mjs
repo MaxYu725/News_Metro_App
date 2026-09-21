@@ -21,3 +21,17 @@ assert.doesNotMatch(appSource, /<img src="\$\{news\.imageUrl\}"/);
 assert.match(appSource, /data-feed-original-src=/);
 
 console.log('Feed image delivery contract: PASS');
+
+
+// CDN feed variants must use the known HK01 width ladder. Invalid intermediate
+// widths can be selected by srcset and fail the whole thumbnail request.
+assert.doesNotMatch(feedSource, /\[160, 320, 480\]/);
+assert.doesNotMatch(feedSource, /\[480, 960, 1440\]/);
+assert.match(feedSource, /\[320, 640\]/);
+assert.match(feedSource, /\[640, 1280, 1920\]/);
+assert.match(feedSource, /addEventListener\('error'/);
+
+assert.doesNotMatch(appSource, /\[160, 320, 480\]/);
+assert.doesNotMatch(appSource, /\[480, 960, 1440\]/);
+assert.match(appSource, /\[320, 640\]/);
+assert.match(appSource, /\[640, 1280, 1920\]/);
