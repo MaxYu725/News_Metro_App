@@ -1,0 +1,97 @@
+/* Low-end browser fallback.
+   Preserve layout and information hierarchy while removing the expensive
+   compositor work that makes older desktop GPUs/CPUs unusable. */
+
+html.low-end-mode #app-bg-container .metro-atmosphere-glow,
+html.low-end-mode #app-bg-container .metro-atmosphere-search-haze,
+html.low-end-mode #app-bg-container .metro-atmosphere-map {
+    display: none !important;
+}
+
+html.low-end-mode #app-bg-container,
+html.low-end-mode #app-bg-container .metro-atmosphere {
+    background: #070910 !important;
+}
+
+html.low-end-mode #app-bg-container .metro-atmosphere-base,
+html.low-end-mode #app-bg-container .metro-atmosphere-mask {
+    background: none !important;
+}
+
+html.low-end-mode .app-header,
+html.low-end-mode .bottom-nav,
+html.low-end-mode #back-to-top,
+html.low-end-mode .search-form,
+html.low-end-mode body:not(.reader-open) #search-view:not(.hidden),
+html.low-end-mode body:not(.reader-open) #gallery-view:not(.hidden),
+html.low-end-mode body:not(.reader-open) #settings-view:not(.hidden) > div,
+html.low-end-mode .reader-toolbar,
+html.low-end-mode .reader-feedback,
+html.low-end-mode .reader-media-count,
+html.low-end-mode #lightbox-close,
+html.low-end-mode #lightbox-quality,
+html.low-end-mode #lightbox-hint,
+html.low-end-mode #settings-view * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+}
+
+html.low-end-mode.liquid-glass body:not(.reader-open) .app-header {
+    background: rgba(10, 14, 25, 0.985) !important;
+    box-shadow: none !important;
+}
+
+html.low-end-mode.liquid-glass .bottom-nav {
+    background: rgba(9, 13, 23, 0.99) !important;
+    box-shadow: none !important;
+}
+
+html.low-end-mode.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card,
+html.low-end-mode .metro-tile.feed-card,
+html.low-end-mode .metro-tile.hero-tile {
+    background: #111827 !important;
+    box-shadow: none !important;
+}
+
+html.low-end-mode.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card::after {
+    display: none !important;
+}
+
+html.low-end-mode.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:hover,
+html.low-end-mode.liquid-glass body:not(.reader-open) .app-main #news-grid > .metro-tile.feed-card:active {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+html.low-end-mode .liquid-nav-indicator,
+html.low-end-mode.liquid-glass body:not(.reader-open) #nav-menu::before {
+    box-shadow: none !important;
+    transition: none !important;
+    will-change: auto !important;
+}
+
+html.low-end-mode .app-main,
+html.low-end-mode #nav-menu {
+    scroll-behavior: auto !important;
+}
+
+html.low-end-mode.liquid-glass body *,
+html.low-end-mode.liquid-glass body *::before,
+html.low-end-mode.liquid-glass body *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+}
+
+html.low-end-mode .skeleton-pulse {
+    animation: none !important;
+    opacity: 0.24 !important;
+}
+
+html.low-end-mode .reader-media,
+html.low-end-mode .reader-ai,
+html.low-end-mode .density-btn,
+html.low-end-mode .settings-link-row,
+html.low-end-mode .metro-btn {
+    box-shadow: none !important;
+}
