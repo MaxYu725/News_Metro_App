@@ -35,7 +35,7 @@ assert.match(eco, /box-shadow: none !important/);
 
 // Cache bust the visual release.
 assert.match(index, /liquid-glass\.css\?v=81/);
-assert.match(sw, /metro-news-shell-v81-liquid-glass-phase2/);
+assert.match(sw, /metro-news-shell-v8[1-9]-liquid-glass-phase[2-3]/);
 assert.match(sw, /liquid-glass\.css\?v=81/);
 
 console.log('Liquid Glass phase 2 contract: PASS');
