@@ -1,4 +1,4 @@
-import { timeAgo, generateGeometricBackground, LocalDB } from './utils.js';
+import { timeAgo, LocalDB } from './utils.js';
 import { fetchNewsData, fetchSearchData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 import { initLightbox, openLightbox } from './lightbox.js';
 import { initGestures } from './gestures.js';
@@ -100,13 +100,6 @@ const DOM = {
     bottomNav: document.getElementById('bottom-nav'),
     appBgContainer: document.getElementById('app-bg-container')
 };
-
-function initRandomBackground() {
-    if (DOM.appBgContainer) {
-        DOM.appBgContainer.innerHTML = generateGeometricBackground()
-            + '<div class="absolute inset-0 bg-gradient-to-b from-[#0a0d1a]/20 via-transparent to-[#0a0d1a]/70"></div>';
-    }
-}
 
 let wakeLock = null;
 let isArticleReaderActive = false;
@@ -1119,7 +1112,6 @@ DOM.backToTopBtn?.addEventListener('click', () => {
 });
 
 window.addEventListener('DOMContentLoaded', () => {
-    initRandomBackground();
     initLightbox();
 
     initGestures({
