@@ -91,16 +91,16 @@
 /* Desktop-only lift is limited to small controls; scrolling content never
    gains hover transforms or persistent compositor promotion. */
 @media (hover: hover) and (pointer: fine) {
-    .liquid-glass .metro-btn:hover,
-    .liquid-glass .density-btn:hover,
-    .liquid-glass .search-submit:hover,
-    .liquid-glass .search-chip:hover,
-    .liquid-glass .search-follow-btn:hover,
-    .liquid-glass #back-to-top:hover,
-    .liquid-glass #lightbox-close:hover,
-    .liquid-glass #lightbox-quality:hover,
-    .liquid-glass .reader-close:hover,
-    .liquid-glass .reader-toolbar-btn:hover {
+    .liquid-glass .metro-btn:not(.liquid-press-active):hover,
+    .liquid-glass .density-btn:not(.liquid-press-active):hover,
+    .liquid-glass .search-submit:not(.liquid-press-active):hover,
+    .liquid-glass .search-chip:not(.liquid-press-active):hover,
+    .liquid-glass .search-follow-btn:not(.liquid-press-active):hover,
+    .liquid-glass #back-to-top:not(.liquid-press-active):hover,
+    .liquid-glass #lightbox-close:not(.liquid-press-active):hover,
+    .liquid-glass #lightbox-quality:not(.liquid-press-active):hover,
+    .liquid-glass .reader-close:not(.liquid-press-active):hover,
+    .liquid-glass .reader-toolbar-btn:not(.liquid-press-active):hover {
         transform: translateY(-1px) !important;
     }
 }
