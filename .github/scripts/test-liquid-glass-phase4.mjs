@@ -31,6 +31,8 @@ assert.match(motion, /transform:\s*scale\(0\.9[4-8]\)\s*!important/);
 assert.match(motion, /box-shadow:[\s\S]*inset 0 1px 0 rgba\(255, 255, 255/);
 
 assert.match(motion, /@media \(hover: hover\) and \(pointer: fine\)/);
+assert.match(motion, /\.metro-btn:not\(\.liquid-press-active\):hover/);
+assert.match(motion, /#lightbox-quality:not\(\.liquid-press-active\):hover/);
 assert.match(motion, /@media \(prefers-reduced-motion: reduce\)/);
 
 // Phase 4 remains local-control-only.
