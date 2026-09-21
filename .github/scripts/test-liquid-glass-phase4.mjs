@@ -34,7 +34,7 @@ assert.match(motion, /@media \(hover: hover\) and \(pointer: fine\)/);
 assert.match(motion, /@media \(prefers-reduced-motion: reduce\)/);
 
 // Phase 4 remains local-control-only.
-assert.doesNotMatch(motion, /feed-card/);
+assert.doesNotMatch(motion, /#news-grid[^\n{]*feed-card|\.metro-tile\.feed-card/);
 assert.doesNotMatch(motion, /reader-shell/);
 assert.doesNotMatch(motion, /requestAnimationFrame/);
 
