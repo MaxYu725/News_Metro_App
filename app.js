@@ -607,8 +607,8 @@ function buildInitialFeedImageMarkup(src, isHeroImage) {
     if (!originalSrc) return '';
 
     const escapedOriginal = escapeHtml(originalSrc);
-    const widths = isHeroImage ? [480, 960, 1440] : [160, 320, 480];
-    const fallbackWidth = isHeroImage ? 960 : 320;
+    const widths = isHeroImage ? [640, 1280, 1920] : [320, 640];
+    const fallbackWidth = isHeroImage ? 1280 : 320;
     const fallback = buildInitialHk01FeedVariant(originalSrc, fallbackWidth);
     const loading = isHeroImage ? 'eager' : 'lazy';
     const priority = isHeroImage ? ' fetchpriority="high"' : '';
