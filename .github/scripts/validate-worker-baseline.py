@@ -316,8 +316,14 @@ def main() -> int:
             fail(f"adaptive retention contract signal missing: {signal}")
     if "-30 days" in source or "cleanUpOldArticles" in source:
         fail("fixed 30-day retention must not be reintroduced")
-    if "ctx.waitUntil(syncAllCategoriesAndRetention(env));" not in source:
-        fail("scheduled ingestion must run adaptive retention after category sync")
+    scheduled_signals = [
+        "event?.cron === HK01_LATEST_CRON",
+        "? syncHk01LatestToDB(env)",
+        ": syncAllCategoriesAndRetention(env)",
+    ]
+    for signal in scheduled_signals:
+        if signal not in source:
+            fail(f"scheduled ingestion routing signal missing: {signal}")
     if "enforceAdaptiveRetention(env.DB)" not in source:
         fail("forced sync must use adaptive retention")
 
