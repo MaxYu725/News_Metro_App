@@ -22,6 +22,7 @@ import {
 } from './article-content.js';
 import { fetchBastilleArticles, isBastilleSource } from './sources/bastille.js';
 import { parseHk01ArticlePayload } from './sources/hk01-article.js';
+import { fetchHk01LatestFeed } from './sources/hk01-latest.js';
 import { NEWS_SOURCES, parseSourceFilter, sourceNamesForIds, sourceFilterSql } from './source-filter.js';
 
 function jsonResponse(request, payload, status = 200, extraHeaders = {}) {
@@ -141,6 +142,8 @@ const rssHubs = [
   'https://rsshub.app',
 ];
 
+const HK01_LATEST_CRON = '*/3 * * * *';
+
 const topicSources = {
   local: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/1`) }],
   ent: [{ name: '香港01', urls: rssHubs.map(base => `${base}/hk01/zone/2`) }],
@@ -197,6 +200,24 @@ async function insertArticles(items, env) {
   }
 }
 
+async function syncHk01LatestToDB(env) {
+  try {
+    const articles = await fetchHk01LatestFeed();
+    if (articles.length === 0) {
+      console.warn('hk01-latest-source-empty');
+      return 0;
+    }
+    await insertArticles(articles, env);
+    return articles.length;
+  } catch (error) {
+    console.warn('hk01-latest-sync-failed', {
+      name: String(error?.name || ''),
+      message: String(error?.message || error),
+    });
+    return 0;
+  }
+}
+
 async function syncCategoryToDB(category, env) {
   const targetSources = topicSources[category];
   if (!targetSources) return;
@@ -228,6 +249,7 @@ async function syncBastilleToDB(env, requestedCategory = null) {
 
 async function syncAllCategoriesAndRetention(env) {
   await Promise.all([
+    syncHk01LatestToDB(env),
     Promise.all(Object.keys(topicSources).map(cat => syncCategoryToDB(cat, env))),
     syncBastilleToDB(env),
   ]);
@@ -268,7 +290,10 @@ function formatArticleRow(row) {
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(syncAllCategoriesAndRetention(env));
+    const task = event?.cron === HK01_LATEST_CRON
+      ? syncHk01LatestToDB(env)
+      : syncAllCategoriesAndRetention(env);
+    ctx.waitUntil(task);
   },
 
   async fetch(request, env, ctx) {
@@ -582,9 +607,15 @@ export default {
         let params;
 
         if (category === 'latest') {
-          if (forceSync || page === 0) {
+          if (forceSync) {
+            await Promise.all([
+              syncHk01LatestToDB(env),
+              syncBastilleToDB(env),
+            ]);
+            await enforceAdaptiveRetention(env.DB);
+          } else if (page === 0) {
             const { results: checkDB } = await env.DB.prepare(`SELECT count(*) as count FROM articles WHERE 1 = 1${sourceFilter.sql}`).bind(...sourceFilter.params).all();
-            if (forceSync || checkDB[0].count === 0) {
+            if (checkDB[0].count === 0) {
               await syncAllCategoriesAndRetention(env);
             }
           }
