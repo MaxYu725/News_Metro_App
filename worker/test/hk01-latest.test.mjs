@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import worker from '../src/index.js';
 import {
   HK01_LATEST_FEED_URL,
   fetchHk01LatestFeed,
@@ -108,4 +109,75 @@ test('HK01 latest fetch uses the first-party category feed and validates final h
     })),
     /escaped publisher API host/,
   );
+});
+
+
+test('three-minute scheduled latest sync preserves richer stored content and media', async () => {
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  const prepared = [];
+  let pending;
+
+  globalThis.fetch = async (url) => {
+    requested.push(String(url));
+    if (String(url) !== HK01_LATEST_FEED_URL) {
+      throw new Error(`unexpected upstream: ${url}`);
+    }
+    return {
+      ok: true,
+      status: 200,
+      url: HK01_LATEST_FEED_URL,
+      json: async () => ({
+        items: [{
+          id: 61234570,
+          data: {
+            type: 'article',
+            articleId: 61234570,
+            title: '排程同步測試',
+            description: '只是一段摘要',
+            publishTime: 1790208180,
+            canonicalUrl: 'https://www.hk01.com/港聞/61234570/排程同步測試',
+            mainCategory: '港聞',
+            mainImage: { cdnUrl: 'https://cdn.hk01.com/di/media/live.jpeg/example' },
+          },
+        }],
+      }),
+    };
+  };
+
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            const statement = { sql, args };
+            prepared.push(statement);
+            return statement;
+          },
+        };
+      },
+      async batch() {},
+    },
+  };
+
+  const ctx = {
+    waitUntil(promise) {
+      pending = promise;
+    },
+  };
+
+  try {
+    worker.scheduled({ cron: '*/3 * * * *' }, env, ctx);
+    assert.ok(pending);
+    await pending;
+
+    assert.deepEqual(requested, [HK01_LATEST_FEED_URL]);
+    assert.equal(prepared.length, 1);
+    assert.doesNotMatch(prepared[0].sql, /description\s*=\s*excluded\.description/);
+    assert.doesNotMatch(prepared[0].sql, /images\s*=\s*excluded\.images/);
+    assert.match(prepared[0].sql, /imageUrl = CASE/);
+    assert.equal(prepared[0].args[8], '[]');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
