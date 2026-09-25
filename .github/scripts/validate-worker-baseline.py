@@ -143,6 +143,8 @@ def main() -> int:
     # Live HK01: latest feed must use the publisher API independently of RSSHub zones.
     for signal in [
         "HK01_LATEST_FEED_URL",
+        "feed/latest?offset=0&limit=50",
+        "HK01_LATEST_FALLBACK_FEED_URL",
         "feed/category/0?bucketId=00000",
         "fetchHk01LatestFeed",
         "https://hk01.com/sns/article/",

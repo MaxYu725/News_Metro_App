@@ -4,6 +4,7 @@ import test from 'node:test';
 import worker from '../src/index.js';
 import {
   HK01_LATEST_FEED_URL,
+  HK01_LATEST_FALLBACK_FEED_URL,
   fetchHk01LatestFeed,
   parseHk01LatestFeed,
 } from '../src/sources/hk01-latest.js';
@@ -69,7 +70,7 @@ test('HK01 latest parser rejects non-publisher URLs', () => {
   assert.deepEqual(result, []);
 });
 
-test('HK01 latest fetch uses the first-party category feed and validates final host', async () => {
+test('HK01 latest fetch uses the dedicated first-party latest feed and validates final host', async () => {
   const payload = {
     items: [{
       id: 61234569,
@@ -87,8 +88,8 @@ test('HK01 latest fetch uses the first-party category feed and validates final h
 
   const articles = await fetchHk01LatestFeed(async (url, options) => {
     assert.equal(url, HK01_LATEST_FEED_URL);
-    assert.equal(options.redirect, 'error');
-    assert.match(options.headers['User-Agent'], /Metro-News-Live/);
+    assert.equal(options.redirect, 'follow');
+    assert.match(options.headers['User-Agent'], /Mozilla\/5\.0/);
     return {
       ok: true,
       status: 200,
@@ -99,6 +100,28 @@ test('HK01 latest fetch uses the first-party category feed and validates final h
 
   assert.equal(articles.length, 1);
   assert.equal(articles[0].category, 'tech');
+
+
+  const requested = [];
+  const fallbackArticles = await fetchHk01LatestFeed(async url => {
+    requested.push(String(url));
+    if (String(url) === HK01_LATEST_FEED_URL) {
+      return {
+        ok: false,
+        status: 503,
+        url: HK01_LATEST_FEED_URL,
+        json: async () => ({}),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      url: HK01_LATEST_FALLBACK_FEED_URL,
+      json: async () => payload,
+    };
+  });
+  assert.deepEqual(requested, [HK01_LATEST_FEED_URL, HK01_LATEST_FALLBACK_FEED_URL]);
+  assert.equal(fallbackArticles.length, 1);
 
   await assert.rejects(
     () => fetchHk01LatestFeed(async () => ({

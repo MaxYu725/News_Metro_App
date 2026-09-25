@@ -1,6 +1,7 @@
 import { mapHk01SearchCategory } from './hk01-search.js';
 
-export const HK01_LATEST_FEED_URL = 'https://web-data.api.hk01.com/v2/feed/category/0?bucketId=00000';
+export const HK01_LATEST_FEED_URL = 'https://web-data.api.hk01.com/v2/feed/latest?offset=0&limit=50';
+export const HK01_LATEST_FALLBACK_FEED_URL = 'https://web-data.api.hk01.com/v2/feed/category/0?bucketId=00000';
 
 const API_HOST = 'web-data.api.hk01.com';
 const ARTICLE_HOSTS = new Set(['hk01.com', 'www.hk01.com']);
@@ -71,14 +72,14 @@ export function parseHk01LatestFeed(payload) {
   return articles;
 }
 
-export async function fetchHk01LatestFeed(fetchImpl = fetch) {
+async function fetchFeed(url, fetchImpl) {
   const { signal, clear } = timeoutSignal(12_000);
   try {
-    const response = await fetchImpl(HK01_LATEST_FEED_URL, {
+    const response = await fetchImpl(url, {
       signal,
-      redirect: 'error',
+      redirect: 'follow',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Metro-News-Live/1.0)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Accept: 'application/json,text/plain,*/*',
         'Accept-Language': 'zh-HK,zh-TW;q=0.9,en;q=0.6',
       },
@@ -86,13 +87,30 @@ export async function fetchHk01LatestFeed(fetchImpl = fetch) {
 
     if (!response.ok) throw new Error(`HK01 latest HTTP ${response.status}`);
 
-    const finalUrl = new URL(response.url || HK01_LATEST_FEED_URL);
+    const finalUrl = new URL(response.url || url);
     if (finalUrl.protocol !== 'https:' || finalUrl.hostname !== API_HOST) {
       throw new Error('HK01 latest redirect escaped publisher API host');
     }
 
-    return parseHk01LatestFeed(await response.json());
+    const articles = parseHk01LatestFeed(await response.json());
+    if (articles.length === 0) throw new Error('HK01 latest returned no article items');
+    return articles;
   } finally {
     clear();
   }
+}
+
+export async function fetchHk01LatestFeed(fetchImpl = fetch) {
+  const urls = [HK01_LATEST_FEED_URL, HK01_LATEST_FALLBACK_FEED_URL];
+  let lastError;
+
+  for (const url of urls) {
+    try {
+      return await fetchFeed(url, fetchImpl);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('HK01 latest feed unavailable');
 }
