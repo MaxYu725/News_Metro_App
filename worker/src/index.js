@@ -200,6 +200,46 @@ async function insertArticles(items, env) {
   }
 }
 
+async function insertHk01LatestArticles(items, env) {
+  if (!Array.isArray(items) || items.length === 0) return;
+
+  const statements = items.map(item =>
+    env.DB.prepare(
+      `INSERT INTO articles (id, title, link, pubDate, description, category, source, imageUrl, images)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          title = excluded.title,
+          link = excluded.link,
+          pubDate = excluded.pubDate,
+          category = excluded.category,
+          imageUrl = CASE
+            WHEN excluded.imageUrl <> '' THEN excluded.imageUrl
+            ELSE articles.imageUrl
+          END
+        WHERE articles.title IS NOT excluded.title
+          OR articles.link IS NOT excluded.link
+          OR articles.pubDate IS NOT excluded.pubDate
+          OR articles.category IS NOT excluded.category
+          OR (excluded.imageUrl <> '' AND articles.imageUrl IS NOT excluded.imageUrl)`,
+    ).bind(
+      item.id,
+      item.title,
+      item.link,
+      item.pubDate,
+      item.description,
+      item.category,
+      item.source,
+      item.imageUrl || '',
+      '[]',
+    ),
+  );
+
+  const chunkSize = 50;
+  for (let i = 0; i < statements.length; i += chunkSize) {
+    await env.DB.batch(statements.slice(i, i + chunkSize));
+  }
+}
+
 async function syncHk01LatestToDB(env) {
   try {
     const articles = await fetchHk01LatestFeed();
@@ -207,7 +247,7 @@ async function syncHk01LatestToDB(env) {
       console.warn('hk01-latest-source-empty');
       return 0;
     }
-    await insertArticles(articles, env);
+    await insertHk01LatestArticles(articles, env);
     return articles.length;
   } catch (error) {
     console.warn('hk01-latest-sync-failed', {
