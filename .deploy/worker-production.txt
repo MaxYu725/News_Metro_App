@@ -1,1 +1,1 @@
-HK01 latest direct sync: deploy first-party /v2/feed/category/0 ingestion every 3 minutes, retain the 15-minute full RSSHub/Bastille sync, and preserve richer stored article content/media during live upserts.
+HK01 latest endpoint fix: deploy /v2/feed/latest as the primary 3-minute live source with category/0 fallback, preserving the existing D1 schema, rich-content protection, and 15-minute full sync.
