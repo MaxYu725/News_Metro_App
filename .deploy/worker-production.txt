@@ -1,1 +1,1 @@
-v72 feed pagination fix: deploy cursor/keyset pagination for /api/news, deterministic pubDate+id ordering, nextCursor responses, and frontend identity dedupe to prevent repeated news blocks during live ingestion.
+HK01 latest direct sync: deploy first-party /v2/feed/category/0 ingestion every 3 minutes, retain the 15-minute full RSSHub/Bastille sync, and preserve richer stored article content/media during live upserts.
