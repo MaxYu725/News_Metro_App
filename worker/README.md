@@ -11,7 +11,7 @@ Production bindings represented by `wrangler.jsonc`:
 - `AI` — Workers AI
 - `DB` — D1 database `metro_news_db`
 - `API_KEY` — required Worker secret; value remains in Cloudflare only
-- Cron — every 15 minutes
+- Cron — every 3 minutes for the HK01 first-party latest feed, plus every 15 minutes for the full category/Bastille sync
 
 The compatibility date remains pinned to the recovered production value (`2026-08-07`) for baseline parity. It should only be advanced as a separate reviewed change.
 

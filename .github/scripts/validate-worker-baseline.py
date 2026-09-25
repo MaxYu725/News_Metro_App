@@ -21,6 +21,7 @@ def main() -> int:
     search = (WORKER / "src" / "search.js").read_text("utf-8")
     retention = (WORKER / "src" / "retention.js").read_text("utf-8")
     bastille = (WORKER / "src" / "sources" / "bastille.js").read_text("utf-8")
+    hk01_latest = (WORKER / "src" / "sources" / "hk01-latest.js").read_text("utf-8")
     archive_backfill = (WORKER / "src" / "archive-backfill.js").read_text("utf-8")
     archive_shards = (WORKER / "src" / "archive-shards.js").read_text("utf-8")
     archive_backfill_script = (WORKER / "scripts" / "archive-backfill.mjs").read_text("utf-8")
@@ -68,8 +69,8 @@ def main() -> int:
     if config.get("secrets", {}).get("required") != ["API_KEY"]:
         fail("API_KEY must be declared as the only required secret")
 
-    if config.get("triggers", {}).get("crons") != ["*/15 * * * *"]:
-        fail("cron trigger does not match production")
+    if config.get("triggers", {}).get("crons") != ["*/15 * * * *", "*/3 * * * *"]:
+        fail("cron trigger set does not match the current sync contract")
 
     ratelimits = {item.get("name"): item for item in config.get("ratelimits", [])}
     expected_rate_limits = {
@@ -138,6 +139,19 @@ def main() -> int:
         fail("wildcard CORS must not be reintroduced")
     if "targetUrl.includes('hk01.com')" in combined:
         fail("unsafe HK01 substring allowlist must not be reintroduced")
+
+    # Live HK01: latest feed must use the publisher API independently of RSSHub zones.
+    for signal in [
+        "HK01_LATEST_FEED_URL",
+        "feed/category/0?bucketId=00000",
+        "fetchHk01LatestFeed",
+        "https://hk01.com/sns/article/",
+    ]:
+        if signal not in hk01_latest:
+            fail(f"HK01 latest provider signal missing: {signal}")
+    for signal in ["syncHk01LatestToDB", "HK01_LATEST_CRON = '*/3 * * * *'"]:
+        if signal not in source:
+            fail(f"HK01 latest integration signal missing: {signal}")
 
     # NS2B: second source must stay source-specific and use the existing schema.
     for signal in [
@@ -302,8 +316,14 @@ def main() -> int:
             fail(f"adaptive retention contract signal missing: {signal}")
     if "-30 days" in source or "cleanUpOldArticles" in source:
         fail("fixed 30-day retention must not be reintroduced")
-    if "ctx.waitUntil(syncAllCategoriesAndRetention(env));" not in source:
-        fail("scheduled ingestion must run adaptive retention after category sync")
+    scheduled_signals = [
+        "event?.cron === HK01_LATEST_CRON",
+        "? syncHk01LatestToDB(env)",
+        ": syncAllCategoriesAndRetention(env)",
+    ]
+    for signal in scheduled_signals:
+        if signal not in source:
+            fail(f"scheduled ingestion routing signal missing: {signal}")
     if "enforceAdaptiveRetention(env.DB)" not in source:
         fail("forced sync must use adaptive retention")
 
