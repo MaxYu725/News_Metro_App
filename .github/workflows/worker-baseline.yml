@@ -13,6 +13,7 @@ on:
       - .github/scripts/validate-archive-backfill.sh
       - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/worker-baseline.yml
+      - .github/workflows/archive-backfill.yml
   push:
     branches:
       - agent/**
@@ -25,6 +26,7 @@ on:
       - .github/scripts/validate-archive-backfill.sh
       - .github/scripts/archive-backfill-production-audit.sh
       - .github/workflows/worker-baseline.yml
+      - .github/workflows/archive-backfill.yml
 
 permissions:
   contents: read
