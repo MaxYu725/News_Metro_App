@@ -1,4 +1,5 @@
 export const DETAILED_SUMMARY_MIN_CHARS = 1200;
+export const DETAILED_SUMMARY_INPUT_CHARS = 12000;
 const DETAILED_SUMMARY_CACHE_KEY = 'metro_ai_detailed_summaries_v1';
 const DETAILED_SUMMARY_CACHE_LIMIT = 50;
 
@@ -9,7 +10,8 @@ export function normalizeArticleSummaryText(text) {
         .replace(/<[^>]+>/g, ' ')
         .replace(/&nbsp;|&#160;/gi, ' ')
         .replace(/\s+/g, ' ')
-        .trim();
+        .trim()
+        .slice(0, DETAILED_SUMMARY_INPUT_CHARS);
 }
 
 export function articleSummaryTextLength(text) {
@@ -18,6 +20,20 @@ export function articleSummaryTextLength(text) {
 
 export function needsDetailedSummaryConfirmation(text) {
     return articleSummaryTextLength(text) < DETAILED_SUMMARY_MIN_CHARS;
+}
+
+function blockAISelectionDuringActiveRequest(event) {
+    const actionTarget = event.target?.closest?.('[data-reader-action]');
+    const action = actionTarget?.dataset?.readerAction;
+    if (action !== 'ai' && action !== 'ai-mode') return;
+    if (!document.querySelector('.reader-ai.loading')) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+}
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', blockAISelectionDuringActiveRequest, true);
 }
 
 function readDetailedSummaryCache(storage = globalThis.localStorage) {
