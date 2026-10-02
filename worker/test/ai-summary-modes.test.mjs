@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import worker from '../src/index.js';
+import worker from '../src/entry.js';
 import { APP_ORIGIN } from '../src/security.js';
 
 function limiter(success = true) {
