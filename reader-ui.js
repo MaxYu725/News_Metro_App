@@ -1,6 +1,12 @@
 import { openLightbox, isLightboxOpen } from './lightbox.js';
 import { timeAgo } from './utils.js';
 import {
+    getDetailedAISummary,
+    needsDetailedSummaryConfirmation,
+    normalizeArticleSummaryText,
+    saveDetailedAISummary
+} from './ai-summary-policy.mjs';
+import {
     getReaderArticle,
     getReaderArticleState,
     markReaderArticleRead,
@@ -12,6 +18,8 @@ import {
     refreshReaderViewAfterClose
 } from './app.js';
 
+const AI_API_URL = 'https://news-proxy.maxyu0725us.workers.dev/api/summarize';
+
 let overlay = null;
 let sourceTile = null;
 let currentArticle = null;
@@ -22,6 +30,7 @@ let openSequence = 0;
 let bookmarkChanged = false;
 let feedbackTimer = 0;
 let renderedMediaSignature = '';
+let selectedAIMode = 'simple';
 
 const DOM = {};
 const APP_SHELL_IDS = ['app-header', 'main-container', 'bottom-nav'];
@@ -68,7 +77,13 @@ function ensureOverlay() {
                     <div class="reader-media hidden"></div>
 
                     <section class="reader-ai hidden" aria-live="polite">
-                        <div class="reader-ai-label">✦ AI 摘要</div>
+                        <div class="reader-ai-header">
+                            <div class="reader-ai-label">✦ AI 摘要</div>
+                            <div class="reader-ai-modes" role="group" aria-label="AI 撮要模式">
+                                <button type="button" class="reader-ai-mode active" data-reader-action="ai-mode" data-ai-mode="simple">簡單撮要</button>
+                                <button type="button" class="reader-ai-mode" data-reader-action="ai-mode" data-ai-mode="detailed">詳細撮要</button>
+                            </div>
+                        </div>
                         <p class="reader-ai-text"></p>
                     </section>
 
@@ -89,6 +104,7 @@ function ensureOverlay() {
     DOM.ai = overlay.querySelector('.reader-ai');
     DOM.aiText = overlay.querySelector('.reader-ai-text');
     DOM.aiTrigger = overlay.querySelector('[data-reader-action="ai"]');
+    DOM.aiModes = [...overlay.querySelectorAll('[data-ai-mode]')];
     DOM.content = overlay.querySelector('.reader-content');
     DOM.bookmark = overlay.querySelector('[data-reader-action="bookmark"]');
     DOM.feedback = overlay.querySelector('[data-reader-feedback]');
@@ -96,11 +112,15 @@ function ensureOverlay() {
     DOM.close.addEventListener('click', () => closeReader());
 
     overlay.addEventListener('click', async event => {
-        const action = event.target.closest('[data-reader-action]')?.dataset.readerAction;
+        const actionTarget = event.target.closest('[data-reader-action]');
+        const action = actionTarget?.dataset.readerAction;
         if (!action || !currentArticle) return;
 
         if (action === 'ai') {
-            await handleAIAction();
+            showAIModePicker();
+        } else if (action === 'ai-mode') {
+            const mode = actionTarget.dataset.aiMode === 'detailed' ? 'detailed' : 'simple';
+            await handleAIAction(mode);
         } else if (action === 'bookmark') {
             const saved = toggleReaderBookmark(currentArticle);
             bookmarkChanged = true;
@@ -363,36 +383,121 @@ function syncBookmarkState(saved) {
     DOM.bookmark.classList.toggle('saved', saved);
 }
 
-function syncAIState(summary = '') {
+function syncAIModeButtons(mode = selectedAIMode) {
+    selectedAIMode = mode === 'detailed' ? 'detailed' : 'simple';
+    DOM.aiModes?.forEach(button => {
+        const active = button.dataset.aiMode === selectedAIMode;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+}
+
+function syncAIState(summary = '', mode = selectedAIMode) {
     const visible = !!summary;
+    syncAIModeButtons(mode);
     DOM.ai.classList.toggle('hidden', !visible);
     DOM.ai.classList.remove('loading');
     DOM.aiTrigger?.classList.toggle('active', visible);
     if (visible) DOM.aiText.textContent = summary;
 }
 
-function showReaderAILoading() {
+function showAIModePicker() {
+    DOM.ai.classList.remove('hidden', 'loading');
+    DOM.aiTrigger?.classList.add('active');
+    syncAIModeButtons(selectedAIMode);
+
+    const state = getReaderArticleState(currentArticle);
+    const cachedSimple = state.aiSummary || '';
+    const cachedDetailed = getDetailedAISummary(currentArticle?.link);
+    const cached = selectedAIMode === 'detailed' ? cachedDetailed : cachedSimple;
+    DOM.aiText.textContent = cached || '選擇「簡單撮要」或「詳細撮要」以開始整理。';
+}
+
+function showReaderAILoading(mode) {
+    syncAIModeButtons(mode);
     DOM.ai.classList.remove('hidden');
-    DOM.aiText.textContent = '正在整理新聞重點…';
+    DOM.aiText.textContent = mode === 'detailed' ? '正在整理詳細撮要…' : '正在整理簡單撮要…';
     DOM.ai.classList.add('loading');
     DOM.aiTrigger?.classList.add('active');
 }
 
-async function handleAIAction() {
+async function fetchDetailedAISummary(article) {
+    const text = normalizeArticleSummaryText(article?.description || '');
+    if (!text) return { success: false, error: '沒有可供摘要的內容' };
+
+    try {
+        const response = await fetch(AI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, mode: 'detailed' })
+        });
+        const result = await response.json();
+        return response.ok && result.success
+            ? result
+            : { success: false, error: result?.error || 'AI 摘要服務暫時無法回應' };
+    } catch {
+        return { success: false, error: 'AI 伺服器無回應' };
+    }
+}
+
+async function handleAIAction(mode = 'simple', { confirmedShortArticle = false } = {}) {
     if (!currentArticle) return;
     const articleAtStart = currentArticle;
-    showReaderAILoading();
+    const nextMode = mode === 'detailed' ? 'detailed' : 'simple';
 
-    const result = await summarizeReaderArticle(articleAtStart);
+    if (nextMode === 'simple') {
+        const state = getReaderArticleState(articleAtStart);
+        if (state.aiSummary) {
+            syncAIState(state.aiSummary, 'simple');
+            return;
+        }
+
+        showReaderAILoading('simple');
+        const result = await summarizeReaderArticle(articleAtStart);
+        if (currentArticle !== articleAtStart || !overlay?.classList.contains('open')) return;
+
+        if (result.success && result.summary) {
+            syncAIState(result.summary, 'simple');
+            syncReaderSourceTile(sourceTile, articleAtStart);
+        } else {
+            DOM.ai.classList.remove('loading');
+            DOM.aiText.textContent = '總結失敗，請稍後再試。';
+        }
+        return;
+    }
+
+    const cachedDetailed = getDetailedAISummary(articleAtStart.link);
+    if (cachedDetailed) {
+        syncAIState(cachedDetailed, 'detailed');
+        return;
+    }
+
+    showReaderAILoading('detailed');
+    await loadReaderArticle(articleAtStart);
+    if (currentArticle !== articleAtStart || !overlay?.classList.contains('open')) return;
+
+    if (!confirmedShortArticle && needsDetailedSummaryConfirmation(articleAtStart.description || '')) {
+        DOM.ai.classList.remove('loading');
+        DOM.aiText.textContent = '文章內容較短，簡單撮要已足夠。';
+        const proceed = window.confirm('文章內容較短，簡單撮要已足夠。\n\n是否仍要產生詳細撮要？');
+        if (!proceed) {
+            await handleAIAction('simple');
+            return;
+        }
+        await handleAIAction('detailed', { confirmedShortArticle: true });
+        return;
+    }
+
+    const result = await fetchDetailedAISummary(articleAtStart);
     if (currentArticle !== articleAtStart || !overlay?.classList.contains('open')) return;
 
     if (result.success && result.summary) {
-        syncAIState(result.summary);
-        syncReaderSourceTile(sourceTile, articleAtStart);
+        saveDetailedAISummary(articleAtStart.link, result.summary);
+        syncAIState(result.summary, 'detailed');
+        sourceTile?.querySelector('.feed-ai-indicator')?.classList.remove('hidden');
     } else {
-        DOM.ai.classList.remove('hidden', 'loading');
-        DOM.aiText.textContent = '總結失敗，請稍後再試。';
-        DOM.aiTrigger?.classList.remove('active');
+        DOM.ai.classList.remove('loading');
+        DOM.aiText.textContent = '詳細撮要失敗，請稍後再試。';
     }
 }
 
@@ -420,11 +525,24 @@ async function shareCurrentArticle() {
 
 function prepareReader(article, tile) {
     const state = getReaderArticleState(article);
+    const cachedDetailed = getDetailedAISummary(article.link);
     DOM.category.textContent = readerCategory(tile, article, state);
     DOM.time.textContent = article.pubDate ? timeAgo(article.pubDate) : '';
     DOM.title.textContent = article.title || '新聞';
     syncBookmarkState(state.saved);
-    syncAIState(state.aiSummary);
+
+    if (state.aiSummary) {
+        syncAIState(state.aiSummary, 'simple');
+    } else if (cachedDetailed) {
+        syncAIState(cachedDetailed, 'detailed');
+    } else {
+        selectedAIMode = 'simple';
+        syncAIModeButtons('simple');
+        DOM.ai.classList.add('hidden');
+        DOM.ai.classList.remove('loading');
+        DOM.aiTrigger?.classList.remove('active');
+        DOM.aiText.textContent = '';
+    }
     showReaderFeedback('');
 
     renderedMediaSignature = '';
@@ -526,6 +644,7 @@ function finalizeClose() {
     historyPushed = false;
     bookmarkChanged = false;
     renderedMediaSignature = '';
+    selectedAIMode = 'simple';
 }
 
 function closeReader({ fromPopState = false } = {}) {
