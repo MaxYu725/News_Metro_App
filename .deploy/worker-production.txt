@@ -1,1 +1,1 @@
-HK01 latest endpoint fix: deploy /v2/feed/latest as the primary 3-minute live source with category/0 fallback, preserving the existing D1 schema, rich-content protection, and 15-minute full sync.
+AI summary modes deployment: deploy PR #115 merge 8f49a71b93f47b5f360176ed353c5c45df65a9a9 with Simple/Detailed Reader summaries, 12,000-character detailed input cap, request-race protection, and v84 PWA shell cache integration.
