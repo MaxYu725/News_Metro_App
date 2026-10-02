@@ -1,4 +1,5 @@
 import worker from './index.js';
+import { handleAISummaryRequest } from './ai-summary.js';
 import {
   consumeRateLimit,
   corsHeaders,
@@ -298,6 +299,10 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/api/summarize' && request.method === 'POST') {
+      return handleAISummaryRequest(request, env);
+    }
 
     if (url.pathname === '/api/images') {
       if (request.method === 'OPTIONS') {
