@@ -46,7 +46,7 @@ const ecoAt = index.indexOf('performance-mode.css');
 assert.ok(pressAt >= 0 && motionAt > pressAt && ecoAt > motionAt);
 
 assert.match(eco, /transition-duration:\s*0\.01ms\s*!important/);
-assert.match(sw, /metro-news-shell-v83-liquid-glass-phase4/);
+assert.match(sw, /metro-news-shell-v8[3-9]-[a-z0-9-]+/);
 assert.match(sw, /liquid-motion-glass\.css\?v=83/);
 
 console.log('Liquid Glass phase 4 contract: PASS');

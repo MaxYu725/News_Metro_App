@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v83-liquid-glass-phase4';
+const SHELL_CACHE = 'metro-news-shell-v84-ai-summary-modes';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -34,6 +34,7 @@ const SHELL_URLS = [
     './feed-ui.js',
     './search-ui.js',
     './reader-ui.js',
+    './ai-summary-policy.mjs',
     './reader-image-stability.js',
     './liquid-nav-indicator.js?v=53',
     './liquid-category-indicator.js?v=54',
