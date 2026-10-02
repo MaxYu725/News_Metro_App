@@ -30,6 +30,20 @@ assert.ok(
   'Reader overlay should close before the feed refresh work begins'
 );
 
-assert.match(swSource, /const SHELL_CACHE = 'metro-news-shell-v\d+-[^']+'/);
+assert.match(swSource, /const SHELL_CACHE = 'metro-news-shell-v84-ai-summary-modes'/);
+assert.match(swSource, /['"]\.\/ai-summary-policy\.mjs['"]/);
+
+assert.match(
+  readerSource,
+  /normalizeArticleSummaryText\(article\?\.description \|\| ''\)\.slice\(0,\s*12000\)/,
+  'Detailed summaries must cap the client payload before POSTing to the Worker'
+);
+assert.match(readerSource, /let aiSummaryRequestSequence = 0;/);
+assert.match(readerSource, /const requestSequence = \+\+aiSummaryRequestSequence;/);
+assert.match(
+  readerSource,
+  /requestSequence !== aiSummaryRequestSequence/,
+  'Superseded AI summary responses must not replace the latest selected mode'
+);
 
 console.log('Reader performance contract: PASS');
