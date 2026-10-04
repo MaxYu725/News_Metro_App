@@ -174,14 +174,12 @@ test("EVENT rebuilds when an old event leaves the selected principal group", asy
     },
   };
   const current = await p.prepareEvidence(
-    cases
-      .slice(0, 3)
-      .map((a, i) => ({
-        ...a,
-        id: String(i + 10),
-        link: `https://hk01.com/sns/article/${i + 10}`,
-        title: `劫案｜警方拘捕嫌疑男子調查 ${i}`,
-      })),
+    cases.slice(0, 3).map((a, i) => ({
+      ...a,
+      id: String(i + 10),
+      link: `https://hk01.com/sns/article/${i + 10}`,
+      title: `劫案｜警方拘捕嫌疑男子調查 ${i}`,
+    })),
   );
   assert.equal(p.planEvidence(current, previous, "EVENT").rebuild, true);
 });
@@ -197,4 +195,36 @@ test("CURATION displays all retained evidence instead of silently hiding items a
     20,
   );
   assert.ok(output.sections.some((s) => s.heading === "餐廳與美食"));
+});
+
+test("low cohesion DIGEST needs readable subgroups rather than title-only clusters", () => {
+  const clusters = [
+    article("1", "香港｜足球球隊聯賽進球甲", ""),
+    article("2", "香港｜足球球隊聯賽進球乙", ""),
+    article("3", "香港｜樂壇歌手音樂演唱會甲", ""),
+    article("4", "香港｜樂壇歌手音樂演唱會乙", ""),
+  ];
+  const singletons = [
+    "工廠火警消防",
+    "天文台強風雷暴",
+    "地鐵工程隧道",
+    "樓市成交價格",
+    "花卉展覽公園",
+    "醫院手術病人",
+    "學校課程學生",
+    "巴士車費調整",
+    "銀行利率存款",
+    "漁船碼頭海港",
+  ].map((title, i) => article(String(i + 5), `香港｜${title}`));
+  const a = p.analyzeTopic("香港", [...clusters, ...singletons], "auto", now);
+  assert.ok(a.cohesion < 45);
+  assert.equal(a.mode, "NONE");
+  const readable = clusters.map((a) => ({
+    ...a,
+    description: "足夠的原文內容。".repeat(20),
+  }));
+  assert.equal(
+    p.analyzeTopic("香港", [...readable, ...singletons], "auto", now).mode,
+    "DIGEST",
+  );
 });

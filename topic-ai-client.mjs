@@ -75,10 +75,35 @@ export function createTopicAIController({
         signal: requestController.signal,
         cache: "no-store",
       });
-      const data = await response.json();
       if (seq !== sequence) return;
-      if (!response.ok || !data.success)
-        throw new Error(data.error || "暫時無法連接整理服務");
+      if (!response.ok) {
+        task.result = {
+          ...(task.result || {}),
+          success: true,
+          status:
+            response.status === 429
+              ? "rate_limited"
+              : [404, 503].includes(response.status)
+                ? "unavailable"
+                : "service_error",
+        };
+        if (response.status === 429) {
+          const retry = Number(response.headers?.get("Retry-After"));
+          task.result.nextUpdateAt =
+            Date.now() + (retry > 0 && retry <= 3600 ? retry : 60) * 1000;
+        }
+        return;
+      }
+      const data = await response.json().catch(() => null);
+      if (seq !== sequence) return;
+      if (!data?.success) {
+        task.result = {
+          ...(task.result || {}),
+          success: true,
+          status: "service_error",
+        };
+        return;
+      }
       task.result = data;
       if (data.output) {
         try {

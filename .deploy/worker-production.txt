@@ -1,1 +1,1 @@
-AI summary modes deployment: deploy PR #115 merge 8f49a71b93f47b5f360176ed353c5c45df65a9a9 with Simple/Detailed Reader summaries, 12,000-character detailed input cap, request-race protection, and v84 PWA shell cache integration.
+Deploy tracked-topic organization from PR #116 plus article-appropriate detailed summaries and readable DIGEST gates. Apply live D1 migration 0003_topic_ai.sql before Worker deployment; verify cache-only /api/topic-ai smoke without AI usage. PWA shell v86 invalidates detailed-summary v1 caches on next use.
