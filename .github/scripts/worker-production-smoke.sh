@@ -47,6 +47,15 @@ if grep -qi '^access-control-allow-origin:' "$tmp_headers"; then
   exit 1
 fi
 
+# Cache-only GET verifies the new route and live migration without spending AI.
+echo 'Smoke: tracked-topic cache route is readable without generation'
+request 200 -G \
+  -H "Origin: ${APP_ORIGIN}" \
+  --data-urlencode 'q=topic-smoke-readonly' \
+  --data-urlencode 'mode=auto' \
+  "${WORKER_ORIGIN}/api/topic-ai"
+jq -e '.success == true and (.status | type == "string") and (.sources | type == "array")' "$tmp_body" >/dev/null
+
 echo 'Smoke: arbitrary article URL is blocked before fetch'
 request 400 -G \
   -H "Origin: ${APP_ORIGIN}" \

@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'metro-news-';
-const SHELL_CACHE = 'metro-news-shell-v84-ai-summary-modes';
+const SHELL_CACHE = 'metro-news-shell-v85-topic-ai';
 const RUNTIME_CACHE = 'metro-news-runtime-v1';
 
 const SHELL_URLS = [
@@ -49,6 +49,9 @@ const SHELL_URLS = [
     './data-cache.js',
     './utils.js',
     './tracking.js',
+    './topic-ai-ui.js',
+    './topic-ai-client.mjs',
+    './topic-ai-ui.css',
     './gestures.js',
     './settings.js',
     './source-settings.js',

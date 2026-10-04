@@ -1,0 +1,144 @@
+const API_URL = "https://news-proxy.maxyu0725us.workers.dev/api/topic-ai";
+const CACHE_KEY = "metro_topic_ai_snapshots_v1";
+export const TOPIC_AI_MODES = Object.freeze([
+  ["auto", "自動"],
+  ["event", "事件追蹤"],
+  ["digest", "主題摘要"],
+  ["off", "關閉"],
+]);
+export function safeTopicSourceLink(value) {
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" &&
+      !u.username &&
+      !u.password &&
+      (!u.port || u.port === "443") &&
+      [
+        "hk01.com",
+        "www.hk01.com",
+        "bastillepost.com",
+        "www.bastillepost.com",
+      ].includes(u.hostname)
+      ? u.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+function readCache(storage) {
+  try {
+    const data = JSON.parse(storage?.getItem(CACHE_KEY) || "{}");
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+export function createTopicAIController({
+  fetch: fetcher = globalThis.fetch,
+  storage = globalThis.localStorage,
+  onChange,
+}) {
+  let sequence = 0,
+    current = null,
+    controller = null;
+  const emit = () => {
+    if (current) onChange({ ...current });
+  };
+  function keyFor(category, sourceIds) {
+    return JSON.stringify([
+      String(category.query || category.name || "")
+        .normalize("NFKC")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase(),
+      category.aiMode || "auto",
+      [...sourceIds].sort(),
+    ]);
+  }
+  async function request(method) {
+    if (!current || current.mode === "off" || current.loading) return;
+    const task = current,
+      seq = sequence;
+    task.loading = true;
+    emit();
+    const requestController = new AbortController();
+    controller = requestController;
+    const params = new URLSearchParams({
+      q: task.query,
+      mode: task.mode,
+      sources: task.sourceIds.join(","),
+    });
+    const timer = setTimeout(() => requestController.abort(), 60000);
+    try {
+      const response = await fetcher(`${API_URL}?${params}`, {
+        method,
+        signal: requestController.signal,
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (seq !== sequence) return;
+      if (!response.ok || !data.success)
+        throw new Error(data.error || "暫時無法連接整理服務");
+      task.result = data;
+      if (data.output) {
+        try {
+          const cache = readCache(storage);
+          delete cache[task.key];
+          cache[task.key] = data;
+          while (Object.keys(cache).length > 20)
+            delete cache[Object.keys(cache)[0]];
+          storage?.setItem(CACHE_KEY, JSON.stringify(cache));
+        } catch {}
+      } else if (["off", "insufficient"].includes(data.status)) {
+        try {
+          const cache = readCache(storage);
+          delete cache[task.key];
+          storage?.setItem(CACHE_KEY, JSON.stringify(cache));
+        } catch {}
+      }
+    } catch (error) {
+      if (seq !== sequence) return;
+      task.result = {
+        ...(task.result || {}),
+        success: true,
+        status: "offline",
+        error: String(error?.message || ""),
+      };
+    } finally {
+      clearTimeout(timer);
+      if (seq === sequence) {
+        task.loading = false;
+        emit();
+      }
+    }
+  }
+  return {
+    async open(category, sourceIds) {
+      sequence++;
+      controller?.abort();
+      const mode = category.aiMode || "auto";
+      const key = keyFor(category, sourceIds);
+      current = {
+        query: String(category.query || category.name || "").trim(),
+        mode,
+        key,
+        sourceIds,
+        loading: false,
+        result:
+          mode === "off"
+            ? { status: "off", mode: "NONE" }
+            : readCache(storage)[key] || { status: "empty", mode: "NONE" },
+      };
+      emit();
+      if (mode !== "off") await request("GET");
+    },
+    generate() {
+      return request("POST");
+    },
+    close() {
+      sequence++;
+      controller?.abort();
+      current = null;
+    },
+  };
+}

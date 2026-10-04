@@ -64,7 +64,8 @@ export function trackKeyword(keyword) {
         id: `custom_${Date.now()}`,
         name: clean,
         isCustom: true,
-        query: clean
+        query: clean,
+        aiMode: 'auto'
     };
 
     const next = [...getTrackedCategories(), category];
@@ -95,4 +96,19 @@ export function untrackKeyword(keywordOrId) {
 export function toggleTrackedKeyword(keyword) {
     const existing = findTrackedCategory(keyword);
     return existing ? untrackKeyword(existing.id) : trackKeyword(keyword);
+}
+
+export function getTrackedAIMode(category) {
+    return ['auto', 'event', 'digest', 'off'].includes(category?.aiMode) ? category.aiMode : 'auto';
+}
+
+export function setTrackedAIMode(id, mode) {
+    if (!['auto', 'event', 'digest', 'off'].includes(mode)) return false;
+    const categories = getTrackedCategories();
+    const category = categories.find(item => item.id === id);
+    if (!category) return false;
+    category.aiMode = mode;
+    LocalDB.saveCustomCategories(categories);
+    emitTrackingChanged('mode', normalizeTrackedKeyword(category.query || category.name));
+    return true;
 }

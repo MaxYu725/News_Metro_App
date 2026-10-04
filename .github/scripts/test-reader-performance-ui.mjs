@@ -31,7 +31,7 @@ assert.ok(
   'Reader overlay should close before the feed refresh work begins'
 );
 
-assert.match(swSource, /const SHELL_CACHE = 'metro-news-shell-v84-ai-summary-modes'/);
+assert.match(swSource, /const SHELL_CACHE = 'metro-news-shell-v\d+-[a-z0-9-]+'/ );
 assert.match(swSource, /['"]\.\/ai-summary-policy\.mjs['"]/);
 
 assert.match(aiPolicySource, /DETAILED_SUMMARY_INPUT_CHARS\s*=\s*12000/);
