@@ -1,4 +1,5 @@
 import { timeAgo, LocalDB } from './utils.js';
+import { showTopicAI, hideTopicAI } from './topic-ai-ui.js';
 import { fetchNewsData, fetchSearchData, fetchImageData, fetchAISummary, fetchFullArticleContent } from './api.js';
 import { initLightbox, openLightbox } from './lightbox.js';
 import { initGestures } from './gestures.js';
@@ -198,6 +199,8 @@ function showNewsGrid() {
 function loadCurrentCategory(forceSync = false, isAppendMode = false) {
     const currentCat = categories[currentIndex];
     if (!currentCat) return Promise.resolve();
+
+    if (!isAppendMode) showTopicAI(currentCat, DOM.newsGrid);
 
     if (currentCat.isCustom) {
         currentSearchQuery = currentCat.query;
@@ -474,6 +477,7 @@ function showAppSection(section) {
     }
 
     activeAppSection = section;
+    if (section !== 'news') hideTopicAI();
     setBottomNavState();
     DOM.categoryStrip?.classList.toggle('hidden', section !== 'news');
 

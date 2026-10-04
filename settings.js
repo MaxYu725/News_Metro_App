@@ -1,10 +1,13 @@
 import { LocalDB } from './utils.js';
+import { TOPIC_AI_MODES } from './topic-ai-client.mjs';
 import {
     TRACKING_CHANGED_EVENT,
     getTrackedCategories,
     trackKeyword,
     untrackKeyword,
-    normalizeTrackedKeyword
+    normalizeTrackedKeyword,
+    getTrackedAIMode,
+    setTrackedAIMode
 } from './tracking.js';
 
 const ACCENT_STORAGE_KEY = 'metro_accent_theme_v1';
@@ -385,7 +388,19 @@ export function renderCategoryManager(allBaseCats, getCategories, saveVisibleCat
             untrackKeyword(cat.id);
         });
 
-        row.append(title, remove);
+        const modeSelect = document.createElement('select');
+        modeSelect.className = 'topic-ai-mode-setting';
+        modeSelect.setAttribute('aria-label', `${keyword} 的整理模式`);
+        for (const [value, label] of TOPIC_AI_MODES) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            modeSelect.append(option);
+        }
+        modeSelect.value = getTrackedAIMode(cat);
+        modeSelect.addEventListener('change', () => setTrackedAIMode(cat.id, modeSelect.value));
+        row.style.flexWrap = 'wrap';
+        row.append(title, modeSelect, remove);
         list.appendChild(row);
     });
 }

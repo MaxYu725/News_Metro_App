@@ -23,7 +23,7 @@ jobs:
         run: npm run build:css
       - name: Check JavaScript syntax
         run: |
-          for file in *.js; do
+          for file in *.js *.mjs; do
             echo "Checking $file"
             node --check "$file"
           done
