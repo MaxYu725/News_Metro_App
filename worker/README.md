@@ -60,6 +60,13 @@ URL (no body) checks and updates on explicit user demand. Origin and existing
 rate limit bindings apply. Apply live migration `0003_topic_ai.sql` before
 publishing this Worker; archive migrations do not change.
 
+Merging UI code deploys Pages automatically, but does **not** deploy the
+Worker. To publish backend changes, include a reviewed change to
+`.deploy/worker-production.txt` in the release PR, or dispatch `Deploy Worker
+production` on main. That workflow applies D1 migrations before deploying,
+then checks `/api/topic-ai` with a cache-only GET and rolls back on smoke
+failure. A plain-text 404 from this route means the backend is not yet deployed.
+
 The policy chooses EVENT/DIGEST/CURATION/NONE without embeddings or AI
 classification. It inspects at most the newest 60 matches across live/archive
 search. EVENT uses one coherent group, DIGEST a 14-day window, CURATION a
@@ -85,7 +92,14 @@ unleased topic rows remain after pruning. No new cron or deployment secret.
 The tracking UI keeps Auto/Event/Digest/Off per local category. Entering a
 category only reads cache; the Organize/Check updates button permits a POST.
 It shows excerpt coverage, backlog and source links. The local fallback retains
-20 snapshots; new dependencies are precached in shell v85.
+20 snapshots; new dependencies are precached in shell v86. HTTP service errors
+are shown separately from network/offline failures. Retry deadlines re-enable
+the update button while the reader remains on the topic.
+
+Detailed article summaries choose sections appropriate to the article type in
+the existing single model call. Lifestyle listings keep practical information
+per place/product; case-specific sections apply only to relevant reporting.
+The detailed local cache uses v2 so old forced case-format output is not reused.
 
 Tests: `npm test` includes a real Python SQLite adapter for migration, lease,
 quota, incremental and correction scenarios. Browser QA can run from the repo
@@ -98,5 +112,5 @@ node .github/scripts/qa-topic-ai-browser.mjs
 Set `PLAYWRIGHT_BROWSER_EXECUTABLE` to reuse an installed Chromium and optionally
 `TOPIC_QA_SCREENSHOT` to save a test screenshot. Fixtures cover mobile width,
 explicit POST, safe output rendering, source links, pending coverage, mode
-changes and section navigation. No production AI is used by tests or the new
+changes, service 404/recovery, Retry-After recovery and section navigation. No production AI is used by tests or the new
 cache-only production smoke probe.

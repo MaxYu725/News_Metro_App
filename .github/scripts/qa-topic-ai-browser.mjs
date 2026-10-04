@@ -58,6 +58,8 @@ try {
   const page = await context.newPage(),
     errors = [],
     requests = [];
+  let topicUnavailable = false;
+  let topicLimited = false;
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -80,6 +82,19 @@ try {
         url = new URL(request.url());
       if (url.pathname === "/api/topic-ai") {
         requests.push(request.method());
+        if (topicUnavailable)
+          return route.fulfill({
+            status: 404,
+            contentType: "text/plain",
+            body: "Not Found",
+          });
+        if (topicLimited)
+          return route.fulfill({
+            status: 429,
+            headers: { "Retry-After": "1", "Access-Control-Expose-Headers": "Retry-After" },
+            contentType: "application/json",
+            body: JSON.stringify({ success: false }),
+          });
         const snapshot =
           request.method() === "POST"
             ? {
@@ -167,6 +182,45 @@ try {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
+  topicUnavailable = true;
+  await page.locator(".topic-ai-generate").click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".topic-ai-status")
+      ?.textContent.includes("整理服務暫時未能提供"),
+  );
+  assert.ok(
+    (await page.locator(".topic-ai-content").textContent()).includes(
+      "控方指稱",
+    ),
+  );
+  assert.ok(
+    !(await page.locator(".topic-ai-status").textContent()).includes(
+      "本機保存",
+    ),
+  );
+  topicUnavailable = false;
+  await page.locator(".topic-ai-generate").click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".topic-ai-status")
+      ?.textContent.includes("整理已更新"),
+  );
+  topicLimited = true;
+  await page.locator(".topic-ai-generate").click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".topic-ai-status")
+      ?.textContent.includes("請求過於頻密"),
+  );
+  assert.equal(await page.locator(".topic-ai-generate").isDisabled(), true);
+  await page.waitForFunction(
+    () => document.querySelector(".topic-ai-generate")?.disabled === false,
+    null,
+    { timeout: 4000 },
+  );
+  topicLimited = false;
+  assert.deepEqual(requests, ["GET", "POST", "POST", "POST", "POST"]);
   if (process.env.TOPIC_QA_SCREENSHOT)
     await page.screenshot({
       path: process.env.TOPIC_QA_SCREENSHOT,
@@ -182,7 +236,7 @@ try {
   assert.equal(await page.locator(".topic-ai-generate").count(), 0);
   assert.deepEqual(errors, []);
   console.log(
-    "Mobile topic UI: explicit POST, safe rendering, sources, pending count, no horizontal overflow, section hide and off preference PASS",
+    "Mobile topic UI: explicit POST, safe rendering, sources, pending count, 404 recovery, Retry-After expiry, no horizontal overflow, section hide and off preference PASS",
   );
 } finally {
   await browser?.close();

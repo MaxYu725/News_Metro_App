@@ -6,7 +6,8 @@ import {
   safeTopicSourceLink,
 } from "./topic-ai-client.mjs";
 let panel = null,
-  category = null;
+  category = null,
+  retryTimer = null;
 const labels = {
   EVENT: "事件追蹤",
   DIGEST: "主題摘要",
@@ -22,6 +23,9 @@ const messages = {
   backoff: "上次整理未能完成，稍後再試。",
   error: "整理未能完成，已保留上次結果。",
   offline: "未能連接服務，顯示本機保存的結果。",
+  unavailable: "整理服務暫時未能提供，請稍後再試。",
+  rate_limited: "請求過於頻密，請稍後再試。",
+  service_error: "整理服務暫時出現問題，請稍後再試。",
   cooldown: "已保留最近的整理；稍後可再檢查更新。",
   unchanged: "資料沒有改變，沿用現有整理。",
   cached: "已載入上次整理。",
@@ -35,10 +39,18 @@ function element(tag, text, className = "") {
   return e;
 }
 function render(state) {
+  clearTimeout(retryTimer);
+  retryTimer = null;
   if (!panel || panel.hidden) return;
   const result = state.result || {},
     output = result.output,
     analysis = result.analysis;
+  if (result.nextUpdateAt > Date.now()) {
+    retryTimer = setTimeout(
+      () => render(state),
+      Math.min(result.nextUpdateAt - Date.now() + 50, 2147483647),
+    );
+  }
   const mode = state.mode === "off" ? "NONE" : result.mode;
   const header = element("div", "", "topic-ai-header");
   const title = element(
@@ -69,7 +81,11 @@ function render(state) {
   }
   const status = element(
     "p",
-    state.loading ? "正在讀取／整理…" : messages[result.status] || "",
+    state.loading
+      ? "正在讀取／整理…"
+      : result.status === "offline" && !output
+        ? "未能連接服務，暫無可用的整理結果。"
+        : messages[result.status] || "",
     "topic-ai-status",
   );
   status.setAttribute("role", "status");
@@ -125,7 +141,7 @@ function render(state) {
         "p",
         mode === "CURATION"
           ? "按已有新聞分類及去重；優惠內容和期限請查原文。"
-          : "根據已存新聞節錄整理，並非完整案情。只在按整理／更新時處理，重點可按來源回查原文。",
+          : "根據已存新聞節錄整理，並非完整報道。只在按整理／更新時處理，重點可按來源回查原文。",
         "topic-ai-note",
       ),
     );
@@ -156,6 +172,8 @@ export function showTopicAI(currentCategory, grid) {
   );
 }
 export function hideTopicAI() {
+  clearTimeout(retryTimer);
+  retryTimer = null;
   controller.close();
   category = null;
   if (panel) panel.hidden = true;

@@ -1,6 +1,6 @@
 export const DETAILED_SUMMARY_MIN_CHARS = 1200;
 export const DETAILED_SUMMARY_INPUT_CHARS = 12000;
-const DETAILED_SUMMARY_CACHE_KEY = 'metro_ai_detailed_summaries_v1';
+const DETAILED_SUMMARY_CACHE_KEY = 'metro_ai_detailed_summaries_v2';
 const DETAILED_SUMMARY_CACHE_LIMIT = 50;
 
 export function normalizeArticleSummaryText(text) {

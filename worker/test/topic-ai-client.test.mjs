@@ -140,3 +140,41 @@ test("an abandoned request timeout cannot abort the next topic request", async (
     globalThis.clearTimeout = originalClear;
   }
 });
+
+test("an undeployed route is unavailable rather than offline, even with a non-JSON 404", async () => {
+  let last,
+    unavailable = false;
+  const c = ui.createTopicAIController({
+    storage: memory(),
+    onChange: (s) => (last = s),
+    fetch: async () =>
+      unavailable
+        ? new Response("Not Found", { status: 404 })
+        : new Response(JSON.stringify(snapshot("已有內容")), { status: 200 }),
+  });
+  await c.open({ query: "深圳好去處" }, ["hk01"]);
+  unavailable = true;
+  await c.generate();
+  assert.equal(last.result.status, "unavailable");
+  assert.equal(last.result.output.sections[0].items[0].text, "已有內容");
+});
+
+test("HTTP failures keep cached content and distinguish rate limits from service failures", async () => {
+  for (const [code, status] of [
+    [429, "rate_limited"],
+    [500, "service_error"],
+    [503, "unavailable"],
+  ]) {
+    let last;
+    const c = ui.createTopicAIController({
+      storage: memory(),
+      onChange: (s) => (last = s),
+      fetch: async () =>
+        new Response(JSON.stringify({ success: false, error: "服務錯誤" }), {
+          status: code,
+        }),
+    });
+    await c.open({ query: "深圳好去處" }, ["hk01"]);
+    assert.equal(last.result.status, status);
+  }
+});

@@ -104,3 +104,21 @@ test('AI summary rejects an unknown mode before invoking Workers AI', async () =
     error: 'AI 摘要模式無效',
   });
 });
+
+test('detailed lifestyle summary asks for article-appropriate sections without empty case headings', async () => {
+  let prompt;
+  const response = await requestSummary(
+    { text: '深圳好去處｜五個景點。教堂免費入場，開放時間9時至17時，地鐵16號線可到達。', mode: 'detailed' },
+    async (_model, { messages }) => {
+      prompt = messages[0].content;
+      return { response: '景點與實用資料' };
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.match(prompt, /先判斷文章類型/);
+  assert.match(prompt, /旅遊、好去處、美食、優惠/);
+  assert.match(prompt, /地址、交通、價錢、開放時間/);
+  assert.match(prompt, /不得固定套用案件/);
+  assert.match(prompt, /不要寫「無涉及人物」、「沒有時間線」/);
+  assert.doesNotMatch(prompt, /優先整理以下內容/);
+});

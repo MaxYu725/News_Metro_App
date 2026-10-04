@@ -1,7 +1,7 @@
 import { articleTextFromHtml } from "./article-content.js";
 import { parseAllowedArticleUrl } from "./security.js";
 
-export const TOPIC_POLICY_VERSION = "topic-v1";
+export const TOPIC_POLICY_VERSION = "topic-v2";
 export const TOPIC_LIMITS = Object.freeze({
   candidates: 60,
   initial: 12,
@@ -163,7 +163,11 @@ export function analyzeTopic(
     else if (
       preference !== "event" &&
       (cohesion >= 45 ||
-        groups.filter((g) => g.indices.length >= 2).length >= 2)
+        groups.filter(
+          (g) =>
+            g.indices.filter((i) => rows[i].description.length >= 80).length >=
+            2,
+        ).length >= 2)
     )
       mode = "DIGEST";
     reason = mode === "NONE" ? "文章過於分散" : "metadata 分群";
