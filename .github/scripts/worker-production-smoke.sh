@@ -56,6 +56,21 @@ request 200 -G \
   "${WORKER_ORIGIN}/api/topic-ai"
 jq -e '.success == true and (.status | type == "string") and (.sources | type == "array")' "$tmp_body" >/dev/null
 
+# Exercise real HTTP POST stream semantics with mode=off: no DB writes or AI.
+echo 'Smoke: bodyless tracked-topic POST is accepted without generation'
+request 200 -X POST \
+  -H "Origin: ${APP_ORIGIN}" \
+  "${WORKER_ORIGIN}/api/topic-ai?q=topic-smoke-readonly&mode=off"
+jq -e '.success == true and .status == "off" and .mode == "NONE"' "$tmp_body" >/dev/null
+
+echo 'Smoke: nonempty tracked-topic POST is rejected before generation'
+request 400 -X POST \
+  -H "Origin: ${APP_ORIGIN}" \
+  -H 'Content-Type: application/json' \
+  --data '{}' \
+  "${WORKER_ORIGIN}/api/topic-ai?q=topic-smoke-readonly&mode=off"
+jq -e '.success == false' "$tmp_body" >/dev/null
+
 echo 'Smoke: arbitrary article URL is blocked before fetch'
 request 400 -G \
   -H "Origin: ${APP_ORIGIN}" \
