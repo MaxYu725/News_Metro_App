@@ -244,6 +244,25 @@ function json(request, payload, status = 200) {
     },
   });
 }
+async function hasBodyContent(request) {
+  if (!request.body) return false;
+  // Workerd exposes an empty stream for bodyless HTTP POSTs. Reject actual
+  // bytes, without buffering or waiting for the remainder of a supplied body.
+  const reader = request.body.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return false;
+      if (value?.byteLength) return true;
+    }
+  } catch {
+    // An unreadable upload cannot be verified as empty; reject it safely.
+    return true;
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 export async function handleTopicAIRequest(request, env) {
   if (!isTrustedAppRequest(request))
     return json(request, { success: false, error: "禁止的請求來源" }, 403);
@@ -262,7 +281,7 @@ export async function handleTopicAIRequest(request, env) {
     !sourceIds
   )
     return json(request, { success: false, error: "主題參數無效" }, 400);
-  if (request.body)
+  if (await hasBodyContent(request))
     return json(
       request,
       { success: false, error: "不接受自訂文章或提示詞" },

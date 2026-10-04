@@ -1,1 +1,1 @@
-Deploy tracked-topic organization from PR #116 plus article-appropriate detailed summaries and readable DIGEST gates. Apply live D1 migration 0003_topic_ai.sql before Worker deployment; verify cache-only /api/topic-ai smoke without AI usage. PWA shell v86 invalidates detailed-summary v1 caches on next use.
+Deploy topic POST empty-stream fix: accept bodyless HTTP POST, reject actual supplied bytes without buffering. Keep PR #117 summary behavior and PWA v86. Smoke must check real POST with mode=off (zero DB writes and AI calls) plus nonempty-body rejection.

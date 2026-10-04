@@ -39,6 +39,103 @@ const spec = {
   preference: "auto",
   sourceIds: ["bastille", "hk01"],
 };
+test("empty POST body streams reach topic organization without invoking AI for CURATION", async (t) => {
+  const db = sqliteD1();
+  t.after(() => db.close());
+  await seedArticles(db, 4, "美食優惠");
+  let calls = 0;
+  const e = env(db, () => {
+    calls++;
+    throw new Error("AI must not run");
+  });
+  for (const body of [
+    "",
+    new ReadableStream({
+      start(c) {
+        c.enqueue(new Uint8Array());
+        c.close();
+      },
+    }),
+  ]) {
+    const request = new Request(
+      "https://worker.example/api/topic-ai?q=美食優惠&mode=auto",
+      {
+        method: "POST",
+        headers: { Origin: APP_ORIGIN },
+        body,
+        duplex: "half",
+      },
+    );
+    assert.ok(request.body, "even an empty POST may have a stream");
+    const response = await entry.fetch(request, e, {});
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.equal(data.mode, "CURATION");
+    assert.ok(data.output.sections.length);
+  }
+  assert.equal(calls, 0);
+});
+test("nonempty POST is rejected at its first content byte without reading the rest", async () => {
+  let cancelled = false;
+  const body = new ReadableStream({
+    start(c) {
+      c.enqueue(new Uint8Array());
+      c.enqueue(new TextEncoder().encode('{"text":"custom"}'));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  const request = new Request(
+    "https://worker.example/api/topic-ai?q=案件&mode=off",
+    {
+      method: "POST",
+      headers: { Origin: APP_ORIGIN, "Content-Length": "0" },
+      body,
+      duplex: "half",
+    },
+  );
+  const response = await entry.fetch(
+    request,
+    env({
+      prepare() {
+        throw new Error("DB must not run");
+      },
+    }),
+    {},
+  );
+  assert.equal(response.status, 400);
+  assert.equal(cancelled, true);
+  assert.equal((await response.json()).error, "不接受自訂文章或提示詞");
+});
+test("unreadable POST streams fail closed with JSON before DB or AI", async () => {
+  const body = new ReadableStream({
+    start(c) {
+      c.error(new Error("aborted upload"));
+    },
+  });
+  const request = new Request(
+    "https://worker.example/api/topic-ai?q=案件&mode=off",
+    {
+      method: "POST",
+      headers: { Origin: APP_ORIGIN },
+      body,
+      duplex: "half",
+    },
+  );
+  const response = await entry.fetch(
+    request,
+    env({
+      prepare() {
+        throw new Error("DB must not run");
+      },
+    }),
+    {},
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).success, false);
+  assert.equal(request.body.locked, false);
+});
 test("GET reads cache without search or AI, POST produces a shared sourced snapshot", async (t) => {
   const db = sqliteD1();
   t.after(() => db.close());
