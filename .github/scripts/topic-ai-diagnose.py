@@ -17,8 +17,21 @@ def visit(v):
         if 'topic-ai-update-failed' in str(message):
             print(json.dumps({'message':message,'applicationFields':{k:val for k,val in v.items() if k in ('name','stage','code')}},ensure_ascii=False))
         for k,val in v.items():
+            if k == 'name' and val in ('Error','SyntaxError','AiError','TypeError','RangeError'): print('Error name:',val)
+            if k == 'args': print('Application args:',json.dumps(val,ensure_ascii=False)[:500])
+            if k == 'properties': print('Property keys:',list(val) if isinstance(val,dict) else type(val).__name__)
             if k in ('logs','message') and 'topic-ai-update-failed' in str(val): print('Failure log:',json.dumps(val,ensure_ascii=False)[:500])
             elif isinstance(val,(dict,list)): visit(val)
     elif isinstance(v,list):
         for x in v: visit(x)
 visit(data.get('result',{}))
+
+print('Event structure:',json.dumps(data.get('result',{}).get('events',{}),ensure_ascii=False)[:0])
+def keys(v,path=''):
+    if isinstance(v,dict):
+        print(path, list(v))
+        for k,val in v.items():
+            if k not in ('$metadata','$workers'): keys(val,path+'.'+k)
+    elif isinstance(v,list):
+        for val in v[:1]: keys(val,path+'[]')
+keys(data.get('result',{}).get('events',{}))
