@@ -19,6 +19,7 @@ import {
   prepareEvidence,
   planEvidence,
   buildTopicInput,
+  topicSourceAliases,
   validateTopicOutput,
   curateEvidence,
 } from "./topic-ai-policy.js";
@@ -115,6 +116,7 @@ export async function getTopicOrganization(env, spec, generate = false) {
     return result(old, cachedStatus(old));
   const token = crypto.randomUUID();
   if (!(await repo.claim(key, spec, token, now))) return result(old, "busy");
+  let stage = "cache";
   try {
     // A competing request may publish between our initial read and this claim.
     // Read under ownership before trusting cached fingerprints or cooldowns.
@@ -133,6 +135,7 @@ export async function getTopicOrganization(env, spec, generate = false) {
       env.DB,
       ...(isArchiveEligibleQuery(spec.query) ? archiveDatabases(env) : []),
     ];
+    stage = "search";
     const found = await searchArticlesAcrossDatabases(
       databases,
       spec.query,
@@ -178,6 +181,7 @@ export async function getTopicOrganization(env, spec, generate = false) {
         analysis.mode === "NONE" ? "insufficient" : "ready",
       );
     }
+    stage = "evidence";
     const evidence = await prepareEvidence(
         analysis.selected.filter((article) => article.description.length >= 80),
       ),
@@ -205,23 +209,31 @@ export async function getTopicOrganization(env, spec, generate = false) {
       ...(inherited?.members || []),
       ...plan.batch.map(({ id, fingerprint }) => ({ id, fingerprint })),
     ];
+    const aliases = topicSourceAliases(sources);
+    stage = "input";
     const input = buildTopicInput(
       analysis.mode,
       spec.query,
       plan.batch,
       inherited,
+      aliases,
     );
+    stage = "budget";
     if (!(await repo.reserveBudget(now))) {
       await repo.release(key, token);
       return result(old, "budget", {
         nextUpdateAt: Math.floor(now / 3600000) * 3600000 + 3600000,
       });
     }
+    stage = "model";
     const response = await boundedRun(env.AI, input);
+    stage = "validation";
     const output = validateTopicOutput(
       response?.response ?? response?.choices?.[0]?.message?.content,
       sources,
+      aliases,
     );
+    stage = "store";
     const state = {
       analysis: { ...compact, pending: plan.pending, covered: members.length },
       output,
@@ -235,10 +247,22 @@ export async function getTopicOrganization(env, spec, generate = false) {
     return result({ ...state, mode: analysis.mode }, "ready");
   } catch (error) {
     await repo.release(key, token, Date.now() + TOPIC_LIMITS.backoff);
-    console.warn("topic-ai-update-failed", {
-      name: String(error?.name || "Error"),
-    });
+    const validationCodes = {
+      "invalid sections": "output_invalid_sections",
+      "invalid section": "output_invalid_section",
+      "invalid source evidence": "output_invalid_sources",
+      "output too large": "output_too_large",
+    };
+    const errorCode = stage === "validation"
+      ? validationCodes[error?.message] || "output_invalid_json"
+      : stage === "model" && error?.message === "topic AI timeout"
+        ? "model_timeout"
+        : `${stage}_failed`;
+    // Never log model content, query, source IDs, or provider error messages.
+    console.warn("topic-ai-update-failed", { stage, code: errorCode });
     return result(old, "error", {
+      errorStage: stage,
+      errorCode,
       nextUpdateAt: Date.now() + TOPIC_LIMITS.backoff,
     });
   }

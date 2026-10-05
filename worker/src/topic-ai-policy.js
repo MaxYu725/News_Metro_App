@@ -273,18 +273,33 @@ export function planEvidence(evidence, previous, mode) {
     pending: Math.max(0, (rebuild ? evidence : delta).length - batch.length),
   };
 }
-export function buildTopicInput(mode, query, batch, previous) {
+export function topicSourceAliases(sources) {
+  return new Map([...new Set(sources.map((source) => source.id))].map(
+    (id, index) => [id, `S${index + 1}`],
+  ));
+}
+export function buildTopicInput(mode, query, batch, previous, aliases = null) {
+  const modelId = (id) => {
+    if (!aliases) return id;
+    const alias = aliases.get(id);
+    if (!alias) throw new Error("unknown input source");
+    return alias;
+  };
+  const priorOutput = previous?.output ? structuredClone(previous.output) : null;
+  if (priorOutput && aliases)
+    for (const section of priorOutput.sections)
+      for (const item of section.items) item.sourceIds = item.sourceIds.map(modelId);
   const input = {
     mode,
     query: String(query).slice(0, 100),
-    previous: previous?.output ? structuredClone(previous.output) : null,
+    previous: priorOutput,
     knownSources: (previous?.sources || []).map(({ id, title, pubDate }) => ({
-      id,
+      id: modelId(id),
       title,
       pubDate,
     })),
     articles: batch.map(({ id, title, source, pubDate, text, category }) => ({
-      id,
+      id: modelId(id),
       title,
       source,
       pubDate,
@@ -302,7 +317,7 @@ export function buildTopicInput(mode, query, batch, previous) {
     throw new Error("topic input exceeds limit");
   return JSON.stringify(input);
 }
-export function validateTopicOutput(raw, sources) {
+export function validateTopicOutput(raw, sources, aliases = null) {
   const value =
     typeof raw === "string"
       ? JSON.parse(raw.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""))
@@ -315,6 +330,8 @@ export function validateTopicOutput(raw, sources) {
   )
     throw new Error("invalid sections");
   const ids = new Set(sources.map((s) => s.id));
+  const originals = aliases ? new Map([...aliases].map(([id, alias]) => [alias, id])) : null;
+  const sourceId = (id) => originals ? originals.get(id) : id;
   const sections = value.sections.map((section) => {
     if (
       typeof section.heading !== "string" ||
@@ -335,12 +352,12 @@ export function validateTopicOutput(raw, sources) {
           !Array.isArray(item.sourceIds) ||
           !item.sourceIds.length ||
           item.sourceIds.length > 8 ||
-          item.sourceIds.some((id) => typeof id !== "string" || !ids.has(id))
+          item.sourceIds.some((id) => typeof id !== "string" || !ids.has(sourceId(id)))
         )
           throw new Error("invalid source evidence");
         return {
           text: item.text.trim(),
-          sourceIds: [...new Set(item.sourceIds)],
+          sourceIds: [...new Set(item.sourceIds.map(sourceId))],
         };
       }),
     };
