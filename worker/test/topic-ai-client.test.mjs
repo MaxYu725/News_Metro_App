@@ -1,6 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 const ui = await import("../../topic-ai-client.mjs").catch(() => ({}));
+test("unavailable organization explains which data gate failed", () => {
+  assert.match(
+    ui.topicInsufficientMessage({ reasonCode: "insufficient_articles" }),
+    /至少 3 篇/,
+  );
+  assert.match(
+    ui.topicInsufficientMessage({ reasonCode: "insufficient_text" }),
+    /可讀.*內文/,
+  );
+  assert.match(
+    ui.topicInsufficientMessage({ reasonCode: "low_cohesion" }),
+    /單一事件/,
+  );
+  assert.doesNotMatch(
+    ui.topicInsufficientMessage({ reasonCode: "low_cohesion" }),
+    /資料不足/,
+  );
+});
 function memory() {
   const data = new Map();
   return {

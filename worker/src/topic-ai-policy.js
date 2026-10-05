@@ -1,7 +1,7 @@
 import { articleTextFromHtml } from "./article-content.js";
 import { parseAllowedArticleUrl } from "./security.js";
 
-export const TOPIC_POLICY_VERSION = "topic-v2";
+export const TOPIC_POLICY_VERSION = "topic-v3";
 export const TOPIC_LIMITS = Object.freeze({
   candidates: 60,
   initial: 12,
@@ -79,6 +79,26 @@ function similarity(a, b) {
   for (const token of a) if (b.has(token)) common++;
   return common / Math.max(a.size, b.size);
 }
+function namedCaseAnchor(query) {
+  const candidate = query.endsWith("案") ? query : `${query}案`;
+  // A specific case label is a subject identity, not repeated headline wording.
+  // Broad crimes and legislative/proposal topics must still use normal grouping.
+  if (!/^(?:[\p{Script=Han}]{3,17}|[a-z][a-z0-9-]{2,24})案$/u.test(candidate))
+    return "";
+  if (
+    /^(?:香港|中國|中国|澳門|澳门|台灣|台湾|美國|美国|英國|英国|日本|韓國|韩国|全球|本港|本地|跨境)/u.test(
+      candidate,
+    )
+  )
+    return "";
+  if (
+    /命案|兇案|凶案|劫案|騙案|奸案|姦案|綁架案|绑架案|欺詐案|失蹤案|非法集結案|罪案|懸案|刑事案|民事案|兇殺案|凶殺案|盜竊案|殺人案|謀殺案|詐騙案|洗黑錢案|洗錢案|貪污案|賄賂案|走私案|販毒案|毒品案|交通意外案|車禍案|性侵案|性罪行案|傷人案|襲擊案|虐兒案|家庭暴力案|縱火案|勒索案|搶劫案|爆竊案|報案|立案|備案|教案|檔案|法案|草案|方案|提案|議案|預算案/.test(
+      candidate,
+    )
+  )
+    return "";
+  return candidate;
+}
 export function analyzeTopic(
   query,
   input,
@@ -120,12 +140,21 @@ export function analyzeTopic(
     if (rows.length === TOPIC_LIMITS.candidates) break;
   }
   const features = rows.map((a) => tokens(a.title, q));
+  const anchor = namedCaseAnchor(q);
+  const anchored = rows.map((a) =>
+    Boolean(anchor && normalizeTopicQuery(a.title).startsWith(anchor)),
+  );
+  const pairSimilarity = (i, j) => {
+    if (anchor && (anchored[i] || anchored[j]))
+      return anchored[i] && anchored[j] ? 1 : 0;
+    return similarity(features[i], features[j]);
+  };
   const groups = [];
   for (let i = 0; i < rows.length; i++) {
     let target = null,
       best = 0.28;
     for (const g of groups) {
-      const s = similarity(features[i], features[g.indices[0]]);
+      const s = pairSimilarity(i, g.indices[0]);
       if (s >= best) {
         best = s;
         target = g;
@@ -140,26 +169,27 @@ export function analyzeTopic(
     principal.length > 1
       ? principal
           .slice(1)
-          .reduce(
-            (sum, i) => sum + similarity(features[i], features[principal[0]]),
-            0,
-          ) /
+          .reduce((sum, i) => sum + pairSimilarity(i, principal[0]), 0) /
         (principal.length - 1)
       : 0;
   const cohesion = rows.length
     ? Math.round((60 * principal.length) / rows.length + 40 * density)
     : 0;
   const readable = rows.filter((a) => a.description.length >= 80).length;
+  const principalReadable = principal.filter(
+    (i) => rows[i].description.length >= 80,
+  ).length;
   let mode = "NONE",
-    reason = "資料不足";
-  if (preference === "off") reason = "已關閉";
-  else if (rows.length >= 3 && readable >= 2) {
+    reason = "資料不足",
+    reasonCode =
+      rows.length < 3 ? "insufficient_articles" : "insufficient_text";
+  if (preference === "off") {
+    reason = "已關閉";
+    reasonCode = "off";
+  } else if (rows.length >= 3 && readable >= 2) {
     if (intent === "CURATION" || intent === "DIGEST") mode = intent;
     else if (principal.length >= 3 && cohesion >= 70)
-      mode =
-        principal.filter((i) => rows[i].description.length >= 80).length >= 2
-          ? "EVENT"
-          : "NONE";
+      mode = principalReadable >= 2 ? "EVENT" : "NONE";
     else if (
       preference !== "event" &&
       (cohesion >= 45 ||
@@ -171,6 +201,14 @@ export function analyzeTopic(
     )
       mode = "DIGEST";
     reason = mode === "NONE" ? "文章過於分散" : "metadata 分群";
+    reasonCode =
+      mode !== "NONE"
+        ? "classified"
+        : principal.length >= 3 && cohesion >= 70
+          ? "insufficient_event_text"
+          : preference === "event"
+            ? "low_cohesion"
+            : "scattered";
   }
   // A discovered digest also gets a recent-only window, even without broad keyword hints.
   if (mode === "DIGEST" && !windowDays)
@@ -180,6 +218,11 @@ export function analyzeTopic(
     mode,
     cohesion,
     reason,
+    reasonCode,
+    readableCount: readable,
+    principalCount: principal.length,
+    principalReadableCount: principalReadable,
+    eventAnchor: anchored[principal[0]] ? anchor : null,
     windowDays: mode === "DIGEST" ? 14 : windowDays,
     count: rows.length,
     selected,

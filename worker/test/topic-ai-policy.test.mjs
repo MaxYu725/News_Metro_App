@@ -24,6 +24,81 @@ const cases = [
   article("3", "蔡天鳳案｜法庭審訊被告證供控方說法"),
   article("4", "蔡天鳳案｜法庭審訊被告證供辯方回應"),
 ];
+test("a named case remains one event across different reporting angles and stages", () => {
+  const rows = [
+    "蔡天鳳案．開案｜案發當日三父子分頭行事",
+    "蔡天鳳案｜租村屋後買碎肉機",
+    "蔡天鳳案｜失蹤前帶人睇樓",
+    "蔡天鳳案陪審團法官宣布重新遴選",
+    "蔡天鳳案｜審前法律爭辯",
+    "蔡天鳳案｜控方指金錢糾紛",
+    "蔡天鳳案｜現場電鋸聲及氣味",
+  ].map((title, i) => article(String(i + 1), title, undefined, i * 100));
+  const incidental = article(
+    "20",
+    "海洋公園鬼屋爭議",
+    "影射蔡天鳳案。".repeat(20),
+  );
+  for (const query of ["蔡天鳳案", "蔡天鳳"]) {
+    for (const preference of ["auto", "event"]) {
+      const a = p.analyzeTopic(query, [...rows, incidental], preference, now);
+      assert.equal(a.mode, "EVENT");
+      assert.ok(a.cohesion >= 70);
+      assert.deepEqual(
+        a.selected.map((r) => r.id),
+        rows.map((r) => r.id),
+      );
+      assert.equal(a.eventAnchor, "蔡天鳳案");
+    }
+  }
+});
+test("generic crime and proposal prefixes are not treated as specific case identities", () => {
+  for (const query of [
+    "香港命案",
+    "香港罪案",
+    "香港懸案",
+    "香港綁架案",
+    "香港強姦案",
+    "香港欺詐案",
+    "香港失蹤案",
+    "香港非法集結案",
+    "香港洗黑錢案",
+    "香港貪污案",
+    "交通意外案",
+    "跨境走私案",
+    "公共方案",
+    "國安法案",
+  ]) {
+    const rows = [
+      "工廠火警消防救援",
+      "球員聯賽足球比賽",
+      "樂壇歌手音樂演唱會",
+    ].map((tail, i) => article(String(i + 1), `${query}｜${tail}`));
+    assert.equal(p.analyzeTopic(query, rows, "event", now).mode, "NONE");
+  }
+});
+test("insufficient analysis distinguishes article count, readable text and event grouping", () => {
+  assert.equal(
+    p.analyzeTopic("案件", cases.slice(0, 2), "event", now).reasonCode,
+    "insufficient_articles",
+  );
+  assert.equal(
+    p.analyzeTopic(
+      "蔡天鳳案",
+      cases.map((a) => ({ ...a, description: "" })),
+      "event",
+      now,
+    ).reasonCode,
+    "insufficient_text",
+  );
+  const rows = ["火警消防救援", "足球球隊比賽", "歌手音樂演唱會"].map(
+    (title, i) => article(String(i + 1), title),
+  );
+  const a = p.analyzeTopic("香港", rows, "event", now);
+  assert.equal(a.reasonCode, "low_cohesion");
+  assert.equal(a.readableCount, 3);
+  assert.equal(a.principalCount, 1);
+});
 test("coherent legal reporting becomes EVENT with traceable principal group", () => {
   const a = p.analyzeTopic("蔡天鳳案", cases, "auto", now);
   assert.equal(a.mode, "EVENT");
@@ -227,4 +302,14 @@ test("low cohesion DIGEST needs readable subgroups rather than title-only cluste
     p.analyzeTopic("香港", [...readable, ...singletons], "auto", now).mode,
     "DIGEST",
   );
+});
+
+test("readable incidental coverage cannot satisfy the principal event text gate", () => {
+  const rows = cases.slice(0, 3).map((a) => ({ ...a, description: "" }));
+  rows.push(article("10", "海洋公園鬼屋爭議"), article("11", "網上影片熱話"));
+  const a = p.analyzeTopic("蔡天鳳案", rows, "event", now);
+  assert.equal(a.mode, "NONE");
+  assert.equal(a.reasonCode, "insufficient_event_text");
+  assert.equal(a.readableCount, 2);
+  assert.equal(a.principalReadableCount, 0);
 });

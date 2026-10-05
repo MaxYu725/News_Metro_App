@@ -4,6 +4,7 @@ import {
   createTopicAIController,
   TOPIC_AI_MODES,
   safeTopicSourceLink,
+  topicInsufficientMessage,
 } from "./topic-ai-client.mjs";
 let panel = null,
   category = null,
@@ -79,13 +80,20 @@ function render(state) {
     if (analysis.windowDays)
       meta.textContent += ` · 近 ${analysis.windowDays} 日`;
   }
+  if (analysis && mode === "NONE" && state.mode !== "off") {
+    meta.textContent += ` · 本次 ${analysis.count ?? 0} 篇`;
+    if (Number.isFinite(analysis.readableCount))
+      meta.textContent += ` · 可讀節錄 ${analysis.readableCount} 篇`;
+  }
   const status = element(
     "p",
     state.loading
       ? "正在讀取／整理…"
-      : result.status === "offline" && !output
-        ? "未能連接服務，暫無可用的整理結果。"
-        : messages[result.status] || "",
+      : result.status === "insufficient"
+        ? topicInsufficientMessage(analysis)
+        : result.status === "offline" && !output
+          ? "未能連接服務，暫無可用的整理結果。"
+          : messages[result.status] || "",
     "topic-ai-status",
   );
   status.setAttribute("role", "status");
