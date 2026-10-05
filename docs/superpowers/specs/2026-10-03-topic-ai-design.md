@@ -11,6 +11,8 @@ PR #115 已部署於 8a35f5f。PWA 以 tracking.js/LocalDB 保存關鍵詞；cus
 最少 3 篇獨立文章、2 篇具 80 字以上內文；否則 NONE。好去處/美食/優惠等 CURATION；天氣/熱話等 DIGEST。其餘 cohesion >=70 且主群>=3 才 EVENT；45–69 DIGEST；<45 只有至少兩個可讀子群才 DIGEST，否則 NONE。EVENT 只綜合主群，旁支文章仍留在 feed。用戶強制事件模式仍受最少資料及主群 gate，不能將不相干文章硬合成事件。
 DIGEST 近期 14 日、CURATION 30 日、EVENT 最近 60 篇；窗口改變會重判 mode。跨 mode 重新建有限 snapshot，不沿用錯誤格式。
 
+2026-10-05 分群修正：同一具名案件的不同報道角度不應被拆成多個事件。對至少四字、以「案」結尾的明確案名（或 Latin 案名），只把標題以該案名開首的文章視為同一身份；query 可省略「案」。這些文章的 pair similarity 為 1，旁支／內文偶然提及案名的文章不加入此群。地區開首的分類及罪案、命案、法案、方案等泛類別不使用此身份判斷。其餘標題仍沿用 token 分群，cohesion 權重、70 分／主群三篇／主群兩篇可讀內文門檻不變，不額外調 AI。policy v3 令舊誤判 cache 失效，UI 分別顯示篇數不足、內文不足或未辨識單一事件及本次可用篇數。
+
 ## D1 schema
 0003_topic_ai.sql 只加 live DB 表：topic_ai_cache（key、query、preference、sources filter、analysis_json、output_json、sources_json、members_json、checked_at、generated_at、lease_token/until、retry_at、updated_at），topic_ai_budget（UTC day bucket、calls、hours_json）。sources_json 保存 id/title/link/date/source，不依赖記事保留期；members_json 保存已處理 fingerprint。shared cache key = normalized query + user mode + source selection + policy version 的 SHA256。兩個 archive DB 不增加 AI 表。
 

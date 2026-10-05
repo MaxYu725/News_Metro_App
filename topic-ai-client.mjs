@@ -6,6 +6,22 @@ export const TOPIC_AI_MODES = Object.freeze([
   ["digest", "主題摘要"],
   ["off", "關閉"],
 ]);
+export function topicInsufficientMessage(analysis) {
+  switch (analysis?.reasonCode) {
+    case "insufficient_articles":
+      return "可用的獨立新聞少於 3 篇；至少 3 篇才開始整理。";
+    case "insufficient_text":
+      return "已有匹配新聞，但可讀的已存內文不足，暫未整理。";
+    case "insufficient_event_text":
+      return "已辨識事件，但該事件的可讀內文不足，暫未整理。";
+    case "low_cohesion":
+      return "已有匹配新聞，但暫未辨識出單一事件；可改用「主題摘要」。";
+    case "scattered":
+      return "已有匹配新聞，但內容分散，暫未找到適合整理的事件或子議題。";
+    default:
+      return "相關資料不足或過於分散，暫不進行 AI 整理。";
+  }
+}
 export function safeTopicSourceLink(value) {
   try {
     const u = new URL(value);

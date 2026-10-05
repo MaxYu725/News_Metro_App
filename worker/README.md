@@ -73,6 +73,19 @@ search. EVENT uses one coherent group, DIGEST a 14-day window, CURATION a
 30-day window. CURATION groups and de-duplicates publisher links/titles without
 AI. Cohesion is a title-based heuristic, not semantic certainty.
 
+Specific Chinese case labels (at least four characters including 案) and Latin
+case labels can identify one event across different reporting stages. Only
+titles beginning with that label share the identity; incidental mentions in
+other articles do not join the case. Region-led labels and generic crime/proposal categories retain
+normal title grouping. Cohesion >=70, principal size >=3 and at least two
+readable excerpts within that group still apply. This does not call AI or
+embeddings. Policy v3 invalidates prior misclassifications.
+
+Insufficient responses distinguish too few independent articles, insufficient
+stored text and failure to identify a single event. They retain these reasons
+on cache-only reads and expose counts for the UI instead of suggesting that
+all failures mean the search returned too little news.
+
 AI generation uses stored article excerpts with at least 80 characters; no
 background full-article fetch. Initial batches cap at 12 articles, incremental
 batches at 6, each excerpt at 900 characters, user input at 22,000 characters
@@ -92,7 +105,7 @@ unleased topic rows remain after pruning. No new cron or deployment secret.
 The tracking UI keeps Auto/Event/Digest/Off per local category. Entering a
 category only reads cache; the Organize/Check updates button permits a POST.
 It shows excerpt coverage, backlog and source links. The local fallback retains
-20 snapshots; new dependencies are precached in shell v86. HTTP service errors
+20 snapshots; new dependencies are precached in shell v87. HTTP service errors
 are shown separately from network/offline failures. Retry deadlines re-enable
 the update button while the reader remains on the topic.
 

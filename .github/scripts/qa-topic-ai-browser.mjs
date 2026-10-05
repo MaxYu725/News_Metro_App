@@ -60,6 +60,7 @@ try {
     requests = [];
   let topicUnavailable = false;
   let topicLimited = false;
+  let topicInsufficient = false;
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.addInitScript(() => {
     localStorage.setItem(
@@ -91,9 +92,27 @@ try {
         if (topicLimited)
           return route.fulfill({
             status: 429,
-            headers: { "Retry-After": "1", "Access-Control-Expose-Headers": "Retry-After" },
+            headers: {
+              "Retry-After": "1",
+              "Access-Control-Expose-Headers": "Retry-After",
+            },
             contentType: "application/json",
             body: JSON.stringify({ success: false }),
+          });
+        if (topicInsufficient)
+          return route.fulfill({
+            contentType: "application/json",
+            body: JSON.stringify({
+              success: true,
+              status: "insufficient",
+              mode: "NONE",
+              sources: [],
+              analysis: {
+                count: 30,
+                readableCount: 24,
+                reasonCode: "low_cohesion",
+              },
+            }),
           });
         const snapshot =
           request.method() === "POST"
@@ -221,6 +240,29 @@ try {
   );
   topicLimited = false;
   assert.deepEqual(requests, ["GET", "POST", "POST", "POST", "POST"]);
+  topicInsufficient = true;
+  await page.locator(".topic-ai-generate").click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".topic-ai-status")
+      ?.textContent.includes("暫未辨識出單一事件"),
+  );
+  assert.ok(
+    (await page.locator(".topic-ai-meta").textContent()).includes("本次 30 篇"),
+  );
+  assert.ok(
+    (await page.locator(".topic-ai-meta").textContent()).includes(
+      "可讀節錄 24 篇",
+    ),
+  );
+  assert.equal(await page.locator(".topic-ai-content").count(), 0);
+  topicInsufficient = false;
+  await page.locator(".topic-ai-generate").click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".topic-ai-status")
+      ?.textContent.includes("整理已更新"),
+  );
   if (process.env.TOPIC_QA_SCREENSHOT)
     await page.screenshot({
       path: process.env.TOPIC_QA_SCREENSHOT,
@@ -236,7 +278,7 @@ try {
   assert.equal(await page.locator(".topic-ai-generate").count(), 0);
   assert.deepEqual(errors, []);
   console.log(
-    "Mobile topic UI: explicit POST, safe rendering, sources, pending count, 404 recovery, Retry-After expiry, no horizontal overflow, section hide and off preference PASS",
+    "Mobile topic UI: explicit POST, safe rendering, sources, pending count, insufficient reason and counts, 404 recovery, Retry-After expiry, no horizontal overflow, section hide and off preference PASS",
   );
 } finally {
   await browser?.close();

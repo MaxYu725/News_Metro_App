@@ -1,1 +1,1 @@
-Deploy topic POST empty-stream fix: accept bodyless HTTP POST, reject actual supplied bytes without buffering. Keep PR #117 summary behavior and PWA v86. Smoke must check real POST with mode=off (zero DB writes and AI calls) plus nonempty-body rejection.
+Deploy named-case topic clustering and specific insufficiency diagnostics: repeated specific case prefixes identify the shared event across different report angles. Preserve cohesion/readability gates and zero-AI classification; topic policy v3 and PWA shell v87.

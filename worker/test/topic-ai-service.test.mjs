@@ -39,6 +39,25 @@ const spec = {
   preference: "auto",
   sourceIds: ["bastille", "hk01"],
 };
+test("cached NONE retains its insufficient status and measurable reason without AI", async (t) => {
+  const db = sqliteD1();
+  t.after(() => db.close());
+  const e = env(db, () => {
+    throw new Error("AI must not run");
+  });
+  const first = await s.getTopicOrganization(e, spec, true);
+  assert.equal(first.status, "insufficient");
+  assert.equal(first.analysis.reasonCode, "insufficient_articles");
+  assert.equal(first.analysis.readableCount, 0);
+  assert.equal(
+    (await s.getTopicOrganization(e, spec, false)).status,
+    "insufficient",
+  );
+  assert.equal(
+    (await s.getTopicOrganization(e, spec, true)).status,
+    "insufficient",
+  );
+});
 test("empty POST body streams reach topic organization without invoking AI for CURATION", async (t) => {
   const db = sqliteD1();
   t.after(() => db.close());

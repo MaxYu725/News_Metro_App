@@ -61,6 +61,13 @@ function result(previous, status, extra = {}) {
     ...extra,
   };
 }
+function cachedStatus(previous) {
+  return !previous?.analysis
+    ? "empty"
+    : previous.mode === "NONE"
+      ? "insufficient"
+      : "cached";
+}
 export async function topicCacheKey(spec) {
   return hashTopic(
     JSON.stringify([
@@ -100,15 +107,12 @@ export async function getTopicOrganization(env, spec, generate = false) {
   const row = await repo.read(key);
   let old = snapshot(row);
   if (!generate)
-    return result(
-      old,
-      row?.lease_until > now ? "busy" : old?.analysis ? "cached" : "empty",
-    );
+    return result(old, row?.lease_until > now ? "busy" : cachedStatus(old));
   if (row?.lease_until > now) return result(old, "busy");
   if (row?.retry_at > now)
     return result(old, "backoff", { nextUpdateAt: row.retry_at });
   if (old?.analysis && now - old.checkedAt < TOPIC_LIMITS.metadataTTL)
-    return result(old, "cached");
+    return result(old, cachedStatus(old));
   const token = crypto.randomUUID();
   if (!(await repo.claim(key, spec, token, now))) return result(old, "busy");
   try {
@@ -122,7 +126,7 @@ export async function getTopicOrganization(env, spec, generate = false) {
     }
     if (old?.analysis && now - old.checkedAt < TOPIC_LIMITS.metadataTTL) {
       await repo.release(key, token);
-      return result(old, "cached");
+      return result(old, cachedStatus(old));
     }
     await repo.prune(now);
     const databases = [
@@ -141,6 +145,11 @@ export async function getTopicOrganization(env, spec, generate = false) {
       mode: analysis.mode,
       cohesion: analysis.cohesion,
       reason: analysis.reason,
+      reasonCode: analysis.reasonCode,
+      readableCount: analysis.readableCount,
+      principalCount: analysis.principalCount,
+      principalReadableCount: analysis.principalReadableCount,
+      eventAnchor: analysis.eventAnchor,
       windowDays: analysis.windowDays,
       count: analysis.count,
       groups: analysis.groups,
