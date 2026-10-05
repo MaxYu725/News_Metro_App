@@ -25,6 +25,24 @@ jobs:
           test -n "${CF_API_TOKEN:-}" || { echo "::error::CF_API_TOKEN is missing"; exit 1; }
           echo "Cloudflare credentials are present."
 
-      - name: Audit Workers and D1
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Probe one model response via isolated preview
         shell: bash
-        run: node .github/scripts/topic-ai-model-probe.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          set -euo pipefail
+          worker/node_modules/.bin/wrangler dev --remote --config worker/topic-probe.json --port 8787 > /tmp/preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for i in {1..45}; do
+            if curl -fsS http://127.0.0.1:8787/ >/dev/null 2>&1; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then echo "Preview unavailable"; sed -E 's/[a-f0-9]{32}/[redacted]/g' /tmp/preview.log | tail -20; exit 1; fi
+          node .github/scripts/topic-ai-model-probe.mjs

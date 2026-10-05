@@ -11,15 +11,4 @@ const a=analyzeTopic(query,rows,'auto'), evidence=await prepareEvidence(a.select
 const input=buildTopicInput(a.mode,query,plan.batch,null);
 const src=readFileSync('worker/src/topic-ai.js','utf8'), prompt=src.match(/const PROMPT = `([\s\S]*?)`;/)[1];
 console.log('Input metadata',JSON.stringify({mode:a.mode,rows:rows.length,batch:plan.batch.length,chars:input.length,idLengths:plan.batch.map(x=>x.id.length)}));
-const res=await fetch('https://api.cloudflare.com/client/v4/accounts/'+process.env.CF_ACCOUNT_ID+'/ai/run/@cf/qwen/qwen3-30b-a3b-fp8',{method:'POST',headers:{Authorization:'Bearer '+process.env.CF_API_TOKEN,'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'system',content:prompt},{role:'user',content:input}],max_tokens:2600,temperature:.2,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(60000)});
-const d=await res.json();
-console.log('Provider status',res.status,'success',d.success,'errorCodes',d.errors?.map(x=>x.code));
-if(!d.success)process.exit(1);
-const r=d.result,raw=r.response??r.choices?.[0]?.message?.content;
-console.log('Response metadata',JSON.stringify({keys:Object.keys(r),type:typeof raw,chars:typeof raw==='string'?raw.length:JSON.stringify(raw)?.length,finishReason:r.choices?.[0]?.finish_reason,usage:r.usage}));
-try {const out=validateTopicOutput(raw,plan.batch);console.log('Validation passed',JSON.stringify(out).length)}
-catch(e) {
- console.log('Validation failed',e.name,e.message);
- let v;try{v=typeof raw==='string'?JSON.parse(raw):raw}catch{}
- console.log('Shape',JSON.stringify({keys:v&&Object.keys(v),sections:v?.sections?.length,sectionStats:v?.sections?.map(s=>({headingType:typeof s.heading,headingChars:s.heading?.length,items:s.items?.length,itemsStats:s.items?.map(i=>({textType:typeof i.text,textChars:i.text?.length,idsType:typeof i.sourceIds,ids:i.sourceIds?.length,unknown:Array.isArray(i.sourceIds)?i.sourceIds.filter(id=>!plan.batch.some(a=>a.id===id)).map(id=>({type:typeof id,chars:String(id).length})):null}))}))}));
-}
+const res=await fetch('http://127.0.0.1:8787/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,input,sources:plan.batch.map(a=>({id:a.id}))}),signal:AbortSignal.timeout(65000)});console.log('Preview result',await res.text());
