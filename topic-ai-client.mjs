@@ -183,3 +183,9 @@ export function createTopicAIController({
     },
   };
 }
+
+export function topicFailureMessage(output) {
+  return output?.sections?.length
+    ? "整理未能完成，已保留上次結果。"
+    : "整理未能完成，請稍後再試。";
+}

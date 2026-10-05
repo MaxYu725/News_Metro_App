@@ -5,6 +5,7 @@ import {
   TOPIC_AI_MODES,
   safeTopicSourceLink,
   topicInsufficientMessage,
+  topicFailureMessage,
 } from "./topic-ai-client.mjs";
 let panel = null,
   category = null,
@@ -22,7 +23,6 @@ const messages = {
   busy: "正在整理，稍後按更新查看結果。",
   budget: "整理服務本時段的額度已用完，稍後再試。",
   backoff: "上次整理未能完成，稍後再試。",
-  error: "整理未能完成，已保留上次結果。",
   offline: "未能連接服務，顯示本機保存的結果。",
   unavailable: "整理服務暫時未能提供，請稍後再試。",
   rate_limited: "請求過於頻密，請稍後再試。",
@@ -91,6 +91,8 @@ function render(state) {
       ? "正在讀取／整理…"
       : result.status === "insufficient"
         ? topicInsufficientMessage(analysis)
+        : result.status === "error"
+          ? topicFailureMessage(output)
         : result.status === "offline" && !output
           ? "未能連接服務，暫無可用的整理結果。"
           : messages[result.status] || "",

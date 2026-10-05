@@ -313,3 +313,29 @@ test("readable incidental coverage cannot satisfy the principal event text gate"
   assert.equal(a.readableCount, 2);
   assert.equal(a.principalReadableCount, 0);
 });
+test('model citations use short aliases and restore exact long IDs across incremental updates', () => {
+  const id='archive:https://hk01.com/'+encodeURIComponent('蔡天鳳案長網址'.repeat(15));
+  const sources=[{id,title:'舊新聞',pubDate:'2026-10-01'},{id:'new',title:'新新聞',pubDate:'2026-10-02'}];
+  const aliases=p.topicSourceAliases(sources);
+  const previous={sources:[sources[0]],output:{sections:[{heading:'概況',items:[{text:'舊內容',sourceIds:[id]}]}]}};
+  const input=JSON.parse(p.buildTopicInput('EVENT','蔡天鳳案',[{...sources[1],text:'節錄'}],previous,aliases));
+  assert.equal(input.articles[0].id,'S2');
+  assert.equal(input.knownSources[0].id,'S1');
+  assert.deepEqual(input.previous.sections[0].items[0].sourceIds,['S1']);
+  assert.deepEqual(previous.output.sections[0].items[0].sourceIds,[id]);
+  assert.ok(!JSON.stringify(input).includes(id));
+  const raw={sections:[{heading:'概況',items:[{text:'有來源',sourceIds:['S1','S2']}]}]};
+  const output=p.validateTopicOutput(raw,sources,aliases);
+  assert.deepEqual(output.sections[0].items[0].sourceIds,[id,'new']);
+  assert.deepEqual(raw.sections[0].items[0].sourceIds,['S1','S2']);
+  for(const bad of ['S3',id])assert.throws(()=>p.validateTopicOutput({sections:[{heading:'概況',items:[{text:'來源錯誤',sourceIds:[bad]}]}]},sources,aliases),/invalid source evidence/);
+});
+test('restoring URL IDs does not spend the model content budget but stored output remains bounded',()=>{
+  const id='archive:'+ 'x'.repeat(500), sources=[{id}], aliases=p.topicSourceAliases(sources);
+  const raw={sections:[1,2,3].map(n=>({heading:'重點'+n,items:Array.from({length:8},()=>({text:'有來源的重點',sourceIds:['S1']}))}))};
+  const output=p.validateTopicOutput(raw,sources,aliases);
+  assert.ok(JSON.stringify(output).length>8000);
+  assert.deepEqual(output.sections[0].items[0].sourceIds,[id]);
+  const huge='x'.repeat(4000);
+  assert.throws(()=>p.validateTopicOutput(raw,[{id:huge}],p.topicSourceAliases([{id:huge}])),/output too large/);
+});
