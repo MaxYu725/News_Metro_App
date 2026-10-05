@@ -31,8 +31,11 @@ function d1Rows(file) {
   const chunks = Array.isArray(payload) ? payload : [payload];
   const rows = [];
   for (const chunk of chunks) {
-    if (Array.isArray(chunk?.results)) rows.push(...chunk.results);
-    else if (Array.isArray(chunk?.result?.results)) rows.push(...chunk.result.results);
+    if (Array.isArray(chunk?.results)) {
+      for (const row of chunk.results) rows.push(row);
+    } else if (Array.isArray(chunk?.result?.results)) {
+      for (const row of chunk.result.results) rows.push(row);
+    }
   }
   return rows;
 }
