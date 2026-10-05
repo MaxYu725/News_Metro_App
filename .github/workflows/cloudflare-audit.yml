@@ -27,4 +27,4 @@ jobs:
 
       - name: Audit Workers and D1
         shell: bash
-        run: bash .github/scripts/cloudflare-audit.sh
+        run: python3 .github/scripts/topic-ai-diagnose.py
