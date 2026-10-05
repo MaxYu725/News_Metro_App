@@ -8,6 +8,8 @@ on:
       - worker/src/sources/hk01-search.js
       - worker/scripts/hk01-search-backfill.mjs
       - worker/test/hk01-search-archive.test.mjs
+      - worker/test/backfill-large-snapshot.test.mjs
+      - worker/scripts/archive-backfill.mjs
       - worker/src/archive-shards.js
       - worker/test/archive-shards.test.mjs
       - .github/scripts/archive-backfill-production-audit.sh
@@ -19,6 +21,8 @@ on:
       - worker/src/sources/hk01-search.js
       - worker/scripts/hk01-search-backfill.mjs
       - worker/test/hk01-search-archive.test.mjs
+      - worker/test/backfill-large-snapshot.test.mjs
+      - worker/scripts/archive-backfill.mjs
       - worker/src/archive-shards.js
       - worker/test/archive-shards.test.mjs
       - .github/scripts/archive-backfill-production-audit.sh
@@ -257,8 +261,11 @@ jobs:
             const payload = JSON.parse(fs.readFileSync(`/tmp/${binding}-existing.json`, 'utf8'));
             const chunks = Array.isArray(payload) ? payload : [payload];
             for (const chunk of chunks) {
-              if (Array.isArray(chunk?.results)) rows.push(...chunk.results);
-              else if (Array.isArray(chunk?.result?.results)) rows.push(...chunk.result.results);
+              if (Array.isArray(chunk?.results)) {
+                for (const row of chunk.results) rows.push(row);
+              } else if (Array.isArray(chunk?.result?.results)) {
+                for (const row of chunk.result.results) rows.push(row);
+              }
             }
           }
           const unique = new Map();
