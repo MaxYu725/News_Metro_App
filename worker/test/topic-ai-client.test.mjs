@@ -196,3 +196,7 @@ test("HTTP failures keep cached content and distinguish rate limits from service
     assert.equal(last.result.status, status);
   }
 });
+test('first failure never claims a previous result exists',()=>{
+  assert.equal(ui.topicFailureMessage(null),'整理未能完成，請稍後再試。');
+  assert.equal(ui.topicFailureMessage({sections:[{heading:'概況',items:[{text:'舊重點',sourceIds:['1']}]}]}),'整理未能完成，已保留上次結果。');
+});

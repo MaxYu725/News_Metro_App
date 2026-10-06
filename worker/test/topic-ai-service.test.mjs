@@ -179,6 +179,7 @@ test("GET reads cache without search or AI, POST produces a shared sourced snaps
   const first = await s.getTopicOrganization(e, spec, true);
   assert.equal(first.mode, "EVENT");
   assert.equal(first.sources.length, 4);
+  assert.ok(first.sources.some(source => source.id === first.output.sections[0].items[0].sourceIds[0]));
   assert.equal(calls, 1);
   const second = await s.getTopicOrganization(e, spec, true);
   assert.equal(second.status, "cached");
@@ -239,7 +240,7 @@ test("new evidence updates incrementally, article corrections rebuild and bad ou
   const next = await s.getTopicOrganization(e, spec, true);
   assert.deepEqual(
     seen[1].articles.map((a) => a.id),
-    ["5"],
+    ["S5"],
   );
   assert.ok(seen[1].previous);
   assert.equal(next.sources.length, 5);
@@ -412,4 +413,18 @@ test("paid prompts skip title-only rows even when readable matches are farther d
   assert.equal(result.status, "ready");
   assert.equal(submitted.length, 2);
   assert.ok(submitted.every((a) => a.text.length >= 80));
+});
+test('failed generation exposes a bounded stage code without provider details', async (t) => {
+  const db=sqliteD1();t.after(()=>db.close());await seedArticles(db);
+  const e=env(db,async()=>({response:{sections:[]}}));
+  const first=await s.getTopicOrganization(e,spec,true);
+  assert.equal(first.errorCode,'output_invalid_sections');
+  assert.equal(first.errorStage,'validation');
+  assert.equal(first.output,null);
+  await db.prepare('UPDATE topic_ai_cache SET retry_at=0').run();
+  e.AI.run=async()=>{throw new Error('provider secret detail')};
+  const second=await s.getTopicOrganization(e,spec,true);
+  assert.equal(second.errorCode,'model_failed');
+  assert.equal(second.errorStage,'model');
+  assert.ok(!JSON.stringify(second).includes('provider secret detail'));
 });
