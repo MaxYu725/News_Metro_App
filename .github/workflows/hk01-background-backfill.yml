@@ -7,7 +7,9 @@ on:
     paths:
       - worker/src/sources/hk01-search.js
       - worker/scripts/hk01-search-backfill.mjs
+      - worker/scripts/hk01-background-snapshot.mjs
       - worker/test/hk01-search-archive.test.mjs
+      - worker/test/hk01-background-snapshot.test.mjs
       - worker/test/backfill-large-snapshot.test.mjs
       - worker/scripts/archive-backfill.mjs
       - worker/src/archive-shards.js
@@ -20,7 +22,9 @@ on:
     paths:
       - worker/src/sources/hk01-search.js
       - worker/scripts/hk01-search-backfill.mjs
+      - worker/scripts/hk01-background-snapshot.mjs
       - worker/test/hk01-search-archive.test.mjs
+      - worker/test/hk01-background-snapshot.test.mjs
       - worker/test/backfill-large-snapshot.test.mjs
       - worker/scripts/archive-backfill.mjs
       - worker/src/archive-shards.js
@@ -61,7 +65,9 @@ jobs:
           node --check worker/src/sources/hk01-search.js
           node --check worker/src/archive-shards.js
           node --check worker/scripts/hk01-search-backfill.mjs
+          node --check worker/scripts/hk01-background-snapshot.mjs
           node --check worker/test/hk01-search-archive.test.mjs
+          node --check worker/test/hk01-background-snapshot.test.mjs
           node --check worker/test/archive-shards.test.mjs
           bash -n .github/scripts/archive-backfill-production-audit.sh
 
@@ -239,20 +245,9 @@ jobs:
         run: |
           set -euo pipefail
           cd worker
-          overlap_start=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/hk01-background-state.json','utf8'));const r=p?.[0]?.results?.[0];const c=Number.parseInt(r?.cursor||'',10);const e=1451606400;if(Number.isSafeInteger(c)&&c>e)process.stdout.write(new Date(Math.max(e,c-46*86400)*1000).toISOString())")
-
-          for binding in ARCHIVE_01 ARCHIVE_02; do
-            lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
-            if [[ -n "$overlap_start" ]]; then
-              npx wrangler d1 execute "$binding" --remote --json \
-                --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' AND pubDate >= '${overlap_start}' ORDER BY pubDate DESC,id DESC" \
-                > "/tmp/${lower}-existing.json"
-            else
-              npx wrangler d1 execute "$binding" --remote --json \
-                --command "SELECT id,link,source,pubDate FROM articles WHERE source='香港01' ORDER BY pubDate DESC,id DESC" \
-                > "/tmp/${lower}-existing.json"
-            fi
-          done
+          node scripts/hk01-background-snapshot.mjs \
+            --state=/tmp/hk01-background-state.json \
+            --out-dir=/tmp
 
           node <<'NODE'
           const fs = require('fs');
@@ -276,11 +271,6 @@ jobs:
           fs.writeFileSync('/tmp/hk01-background-existing.json', JSON.stringify([{ results: [...unique.values()] }]));
           console.log(`Cross-shard dedupe rows: ${unique.size}`);
           NODE
-          if [[ -n "$overlap_start" ]]; then
-            echo "Background dedupe snapshot: bounded_46d from=${overlap_start} across ARCHIVE_01+ARCHIVE_02"
-          else
-            echo 'Background dedupe snapshot: full bootstrap scan across ARCHIVE_01+ARCHIVE_02'
-          fi
 
       - name: Generate HK01 universal-search plan
         if: steps.control.outputs.status == 'absent' && steps.control.outputs.halted != 'true'
