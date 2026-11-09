@@ -126,6 +126,7 @@ jobs:
         run: |
           npx wrangler d1 migrations apply metro_news_archive_01 --remote
           npx wrangler d1 migrations apply metro_news_archive_02 --remote
+          npx wrangler d1 migrations apply metro_news_archive_03 --remote
 
       - name: Locate replay batch and select writable shard
         id: control
@@ -135,7 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           cd worker
-          for binding in ARCHIVE_01 ARCHIVE_02; do
+          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03; do
             lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
             npx wrangler d1 execute "$binding" --remote --json --command "
               SELECT
@@ -145,6 +146,7 @@ jobs:
                 (SELECT before_rows FROM archive_backfill_runs WHERE batch_id='${BATCH_ID}') AS before_rows,
                 (SELECT COUNT(*) FROM archive_backfill_state WHERE source_key='hk01:search') AS state_present,
                 (SELECT cursor FROM archive_backfill_state WHERE source_key='hk01:search') AS cursor,
+                (SELECT updated_at FROM archive_backfill_state WHERE source_key='hk01:search') AS state_updated_at,
                 (SELECT pages_fetched FROM archive_backfill_state WHERE source_key='hk01:search') AS pages_fetched,
                 (SELECT rows_inserted FROM archive_backfill_state WHERE source_key='hk01:search') AS rows_inserted,
                 (SELECT last_pubDate FROM archive_backfill_state WHERE source_key='hk01:search') AS last_pubDate,
@@ -167,6 +169,7 @@ jobs:
               generated: Number(row.generated_rows || 0),
               before: Number(row.before_rows || 0),
               statePresent: Number(row.state_present || 0) > 0,
+              stateUpdatedAt: String(row.state_updated_at || ''),
               state: {
                 source_key: 'hk01:search',
                 cursor: row.cursor == null ? '' : String(row.cursor),
@@ -177,7 +180,7 @@ jobs:
               },
             };
           };
-          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02')];
+          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02'), read('ARCHIVE_03')];
           if (shards.some(shard => shard.size <= 0)) throw new Error('Unable to observe archive shard size');
 
           const replay = shards.filter(shard => shard.status);
@@ -188,18 +191,13 @@ jobs:
           let haltReason = '';
           if (replay.length === 1) {
             active = replay[0];
-          } else if (shards[0].size < 300_000_000) {
-            active = shards[0];
-          } else if (shards[1].size < 300_000_000) {
-            active = shards[1];
           } else {
-            active = shards[1];
-            halted = true;
-            haltReason = 'all-shards-at-capacity';
+            active = [...shards].reverse().find(shard => shard.size < 300_000_000) || shards.at(-1);
+            halted = shards.every(shard => shard.size >= 300_000_000);
+            if (halted) haltReason = 'all-shards-at-capacity';
           }
 
-          let sourceState = active.statePresent ? active : null;
-          if (!sourceState && active.binding === 'ARCHIVE_02' && shards[0].statePresent) sourceState = shards[0];
+          let sourceState = [...shards].reverse().filter(shard => shard.statePresent).sort((a, b) => (Date.parse(b.stateUpdatedAt) || 0) - (Date.parse(a.stateUpdatedAt) || 0))[0];
           if (!sourceState) sourceState = active;
 
           if (!active.status && sourceState.statePresent && sourceState.state.exhausted === 1) {
@@ -252,7 +250,7 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const rows = [];
-          for (const binding of ['archive_01', 'archive_02']) {
+          for (const binding of ['archive_01', 'archive_02', 'archive_03']) {
             const payload = JSON.parse(fs.readFileSync(`/tmp/${binding}-existing.json`, 'utf8'));
             const chunks = Array.isArray(payload) ? payload : [payload];
             for (const chunk of chunks) {
@@ -363,7 +361,7 @@ jobs:
         run: |
           set -euo pipefail
           cd worker
-          for binding in ARCHIVE_01 ARCHIVE_02; do
+          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03; do
             lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
             npx wrangler d1 execute "$binding" --remote --json \
               --command "SELECT COUNT(*) AS total_rows,SUM(CASE WHEN source='香港01' THEN 1 ELSE 0 END) AS hk01_rows,MIN(CASE WHEN source='香港01' THEN pubDate END) AS hk01_oldest FROM articles" \
@@ -381,13 +379,15 @@ jobs:
           };
           const a = read('ARCHIVE_01');
           const b = read('ARCHIVE_02');
-          const oldest = [a.oldest, b.oldest].filter(Boolean).sort()[0] || 'unknown';
+          const c = read('ARCHIVE_03');
+          const oldest = [a.oldest, b.oldest, c.oldest].filter(Boolean).sort()[0] || 'unknown';
           console.log('## HK01 background archive');
           console.log(`- batch: ${process.env.BATCH_ID || 'unknown'}`);
           console.log(`- active shard: ${process.env.ACTIVE_BINDING || 'none'}`);
-          console.log(`- total rows: ${a.rows + b.rows}`);
-          console.log(`- HK01 rows: ${a.hk01 + b.hk01}`);
+          console.log(`- total rows: ${a.rows + b.rows + c.rows}`);
+          console.log(`- HK01 rows: ${a.hk01 + b.hk01 + c.hk01}`);
           console.log(`- HK01 oldest: ${oldest}`);
           console.log(`- ARCHIVE_01 rows: ${a.rows}`);
           console.log(`- ARCHIVE_02 rows: ${b.rows}`);
+          console.log(`- ARCHIVE_03 rows: ${c.rows}`);
           NODE

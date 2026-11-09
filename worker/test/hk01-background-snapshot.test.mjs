@@ -126,7 +126,7 @@ test('a later shard failure leaves no successful snapshot files', async t => {
   assert.deepEqual(readdirSync(dir), ['state.json']);
 });
 
-test('both shard snapshots retain the existing D1 results shape and summary', async t => {
+test('all three shard snapshots retain the existing D1 results shape and summary', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'hk01-snapshot-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const stateFile = join(dir, 'state.json');
@@ -139,8 +139,8 @@ test('both shard snapshots retain the existing D1 results shape and summary', as
       return JSON.stringify([{ results: [article(binding)] }]);
     },
   });
-  for (const binding of ['ARCHIVE_01', 'ARCHIVE_02']) {
+  for (const binding of ['ARCHIVE_01', 'ARCHIVE_02', 'ARCHIVE_03']) {
     assert.deepEqual(JSON.parse(readFileSync(join(dir, `${binding.toLowerCase()}-existing.json`), 'utf8')), [{ results: [article(binding)] }]);
   }
-  assert.ok(logs.some(line => line.includes('full bootstrap scan across ARCHIVE_01+ARCHIVE_02')));
+  assert.ok(logs.some(line => line.includes('full bootstrap scan across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03')));
 });

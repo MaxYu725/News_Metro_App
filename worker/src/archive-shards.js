@@ -1,4 +1,4 @@
-export const ARCHIVE_BINDING_NAMES = Object.freeze(['ARCHIVE_01', 'ARCHIVE_02']);
+export const ARCHIVE_BINDING_NAMES = Object.freeze(['ARCHIVE_01', 'ARCHIVE_02', 'ARCHIVE_03']);
 
 function readableDatabase(value) {
   return value && typeof value.prepare === 'function';

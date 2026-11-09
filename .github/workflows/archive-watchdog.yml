@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           cd worker
-          for binding in ARCHIVE_01 ARCHIVE_02; do
+          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03; do
             lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
             npx wrangler d1 execute "$binding" --remote --json --command "
               SELECT
@@ -48,6 +48,7 @@ jobs:
                 (SELECT MIN(pubDate) FROM articles WHERE source='香港01') AS hk01_oldest,
                 (SELECT COUNT(*) FROM archive_backfill_state WHERE source_key='hk01:search') AS state_present,
                 (SELECT cursor FROM archive_backfill_state WHERE source_key='hk01:search') AS cursor,
+                (SELECT updated_at FROM archive_backfill_state WHERE source_key='hk01:search') AS state_updated_at,
                 (SELECT exhausted FROM archive_backfill_state WHERE source_key='hk01:search') AS exhausted,
                 (SELECT MAX(completed_at) FROM archive_backfill_runs WHERE source='hk01' AND status='completed') AS latest_completed_at,
                 (SELECT requested_rows FROM archive_backfill_runs WHERE source='hk01' AND status='completed' ORDER BY completed_at DESC LIMIT 1) AS latest_requested,
@@ -75,6 +76,7 @@ jobs:
               oldest: String(row.hk01_oldest || ''),
               size: Number(first?.meta?.size_after || first?.result?.meta?.size_after || 0),
               statePresent: Number(row.state_present || 0) > 0,
+              stateUpdatedAt: String(row.state_updated_at || ''),
               cursor: String(row.cursor || ''),
               exhausted: Number(row.exhausted || 0) === 1,
               completedAt: String(row.latest_completed_at || ''),
@@ -84,25 +86,21 @@ jobs:
               stale: Number(row.stale_open_batches || 0),
             };
           };
-          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02')];
+          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02'), read('ARCHIVE_03')];
           if (shards.some(shard => shard.size <= 0)) throw new Error('watchdog cannot observe archive shard size');
 
           const totalRows = shards.reduce((sum, shard) => sum + shard.total, 0);
           const hk01Rows = shards.reduce((sum, shard) => sum + shard.hk01, 0);
           const oldest = shards.map(shard => shard.oldest).filter(Boolean).sort()[0] || 'unknown';
           const stale = shards.reduce((sum, shard) => sum + shard.stale, 0);
-          const stateOwner = shards[1].statePresent ? shards[1] : shards[0];
+          const stateOwner = [...shards].reverse().filter(shard => shard.statePresent).sort((a, b) => (Date.parse(b.stateUpdatedAt) || 0) - (Date.parse(a.stateUpdatedAt) || 0))[0] || shards.at(-1);
           const exhausted = stateOwner.statePresent && stateOwner.exhausted;
           const completed = [...shards]
             .filter(shard => Number.isFinite(shard.completedMs))
             .sort((a, b) => b.completedMs - a.completedMs)[0];
           const ageHours = completed ? (Date.now() - completed.completedMs) / 3_600_000 : Infinity;
           const capacityHalted = shards.every(shard => shard.size >= 300_000_000);
-          const active = shards[0].size < 300_000_000
-            ? 'ARCHIVE_01'
-            : shards[1].size < 300_000_000
-              ? 'ARCHIVE_02'
-              : 'none';
+          const active = [...shards].reverse().find(shard => shard.size < 300_000_000)?.binding || 'none';
 
           const summary = [
             '## Archive watchdog',
@@ -117,6 +115,7 @@ jobs:
             `- stale open batches: ${stale}`,
             `- ARCHIVE_01: rows=${shards[0].total}, size=${shards[0].size}`,
             `- ARCHIVE_02: rows=${shards[1].total}, size=${shards[1].size}`,
+            `- ARCHIVE_03: rows=${shards[2].total}, size=${shards[2].size}`,
             `- all shards capacity halted: ${capacityHalted}`,
             `- exhausted: ${exhausted}`,
           ];

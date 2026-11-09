@@ -23,8 +23,8 @@ function fakeDb(rows, { withSession = true } = {}) {
   return db;
 }
 
-test('archive registry exposes the two provisioned shards in deterministic order', () => {
-  assert.deepEqual(ARCHIVE_BINDING_NAMES, ['ARCHIVE_01', 'ARCHIVE_02']);
+test('archive registry exposes the three provisioned shards in deterministic order', () => {
+  assert.deepEqual(ARCHIVE_BINDING_NAMES, ['ARCHIVE_01', 'ARCHIVE_02', 'ARCHIVE_03']);
 });
 
 test('archive registry is safe before any archive binding is available', () => {
@@ -56,4 +56,11 @@ test('source counts aggregate across every bound archive shard', async () => {
 
   assert.equal(totals.get('香港01'), 23541);
   assert.equal(totals.get('巴士的報'), 6459);
+});
+
+test('all three distinct archive bindings contribute source counts', async () => {
+  const env = Object.fromEntries(ARCHIVE_BINDING_NAMES.map((binding, index) => [binding, fakeDb([{ source: '香港01', count: index + 1 }]) ]));
+  const databases = archiveDatabases(env);
+  assert.equal(databases.length, 3);
+  assert.equal((await sourceCountsAcrossDatabases(databases)).get('香港01'), 6);
 });
