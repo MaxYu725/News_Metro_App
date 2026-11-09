@@ -10,7 +10,7 @@ if [[ ! "$batch_id" =~ ^[A-Za-z0-9._-]{1,80}$ ]]; then
   echo 'invalid archive batch id' >&2
   exit 1
 fi
-if [[ "$archive_binding" != 'ARCHIVE_01' && "$archive_binding" != 'ARCHIVE_02' ]]; then
+if [[ "$archive_binding" != 'ARCHIVE_01' && "$archive_binding" != 'ARCHIVE_02' && "$archive_binding" != 'ARCHIVE_03' ]]; then
   echo 'invalid archive binding' >&2
   exit 1
 fi

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { archiveDatabases } from '../src/archive-shards.js';
 
 import {
   decodeSearchCursor,
@@ -133,4 +134,16 @@ test('multi-D1 next page binds decoded cursor boundary', async () => {
 test('archive fan-out is reserved for trigram-eligible queries', () => {
   assert.equal(isArchiveEligibleQuery('香港01'), true);
   assert.equal(isArchiveEligibleQuery('AI'), false);
+});
+
+test('search includes unique third-shard matches and globally deduplicates identities', async () => {
+  const row = (id, day) => ({ id, pubDate: `2026-11-${day}T00:00:00.000Z` });
+  const env = {
+    ARCHIVE_01: fakeDb([() => ({ results: [row('shared', '07')] })]),
+    ARCHIVE_02: fakeDb([() => ({ results: [row('second', '08')] })]),
+    ARCHIVE_03: fakeDb([() => ({ results: [row('third-only', '09'), row('shared', '07')] })]),
+  };
+  const result = await searchArticlesAcrossDatabases(archiveDatabases(env), '香港新聞', null, 20);
+  assert.deepEqual(result.rows.map(row => row.id), ['third-only', 'second', 'shared']);
+  assert.equal(env.ARCHIVE_03.calls.length, 1);
 });
