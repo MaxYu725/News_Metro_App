@@ -70,7 +70,8 @@ jobs:
             if (Array.isArray(chunk.results)) {
               console.log(JSON.stringify({ rows: chunk.results.length, success: chunk.success, meta: chunk.meta }));
             } else {
-              console.log(JSON.stringify(chunk).slice(0, 4000));
+              const errors = chunk.errors || chunk.error || [];
+              console.log(JSON.stringify({ errors }).slice(0, 4000));
             }
           }
           NODE
