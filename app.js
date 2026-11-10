@@ -914,6 +914,15 @@ async function loadSearchUI(isAppendMode = false) {
 
     if (isAppendMode) removeBottomSkeletons();
 
+    // A failed next-page request is not the end of historical results.
+    // Retain the last valid cursor and already-rendered cards for manual retry.
+    if (isAppendMode && (!result.success || result.stale)) {
+        searchState.hasMore = false;
+        hasMoreNews = false;
+        isLoadingMore = false;
+        return;
+    }
+
     if (result.success && result.data.length > 0) {
         const newBatch = result.data;
 
@@ -1110,6 +1119,19 @@ function scheduleMainScroll() {
 }
 
 DOM.mainContainer?.addEventListener('scroll', scheduleMainScroll, { passive: true });
+
+// Retry only the failed page; never restart the topic or discard its cursor.
+window.addEventListener('metro:retry-feed-append', event => {
+    if (isLoadingMore) return;
+    const context = event.detail?.context;
+    if (context === 'news' && activeAppSection === 'news') {
+        isLoadingMore = true;
+        loadCurrentCategory(false, true);
+    } else if (context === 'search' && activeAppSection === 'search' && searchState.query) {
+        isLoadingMore = true;
+        loadSearchUI(true);
+    }
+});
 
 DOM.backToTopBtn?.addEventListener('click', () => {
     DOM.mainContainer?.scrollTo({ top: 0, behavior: 'smooth' });

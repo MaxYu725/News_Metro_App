@@ -71,7 +71,7 @@ assert.equal(result.mode, 'live');
 const apiSource = fs.readFileSync(new URL('../../api.js', import.meta.url), 'utf8');
 assert.match(apiSource, /fetchTrackedTopicSearchData\(searchQuery, page\)/);
 assert.match(apiSource, /trackedTopicCursorPages/);
-assert.match(apiSource, /return fetchSearchData\(query, \{ page, includeArchive: false \}\)/);
+assert.match(apiSource, /return fetchSearchData\(query, \{ page, includeArchive: false, context: 'news' \}\)/);
 
 const appSource = fs.readFileSync(new URL('../../app.js', import.meta.url), 'utf8');
 assert.match(appSource, /Array\.from\(query\)\.length >= 3/);

@@ -319,6 +319,11 @@ function retryCurrentState() {
 
     if (lastState?.status === 'stale') showBanner(lastState);
 
+    if (lastState?.append && lastState.status === 'error' && (context === 'news' || context === 'search')) {
+        window.dispatchEvent(new CustomEvent('metro:retry-feed-append', { detail: { context } }));
+        return;
+    }
+
     if (context === 'search') {
         document.getElementById('news-search-form')?.requestSubmit();
         return;
