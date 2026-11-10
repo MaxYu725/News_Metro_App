@@ -1,4 +1,4 @@
-name: One-time HK01 priority-day gap repair
+name: One-time HK01 August-September gap repair
 
 on:
   pull_request:
@@ -32,11 +32,11 @@ jobs:
       - name: Install pinned Wrangler
         working-directory: worker
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Restore two verified recent missing HK01 days
+      - name: Restore three verified Aug-Sep missing HK01 days
         if: github.event_name == 'push'
         run: |
           set -euo pipefail
-          for day in 2026-11-01 2026-10-15; do
+          for day in 2026-09-15 2026-09-01 2026-08-20; do
             echo "=== Restoring $day ==="
             node worker/scripts/hk01-gap-day.mjs --date="$day" --mode=run --limit=500
           done
