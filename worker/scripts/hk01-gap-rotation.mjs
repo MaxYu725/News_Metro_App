@@ -1,3 +1,6 @@
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+
 // Deterministic, finite HK01 gap repair rotation.
 // Four UTC slots per day, two cycles, then automatic no-op.
 export const GAP_START = '2026-08-17';
@@ -20,6 +23,6 @@ export function selectGapDay(now = Date.now()) {
   return new Date(day).toISOString().slice(0, 10);
 }
 
-if (import.meta.url === new URL('file://' + process.argv[1]).href) {
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   console.log(selectGapDay() || 'skip');
 }
