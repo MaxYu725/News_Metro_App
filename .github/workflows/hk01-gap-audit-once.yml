@@ -32,6 +32,6 @@ jobs:
       - name: Install pinned Wrangler
         working-directory: worker
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Restore up to 100 missing HK01 articles from 2026-10-01
+      - name: Restore remaining HK01 articles from 2026-10-01
         if: github.event_name == 'push'
-        run: node worker/scripts/hk01-gap-day.mjs --date=2026-10-01 --mode=run --limit=100
+        run: node worker/scripts/hk01-gap-day.mjs --date=2026-10-01 --mode=run --limit=500
