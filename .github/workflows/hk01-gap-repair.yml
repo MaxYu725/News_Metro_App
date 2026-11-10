@@ -1,0 +1,76 @@
+name: HK01 bounded date gap repair
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - worker/scripts/hk01-gap-day.mjs
+      - worker/test/hk01-gap-day.test.mjs
+      - .github/workflows/hk01-gap-repair.yml
+  workflow_dispatch:
+    inputs:
+      date:
+        description: UTC day YYYY-MM-DD (2026-08-01 through today)
+        required: true
+        type: string
+        default: '2026-10-01'
+      limit:
+        description: Maximum missing articles to write
+        required: true
+        type: choice
+        default: '100'
+        options: ['100', '250', '500']
+      mode:
+        description: Dry-run only reads; run inserts into ARCHIVE_03
+        required: true
+        type: choice
+        default: dry-run
+        options: [dry-run, run]
+      confirmation:
+        description: For run type ALLOW_ARCHIVE_03_WRITE; blank for dry-run
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: metro-news-archive-backfill
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: node --check worker/scripts/hk01-gap-day.mjs
+      - run: node --test worker/test/hk01-gap-day.test.mjs
+
+  execute:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      GAP_DATE: ${{ inputs.date }}
+      GAP_MODE: ${{ inputs.mode }}
+      GAP_LIMIT: ${{ inputs.limit }}
+      GAP_WRITE_CONFIRM: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Wrangler
+        working-directory: worker
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Day-bounded read / optional repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          node worker/scripts/hk01-gap-day.mjs \
+            --date="$GAP_DATE" \
+            --mode="$GAP_MODE" \
+            --limit="$GAP_LIMIT"
