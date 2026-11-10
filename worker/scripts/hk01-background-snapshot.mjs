@@ -10,19 +10,31 @@ const PAGE_SIZE = 5000;
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const bounded = (value, limit = 300) => String(value ?? '').slice(0, limit);
 
-export function snapshotLowerBound(state) {
+function validCursor(state) {
   const cursor = Number.parseInt(state?.[0]?.results?.[0]?.cursor || '', 10);
-  const epoch = 1451606400;
-  return Number.isSafeInteger(cursor) && cursor > epoch
-    ? new Date(Math.max(epoch, cursor - 46 * 86400) * 1000).toISOString() : null;
+  return Number.isSafeInteger(cursor) && cursor > 1451606400 ? cursor : null;
 }
 
-export function buildSnapshotQuery({ lowerBound = null, after = null, pageSize = PAGE_SIZE } = {}) {
+export function snapshotLowerBound(state) {
+  const cursor = validCursor(state);
+  return cursor === null
+    ? null : new Date(Math.max(1451606400, cursor - 46 * 86400) * 1000).toISOString();
+}
+
+// Backfill only searches publication windows before the durable cursor.
+// Excluding newer articles prevents every cycle from rescanning the full archive.
+export function snapshotUpperBound(state) {
+  const cursor = validCursor(state);
+  return cursor === null ? null : new Date(cursor * 1000).toISOString();
+}
+
+export function buildSnapshotQuery({ lowerBound = null, upperBound = null, after = null, pageSize = PAGE_SIZE } = {}) {
   if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > PAGE_SIZE) {
     throw new Error('Snapshot page size must be between 1 and 5000');
   }
   const conditions = ["source='香港01'"];
   if (lowerBound) conditions.push(`pubDate >= ${quote(lowerBound)}`);
+  if (upperBound) conditions.push(`pubDate < ${quote(upperBound)}`);
   if (after) {
     conditions.push(`(pubDate < ${quote(after.pubDate)} OR (pubDate = ${quote(after.pubDate)} AND id < ${quote(after.id)}))`);
   }
@@ -82,13 +94,13 @@ function executeD1({ binding, query }) {
 const compare = (a, b) => Buffer.compare(Buffer.from(a.pubDate), Buffer.from(b.pubDate))
   || Buffer.compare(Buffer.from(a.id), Buffer.from(b.id));
 
-export async function collectSnapshot({ binding, lowerBound = null, pageSize = PAGE_SIZE, execute = executeD1 }) {
+export async function collectSnapshot({ binding, lowerBound = null, upperBound = null, pageSize = PAGE_SIZE, execute = executeD1 }) {
   if (!SHARDS.includes(binding)) throw new Error('Unknown archive shard');
   const rows = [];
   let after = null;
   for (let page = 1; ; page++) {
     const context = { binding, page };
-    const query = buildSnapshotQuery({ lowerBound, after, pageSize });
+    const query = buildSnapshotQuery({ lowerBound, upperBound, after, pageSize });
     let raw;
     try { raw = await execute({ binding, query, page }); }
     catch (error) {
@@ -105,7 +117,8 @@ export async function collectSnapshot({ binding, lowerBound = null, pageSize = P
     let previous = after;
     for (const row of batch) {
       if (!row || ['id', 'link', 'source', 'pubDate'].some(key => typeof row[key] !== 'string')
-        || !row.id || !row.pubDate || row.source !== '香港01' || (lowerBound && row.pubDate < lowerBound)) {
+        || !row.id || !row.pubDate || row.source !== '香港01'
+        || (lowerBound && row.pubDate < lowerBound) || (upperBound && row.pubDate >= upperBound)) {
         throw failure(context, 'INVALID_RESPONSE', 'D1 returned an invalid identity row');
       }
       if (previous && compare(row, previous) >= 0) {
@@ -120,17 +133,19 @@ export async function collectSnapshot({ binding, lowerBound = null, pageSize = P
 }
 
 export async function runSnapshot({ stateFile, outDir = tmpdir(), execute = executeD1, log = console.log }) {
-  const lowerBound = snapshotLowerBound(JSON.parse(readFileSync(stateFile, 'utf8')));
+  const state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  const lowerBound = snapshotLowerBound(state);
+  const upperBound = snapshotUpperBound(state);
   const snapshots = [];
   for (const binding of SHARDS) {
-    snapshots.push(await collectSnapshot({ binding, lowerBound, execute }));
+    snapshots.push(await collectSnapshot({ binding, lowerBound, upperBound, execute }));
   }
   for (let i = 0; i < SHARDS.length; i++) {
     writeFileSync(join(outDir, `${SHARDS[i].toLowerCase()}-existing.json`), JSON.stringify(snapshots[i]));
     log(`Background dedupe shard: ${SHARDS[i]} rows=${snapshots[i][0].results.length} page_size=${PAGE_SIZE}`);
   }
   log(lowerBound
-    ? `Background dedupe snapshot: bounded_46d from=${lowerBound} across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03`
+    ? `Background dedupe snapshot: bounded_46d from=${lowerBound} until=${upperBound} across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03`
     : 'Background dedupe snapshot: full bootstrap scan across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03');
 }
 

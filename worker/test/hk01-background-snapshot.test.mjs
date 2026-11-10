@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { collectSnapshot, runSnapshot, snapshotLowerBound } from '../scripts/hk01-background-snapshot.mjs';
+import { collectSnapshot, runSnapshot, snapshotLowerBound, snapshotUpperBound } from '../scripts/hk01-background-snapshot.mjs';
 import { sqliteD1 } from './helpers/sqlite-d1.mjs';
 
 const date = '2026-10-01T00:00:00.000Z';
@@ -45,6 +45,24 @@ test('keyset pages preserve every identity across equal timestamps and SQL quote
   assert.ok(executor.queries.every(query => /LIMIT 2\s*;?$/.test(query)));
 });
 
+test('cursor-bounded snapshot excludes newer articles while retaining older-window identities', async t => {
+  const executor = await sqliteExecutor(t, [
+    article('newer', '2026-11-10T00:00:00.000Z'),
+    article('at-cursor', '2026-11-09T00:00:00.000Z'),
+    article('inside', '2026-11-08T12:00:00.000Z'),
+    article('before-window', '2026-09-23T23:59:59.999Z'),
+  ]);
+  const state = [{ results: [{ cursor: String(Date.parse('2026-11-09T00:00:00.000Z') / 1000) }] }];
+  const lowerBound = snapshotLowerBound(state);
+  const upperBound = snapshotUpperBound(state);
+  const snapshot = await collectSnapshot({
+    binding: 'ARCHIVE_01', lowerBound, upperBound, pageSize: 1,
+    execute: executor.execute,
+  });
+  assert.deepEqual(snapshot[0].results.map(row => row.id), ['inside']);
+  assert.ok(executor.queries.every(query => query.includes(`pubDate >= '${lowerBound}'`) && query.includes(`pubDate < '${upperBound}'`)));
+});
+
 test('bootstrap scans all dates and accepts wrapped Wrangler results', async t => {
   const executor = await sqliteExecutor(t, [
     article('old', '2016-01-01T00:00:00.000Z'), article('new', '2026-11-10T00:00:00.000Z'),
@@ -65,6 +83,8 @@ test('cursor overlap retains the original 46-day lower bound and bootstrap behav
   assert.equal(snapshotLowerBound([{ results: [{ cursor: '1451692800' }] }]), '2016-01-01T00:00:00.000Z');
   assert.equal(snapshotLowerBound([{ results: [] }]), null);
   assert.equal(snapshotLowerBound([{ results: [{ cursor: '' }] }]), null);
+  assert.equal(snapshotUpperBound([{ results: [{ cursor: String(Date.parse('2026-11-09T00:00:00.000Z') / 1000) }] }]), '2026-11-09T00:00:00.000Z');
+  assert.equal(snapshotUpperBound([{ results: [] }]), null);
 });
 
 for (const [label, response, code] of [
