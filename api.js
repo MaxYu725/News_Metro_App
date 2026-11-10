@@ -115,7 +115,7 @@ function trackedTopicCursorState(searchQuery) {
 async function fetchTrackedTopicSearchData(searchQuery, page = 0) {
     const query = String(searchQuery || '').trim();
     if (searchCodePointLength(query) < 3) {
-        return fetchSearchData(query, { page, includeArchive: false });
+        return fetchSearchData(query, { page, includeArchive: false, context: 'news' });
     }
 
     const pages = trackedTopicCursorState(query);
@@ -135,9 +135,10 @@ async function fetchTrackedTopicSearchData(searchQuery, page = 0) {
         while (replayPage < page) {
             const replay = await fetchSearchData(query, {
                 cursor: replayCursor,
-                includeArchive: true
+                includeArchive: true,
+                context: 'news'
             });
-            if (!replay.success || !replay.hasMore || !replay.nextCursor) {
+            if (!replay.success || replay.stale || !replay.hasMore || !replay.nextCursor) {
                 return {
                     ...replay,
                     data: [],
@@ -155,7 +156,8 @@ async function fetchTrackedTopicSearchData(searchQuery, page = 0) {
 
     const result = await fetchSearchData(query, {
         cursor,
-        includeArchive: true
+        includeArchive: true,
+        context: 'news'
     });
 
     if (result.success) {
@@ -171,13 +173,13 @@ async function fetchTrackedTopicSearchData(searchQuery, page = 0) {
     return { ...result, page };
 }
 
-function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live' } = {}) {
+function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live', context = 'search' } = {}) {
     const message = errorMessage(error, '暫時無法連接搜尋服務');
     const cached = !append ? getCachedFeed('search', sourceCacheKey(searchQuery)) : null;
 
     if (cached?.data?.length) {
         emitDataState({
-            context: 'search',
+            context,
             status: 'stale',
             error: message,
             cachedAt: cached.savedAt,
@@ -196,7 +198,7 @@ function fallbackSearchResult(searchQuery, error, { append = false, mode = 'live
         };
     }
 
-    emitDataState({ context: 'search', status: 'error', error: message, query: searchQuery, append });
+    emitDataState({ context, status: 'error', error: message, query: searchQuery, append });
     return { success: false, data: [], hasMore: false, nextCursor: '', mode, error: message };
 }
 
@@ -290,7 +292,7 @@ export async function fetchNewsData(categoryId, page, forceSync = false, searchQ
     }
 }
 
-export async function fetchSearchData(searchQuery, { cursor = '', page = 0, includeArchive = true } = {}) {
+export async function fetchSearchData(searchQuery, { cursor = '', page = 0, includeArchive = true, context = 'search' } = {}) {
     const query = String(searchQuery || '').trim();
     const useArchive = includeArchive && searchCodePointLength(query) >= 3;
     const mode = useArchive ? 'archive' : 'live';
@@ -317,7 +319,7 @@ export async function fetchSearchData(searchQuery, { cursor = '', page = 0, incl
             return fallbackSearchResult(
                 query,
                 result?.error || `搜尋服務暫時無法回應 (${response.status})`,
-                { append, mode }
+                { append, mode, context }
             );
         }
 
@@ -326,7 +328,7 @@ export async function fetchSearchData(searchQuery, { cursor = '', page = 0, incl
         if (!append && data.length > 0) {
             saveCachedFeed('search', sourceCacheKey(query), data, !!result.hasMore);
         }
-        emitDataState({ context: 'search', status: 'ok', query, append, updatedAt });
+        emitDataState({ context, status: 'ok', query, append, updatedAt });
         return {
             success: true,
             data,
@@ -337,7 +339,7 @@ export async function fetchSearchData(searchQuery, { cursor = '', page = 0, incl
             updatedAt
         };
     } catch (error) {
-        return fallbackSearchResult(query, error, { append, mode });
+        return fallbackSearchResult(query, error, { append, mode, context });
     }
 }
 
