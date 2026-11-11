@@ -35,7 +35,7 @@ test('state mismatch and improper movement fail closed', () => {
     { cycle: 1, next_date: '2026-08-18', completed_days: 0 },
     { cycle: 2, next_date: GAP_START, completed_days: 0 },
     { cycle: 1, next_date: '2026-09-99', completed_days: 44 },
-    { cycle: 2, next_date: GAP_END, completed_days: 169 },
+    { cycle: 2, next_date: GAP_END, completed_days: 168 },
     { cycle: 3, next_date: GAP_END, completed_days: 170 },
     { cycle: 5, next_date: GAP_START, completed_days: 170 },
   ]) {
