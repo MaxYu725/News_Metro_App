@@ -5,11 +5,12 @@ on:
     branches: [main]
     paths:
       - .github/workflows/hk01-gap-recovery-schedule.yml
-      - worker/scripts/hk01-gap-rotation.mjs
-      - worker/test/hk01-gap-rotation.test.mjs
+      - worker/scripts/hk01-gap-recovery.mjs
+      - worker/test/hk01-gap-recovery.test.mjs
       - worker/scripts/hk01-gap-day.mjs
   schedule:
     - cron: '37 0,6,12,18 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,14 +26,14 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Check safe date selection
+      - name: Check durable progression and verification
         run: |
-          node --check worker/scripts/hk01-gap-rotation.mjs
+          node --check worker/scripts/hk01-gap-recovery.mjs
           node --check worker/scripts/hk01-gap-day.mjs
-          node --test worker/test/hk01-gap-rotation.test.mjs worker/test/hk01-gap-day.test.mjs
+          node --test worker/test/hk01-gap-recovery.test.mjs worker/test/hk01-gap-day.test.mjs
 
   recover:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -43,29 +44,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Choose one bounded UTC day
-        id: day
-        shell: bash
-        run: |
-          set -euo pipefail
-          next=$(node worker/scripts/hk01-gap-rotation.mjs)
-          if [[ "$next" == 'skip' ]]; then
-            echo 'Finite two-cycle recovery window has ended; no D1 work.'
-            echo 'active=false' >> "$GITHUB_OUTPUT"
-          else
-            echo "Target UTC day: $next"
-            echo 'active=true' >> "$GITHUB_OUTPUT"
-            echo "date=$next" >> "$GITHUB_OUTPUT"
-          fi
       - name: Install pinned Wrangler
-        if: steps.day.outputs.active == 'true'
         working-directory: worker
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Idempotent HK01 gap repair for one day
-        if: steps.day.outputs.active == 'true'
+      - name: Resume earliest incomplete UTC day and verify before advancing
         shell: bash
-        env:
-          GAP_DATE: ${{ steps.day.outputs.date }}
         run: |
           set -euo pipefail
-          node worker/scripts/hk01-gap-day.mjs --date="$GAP_DATE" --mode=run --limit=500
+          node worker/scripts/hk01-gap-recovery.mjs
