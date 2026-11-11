@@ -1,5 +1,6 @@
 // Manual UTC-day HK01 repair: no multi-year cursor changes or automatic retries.
 import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -94,6 +95,7 @@ async function main() {
   const day = dayWindow(args.date || '');
   const limit = Number(args.limit || 100);
   const mode = args.mode || 'dry-run';
+  const reportFile = args['report-file'] || '';
   if (!['dry-run', 'run'].includes(mode) || ![100, 250, 500].includes(limit)) throw Error('Invalid mode or limit');
   if (mode === 'run' && process.env.GAP_WRITE_CONFIRM !== 'ALLOW_ARCHIVE_03_WRITE') {
     throw Error('Explicit write confirmation is required');
@@ -101,6 +103,10 @@ async function main() {
 
   const config = await discoverHk01SearchConfig();
   const found = await fetchHk01SearchWindow({ startEpoch: day.startEpoch, endEpoch: day.endEpoch, config });
+  // Do not advance a scheduled cursor on a suspiciously empty upstream response.
+  if (mode === 'run' && found.articles.length === 0) {
+    throw Error('HK01 search returned zero articles; cannot certify this day complete');
+  }
   const snapshots = [];
   let readRows = 0;
   for (const binding of SHARDS) {
@@ -117,17 +123,37 @@ async function main() {
     missing, selected: selected.length, remaining: Math.max(0, missing - selected.length),
     d1RowsRead: readRows, destination: 'ARCHIVE_03' };
   console.log('Gap repair plan: ' + JSON.stringify(report));
-  if (mode === 'dry-run' || selected.length === 0) {
-    console.log(mode === 'dry-run' ? 'DRY RUN: no D1 writes' : 'Nothing missing on this day');
+  if (mode === 'dry-run') {
+    console.log('DRY RUN: no D1 writes');
     return;
   }
-  const capacity = Number(read('ARCHIVE_03', 'SELECT 1 AS probe').meta.size_after || 0);
-  if (!(capacity > 0 && capacity < MAX_ARCHIVE_SIZE)) throw Error('ARCHIVE_03 size guard reached');
-  for (let i = 0; i < selected.length; i += 25) {
-    const sql = selected.slice(i, i + 25).map(insertArticleSql).join('\n');
-    wrangler(['d1', 'execute', 'ARCHIVE_03', '--remote', '--command', sql]);
-    console.log('Idempotent chunk ' + (1 + Math.floor(i / 25)) + ' written');
+  if (selected.length > 0) {
+    const capacity = Number(read('ARCHIVE_03', 'SELECT 1 AS probe').meta.size_after || 0);
+    if (!(capacity > 0 && capacity < MAX_ARCHIVE_SIZE)) throw Error('ARCHIVE_03 size guard reached');
+    for (let i = 0; i < selected.length; i += 25) {
+      const sql = selected.slice(i, i + 25).map(insertArticleSql).join('\n');
+      wrangler(['d1', 'execute', 'ARCHIVE_03', '--remote', '--command', sql]);
+      console.log('Idempotent chunk ' + (1 + Math.floor(i / 25)) + ' written');
+    }
   }
+
+  // Independently re-query ARCHIVE_03 after successful writes. Never advance a
+  // durable day cursor on the basis of an intended INSERT count alone.
+  const verified = read('ARCHIVE_03', dayIdentityQuery(day));
+  if (verified.rows.length > MAX_ROWS_PER_SHARD
+      || readRows + Number(verified.meta.rows_read || 0) > MAX_READS_PER_RUN) {
+    throw Error('Post-write identity/read cap exceeded; cursor unchanged');
+  }
+  snapshots[snapshots.length - 1] = verified.rows;
+  const remainingAfterWrite = missingArticles(found.articles, snapshots, limit).missing;
+  const finalReport = {
+    ...report, verified: true, remainingAfterWrite,
+    complete: remainingAfterWrite === 0,
+    archive03Identities: verified.rows.length,
+    postWriteRowsRead: Number(verified.meta.rows_read || 0),
+  };
+  console.log('Gap repair final: ' + JSON.stringify(finalReport));
+  if (reportFile) writeFileSync(reportFile, JSON.stringify(finalReport) + '\n', 'utf8');
   console.log('Done. No archive cursor or original articles changed.');
 }
 
