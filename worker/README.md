@@ -127,3 +127,44 @@ Set `PLAYWRIGHT_BROWSER_EXECUTABLE` to reuse an installed Chromium and optionall
 explicit POST, safe output rendering, source links, pending coverage, mode
 changes, service 404/recovery, Retry-After recovery and section navigation. No production AI is used by tests or the new
 cache-only production smoke probe.
+
+
+## HK01 2026 finite gap recovery: durable progress
+
+The workflow `.github/workflows/hk01-gap-recovery-schedule.yml` now resumes a
+**D1-persisted cursor**, not a date calculated from when a GitHub cron runner
+starts. Every schedule or manual dispatch uses the earliest incomplete UTC
+day between `2026-08-17` and `2026-11-09`, with two finite verification
+passes (170 successful day-passes total). Missing cron ticks do not skip dates.
+
+Operational state is a single row in `metro_news_archive_03`, table
+`hk01_gap_recovery_state`, key `hk01-2026-aug-nov-v1`. The recovery script
+creates the table if missing and initializes its row via `INSERT OR IGNORE`.
+Progress updates use a compare-and-swap `UPDATE ... RETURNING` that matches
+cycle, date and completed-day count. After successful article writes,
+`hk01-gap-day.mjs` rechecks the same day's D1 article identities against
+the publisher's exhaustive result; the cursor advances **only if zero
+articles are still missing**. A partial batch (500-article cap), D1 quota or
+capacity error, network failure, incomplete upstream response or failed
+verification leaves the cursor unchanged for the next run.
+
+View progress with this read-only command from the `worker` directory:
+
+```sh
+npx wrangler d1 execute metro_news_archive_03 --remote --json --command "SELECT cycle,next_date,completed_days,last_completed_date,updated_at FROM hk01_gap_recovery_state WHERE id='hk01-2026-aug-nov-v1'"
+```
+
+The state is separate from `archive_backfill_state` and does not modify
+the years-long HK01 backfill cursor. Only `ARCHIVE_03` receives the
+new one-row state writes and missing articles (`INSERT OR IGNORE`).
+The recovery retains the 300 MB write-start guard and day-bounded 20,000
+D1 row-read guard. The row-read guard is checked after a query executes:
+it **cannot guarantee** the Cloudflare account-wide daily limit will not
+be exceeded by unrelated work. If all archive shards approach capacity,
+provision more space before resuming. The cron remains configured after
+the two cycles but exits without article writes when the state is complete;
+it can then be disabled.
+
+The first deployment rechecks 2026-08-17 even though prior clock-based runs
+wrote articles there; existing IDs are de-duplicated, so recovery cannot
+silently mark that date finished without verification.
