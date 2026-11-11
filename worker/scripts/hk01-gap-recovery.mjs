@@ -126,6 +126,17 @@ export function shouldAttemptRecovery(now = Date.now()) {
   return time >= Date.parse(FIRST_SLOT_UTC);
 }
 
+export function verifiedDayResult(report, targetDate) {
+  if (report?.utcDay !== targetDate || report?.mode !== 'run' || report?.verified !== true
+      || !Number.isInteger(report?.remainingAfterWrite) || report.remainingAfterWrite < 0
+      || report.complete !== (report.remainingAfterWrite === 0)
+      || !Number.isInteger(report?.hk01Found) || report.hk01Found < 0
+      || !Number.isInteger(report?.archive03Identities) || report.archive03Identities < 0) {
+    throw Error('Invalid or unverified HK01 day completion report; cursor unchanged');
+  }
+  return { complete: report.complete, remaining: report.remainingAfterWrite };
+}
+
 async function main() {
   if (!shouldAttemptRecovery()) {
     console.log('Recovery start boundary not reached; no D1 operations');
@@ -158,15 +169,12 @@ async function main() {
     ], { cwd: resolve(scriptDir, '..'), stdio: 'inherit' });
     if (!existsSync(reportFile)) throw Error('Verified day report missing; cursor unchanged');
     const report = JSON.parse(readFileSync(reportFile, 'utf8'));
-    if (report.utcDay !== state.nextDate || report.mode !== 'run' || report.verified !== true
-        || !Number.isInteger(report.remainingAfterWrite) || report.remainingAfterWrite < 0) {
-      throw Error('Invalid day verification report; cursor unchanged');
-    }
-    if (!report.complete || report.remainingAfterWrite !== 0) {
-      console.log('UTC ' + state.nextDate + ' still has ' + report.remainingAfterWrite
+    const verification = verifiedDayResult(report, state.nextDate);
+    if (!verification.complete) {
+      console.log('UTC ' + state.nextDate + ' still has ' + verification.remaining
         + ' missing articles; next run retries SAME day');
       jobSummary(['## HK01 gap recovery', '- Pending: ' + state.nextDate + ' (cycle ' + state.cycle + ')',
-        '- Remaining: ' + report.remainingAfterWrite, '- Cursor not advanced']);
+        '- Remaining: ' + verification.remaining, '- Cursor not advanced']);
       return;
     }
     const next = advanceRecoveryState(state);
