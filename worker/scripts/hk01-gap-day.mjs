@@ -103,6 +103,10 @@ async function main() {
 
   const config = await discoverHk01SearchConfig();
   const found = await fetchHk01SearchWindow({ startEpoch: day.startEpoch, endEpoch: day.endEpoch, config });
+  // Do not advance a scheduled cursor on a suspiciously empty upstream response.
+  if (mode === 'run' && found.articles.length === 0) {
+    throw Error('HK01 search returned zero articles; cannot certify this day complete');
+  }
   const snapshots = [];
   let readRows = 0;
   for (const binding of SHARDS) {
@@ -136,7 +140,10 @@ async function main() {
   // Independently re-query ARCHIVE_03 after successful writes. Never advance a
   // durable day cursor on the basis of an intended INSERT count alone.
   const verified = read('ARCHIVE_03', dayIdentityQuery(day));
-  if (verified.rows.length > MAX_ROWS_PER_SHARD) throw Error('Post-write identity cap exceeded');
+  if (verified.rows.length > MAX_ROWS_PER_SHARD
+      || readRows + Number(verified.meta.rows_read || 0) > MAX_READS_PER_RUN) {
+    throw Error('Post-write identity/read cap exceeded; cursor unchanged');
+  }
   snapshots[snapshots.length - 1] = verified.rows;
   const remainingAfterWrite = missingArticles(found.articles, snapshots, limit).missing;
   const finalReport = {
