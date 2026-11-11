@@ -22,8 +22,8 @@ function plusDays(day, increment) {
 
 export function validateRecoveryState(state) {
   const cycle = Number(state?.cycle);
-  const completedDays = Number(state?.completed_days);
-  const nextDate = String(state?.next_date || '');
+  const completedDays = Number(state?.completed_days ?? state?.completedDays);
+  const nextDate = String(state?.next_date ?? state?.nextDate ?? '');
   if (!Number.isInteger(cycle) || cycle < 1 || cycle > MAX_CYCLES + 1
       || !Number.isInteger(completedDays) || completedDays < 0 || completedDays > MAX_CYCLES * DAY_COUNT) {
     throw Error('Invalid durable HK01 recovery state');
