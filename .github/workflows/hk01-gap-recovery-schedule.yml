@@ -35,7 +35,7 @@ jobs:
   recover:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     environment: production
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -47,7 +47,7 @@ jobs:
       - name: Install pinned Wrangler
         working-directory: worker
         run: npm install --ignore-scripts --no-audit --no-fund
-      - name: Resume earliest incomplete UTC day and verify before advancing
+      - name: Resume up to three consecutive UTC days with independent verification
         shell: bash
         run: |
           set -euo pipefail
