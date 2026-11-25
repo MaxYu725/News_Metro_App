@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dayWindow, dayIdentityQuery, missingArticles, insertArticleSql } from '../scripts/hk01-gap-day.mjs';
+import { dayWindow, dayIdentityQuery, missingArticles, insertArticleSql, GAP_READ_SHARDS } from '../scripts/hk01-gap-day.mjs';
 
 const article = id => ({
   id: 'https://www.hk01.com/tech/' + id + '/test',
@@ -49,4 +49,11 @@ test('writes are insert-only and SQL strings are escaped', () => {
   assert.match(sql, /^INSERT OR IGNORE INTO articles/);
   assert.match(sql, /Joe''s phone/);
   assert.doesNotMatch(sql, /DELETE|UPDATE|archive_backfill_state/);
+});
+
+test('gap repair deduplicates against live and all four archive shards', () => {
+  assert.deepEqual(GAP_READ_SHARDS, ['DB','ARCHIVE_01','ARCHIVE_02','ARCHIVE_03','ARCHIVE_04']);
+  const a = article(999);
+  const result = missingArticles([a], [[],[],[],[],[{id:a.id,link:a.link}]],500);
+  assert.equal(result.missing,0);
 });
