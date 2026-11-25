@@ -173,3 +173,8 @@ silently mark that date finished without verification.
 ### Priority recovery acceleration (2026-11-25)
 
 The finite 2026 gap workflow now handles at most three successive UTC days per invocation, each with a 500-article cap and independently verified durable CAS checkpoint. It stops on partial coverage or error and never crosses a pass boundary in the same invocation. The older HK01 scheduled backfill temporarily uses 500 articles per cycle (manual options unchanged), conserving storage and writes until the recent gap is restored. Review the Cloudflare account-wide quotas before increasing throughput. Restore the older schedule to 1000 only after assessing remaining coverage and capacity.
+
+
+### ARCHIVE_04 writer activation
+
+After deployment of the fourth read binding and its archive migrations is confirmed, the older HK01 backfill selects the newest writable archive (initially ARCHIVE_04) and carries forward the latest historical cursor without resetting it. Its dedupe snapshot, audits, and watchdog include all four archive shards. The 2026 gap workflow continues writing to ARCHIVE_03 and persists its cursor there, but now checks existing identities in the main DB plus all four archives. This separates the two write targets while ARCHIVE_04 has capacity. The gap repair still stops when ARCHIVE_03 reaches the 300 MB guard; a further explicit rollover will be needed if that happens. The legacy manually dispatched mixed-source archive backfill remains restricted to ARCHIVE_01 and is not the active HK01 scheduled writer. No existing archive data is copied, removed, or reset.
