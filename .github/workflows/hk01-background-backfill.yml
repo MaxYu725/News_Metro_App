@@ -45,7 +45,7 @@ on:
           - '1000'
 
 concurrency:
-  group: metro-news-archive-backfill
+  group: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'metro-news-archive-backfill' || format('archive-ci-{0}-{1}', github.workflow, github.ref) }}
   cancel-in-progress: false
 
 permissions:
@@ -103,7 +103,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
-            limit=1000
+            # Temporarily prioritize the recent 2026 gap over older history.
+            limit=500
           else
             limit=${INPUT_LIMIT:-1000}
           fi

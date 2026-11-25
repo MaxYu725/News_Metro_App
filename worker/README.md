@@ -168,3 +168,8 @@ it can then be disabled.
 The first deployment rechecks 2026-08-17 even though prior clock-based runs
 wrote articles there; existing IDs are de-duplicated, so recovery cannot
 silently mark that date finished without verification.
+
+
+### Priority recovery acceleration (2026-11-25)
+
+The finite 2026 gap workflow now handles at most three successive UTC days per invocation, each with a 500-article cap and independently verified durable CAS checkpoint. It stops on partial coverage or error and never crosses a pass boundary in the same invocation. The older HK01 scheduled backfill temporarily uses 500 articles per cycle (manual options unchanged), conserving storage and writes until the recent gap is restored. Review the Cloudflare account-wide quotas before increasing throughput. Restore the older schedule to 1000 only after assessing remaining coverage and capacity.
