@@ -9,6 +9,8 @@ import { sqlLiteral } from '../src/archive-backfill.js';
 export const GAP_START = '2026-08-17';
 export const GAP_END = '2026-11-09';
 export const MAX_CYCLES = 2;
+export const MAX_DAYS_PER_RUN = 3;
+export const MAX_ARTICLES_PER_DAY = 500;
 export const STATE_KEY = 'hk01-2026-aug-nov-v1';
 export const FIRST_SLOT_UTC = '2026-11-10T18:00:00.000Z';
 export const DAY_COUNT = Math.round((Date.parse(GAP_END) - Date.parse(GAP_START)) / 86400000) + 1;
@@ -137,6 +139,25 @@ export function verifiedDayResult(report, targetDate) {
   return { complete: report.complete, remaining: report.remainingAfterWrite };
 }
 
+// Process at most three consecutive verified dates. Commit each day independently.
+export async function recoverConsecutiveDays(initial, processDay, commitDay, maxDays = MAX_DAYS_PER_RUN) {
+  if (!Number.isInteger(maxDays) || maxDays < 1 || maxDays > MAX_DAYS_PER_RUN) throw Error('Invalid day batch limit');
+  let state = validateRecoveryState(initial);
+  let advanced = 0;
+  while (!state.done && advanced < maxDays) {
+    const report = await processDay(state);
+    const verified = verifiedDayResult(report, state.nextDate);
+    if (!verified.complete) return { state, advanced, remaining: verified.remaining };
+    const next = advanceRecoveryState(state);
+    await commitDay(state, next);
+    state = validateRecoveryState(next);
+    advanced++;
+    // Do not begin the second pass in the same invocation.
+    if (state.cycle !== initial.cycle) break;
+  }
+  return { state, advanced, remaining: 0 };
+}
+
 async function main() {
   if (!shouldAttemptRecovery()) {
     console.log('Recovery start boundary not reached; no D1 operations');
@@ -157,41 +178,40 @@ async function main() {
     jobSummary(['## HK01 gap recovery', '- Finished: ' + state.completedDays + ' day-passes']);
     return;
   }
-  console.log('Durable gap cursor: cycle=' + state.cycle + '/' + MAX_CYCLES
-    + ', UTC day=' + state.nextDate + ', completed=' + state.completedDays
-    + '/' + (MAX_CYCLES * DAY_COUNT));
-  const reportFile = '/tmp/hk01-gap-recovery-' + process.pid + '.json';
-  if (existsSync(reportFile)) unlinkSync(reportFile);
-  try {
-    execFileSync(process.execPath, [
-      join(scriptDir, 'hk01-gap-day.mjs'), '--date=' + state.nextDate,
-      '--mode=run', '--limit=500', '--report-file=' + reportFile,
-    ], { cwd: resolve(scriptDir, '..'), stdio: 'inherit' });
-    if (!existsSync(reportFile)) throw Error('Verified day report missing; cursor unchanged');
-    const report = JSON.parse(readFileSync(reportFile, 'utf8'));
-    const verification = verifiedDayResult(report, state.nextDate);
-    if (!verification.complete) {
-      console.log('UTC ' + state.nextDate + ' still has ' + verification.remaining
-        + ' missing articles; next run retries SAME day');
-      jobSummary(['## HK01 gap recovery', '- Pending: ' + state.nextDate + ' (cycle ' + state.cycle + ')',
-        '- Remaining: ' + verification.remaining, '- Cursor not advanced']);
-      return;
+  const outcome = await recoverConsecutiveDays(state, current => {
+    console.log('Durable gap cursor: cycle=' + current.cycle + '/' + MAX_CYCLES
+      + ', UTC day=' + current.nextDate + ', completed=' + current.completedDays
+      + '/' + (MAX_CYCLES * DAY_COUNT));
+    const reportFile = '/tmp/hk01-gap-recovery-' + process.pid + '.json';
+    if (existsSync(reportFile)) unlinkSync(reportFile);
+    try {
+      execFileSync(process.execPath, [
+        join(scriptDir, 'hk01-gap-day.mjs'), '--date=' + current.nextDate,
+        '--mode=run', '--limit=' + MAX_ARTICLES_PER_DAY, '--report-file=' + reportFile,
+      ], { cwd: resolve(scriptDir, '..'), stdio: 'inherit' });
+      if (!existsSync(reportFile)) throw Error('Verified day report missing; cursor unchanged');
+      return JSON.parse(readFileSync(reportFile, 'utf8'));
+    } finally {
+      if (existsSync(reportFile)) unlinkSync(reportFile);
     }
-    const next = advanceRecoveryState(state);
-    const rows = d1(progressAdvanceSql(state, next));
+  }, (current, next) => {
+    const rows = d1(progressAdvanceSql(current, next));
     if (rows.length !== 1 || Number(rows[0].completed_days) !== next.completedDays
         || Number(rows[0].cycle) !== next.cycle || rows[0].next_date !== next.nextDate) {
-      throw Error('D1 cursor compare-and-swap failed; retry current day');
+      throw Error('D1 cursor compare-and-swap not confirmed; re-read durable progress next run');
     }
-    console.log('Durable cursor advanced: ' + state.nextDate + ' completed, next='
+    console.log('Durable cursor advanced: ' + current.nextDate + ' completed, next='
       + next.nextDate + ', cycle=' + next.cycle + ', completed=' + next.completedDays);
-    jobSummary(['## HK01 gap recovery', '- Completed UTC day: ' + state.nextDate,
-      '- Cycle: ' + state.cycle + '/' + MAX_CYCLES,
-      '- Next day: ' + next.nextDate,
-      '- Completed: ' + next.completedDays + '/' + (MAX_CYCLES * DAY_COUNT)]);
-  } finally {
-    if (existsSync(reportFile)) unlinkSync(reportFile);
+  });
+  if (outcome.remaining > 0) {
+    console.log('UTC ' + outcome.state.nextDate + ' still has ' + outcome.remaining
+      + ' missing articles; next run retries SAME day');
   }
+  jobSummary(['## HK01 gap recovery', '- Verified day-passes this run: ' + outcome.advanced,
+    '- Next day: ' + outcome.state.nextDate,
+    '- Remaining on pending day: ' + outcome.remaining,
+    '- Completed: ' + outcome.state.completedDays + '/' + (MAX_CYCLES * DAY_COUNT)]);
+
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
