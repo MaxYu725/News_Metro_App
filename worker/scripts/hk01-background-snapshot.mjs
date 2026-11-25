@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SHARDS = ['ARCHIVE_01', 'ARCHIVE_02', 'ARCHIVE_03'];
+const SHARDS = ['ARCHIVE_01', 'ARCHIVE_02', 'ARCHIVE_03', 'ARCHIVE_04'];
 const PAGE_SIZE = 5000;
 const quote = value => `'${String(value).replaceAll("'", "''")}'`;
 const bounded = (value, limit = 300) => String(value ?? '').slice(0, limit);
@@ -145,8 +145,8 @@ export async function runSnapshot({ stateFile, outDir = tmpdir(), execute = exec
     log(`Background dedupe shard: ${SHARDS[i]} rows=${snapshots[i][0].results.length} page_size=${PAGE_SIZE}`);
   }
   log(lowerBound
-    ? `Background dedupe snapshot: bounded_46d from=${lowerBound} until=${upperBound} across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03`
-    : 'Background dedupe snapshot: full bootstrap scan across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03');
+    ? `Background dedupe snapshot: bounded_46d from=${lowerBound} until=${upperBound} across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03+ARCHIVE_04`
+    : 'Background dedupe snapshot: full bootstrap scan across ARCHIVE_01+ARCHIVE_02+ARCHIVE_03+ARCHIVE_04');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

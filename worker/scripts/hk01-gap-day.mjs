@@ -7,7 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { discoverHk01SearchConfig, fetchHk01SearchWindow, hk01ArticleNumericId } from '../src/sources/hk01-search.js';
 import { sqlLiteral } from '../src/archive-backfill.js';
 
-const SHARDS = ['DB', 'ARCHIVE_01', 'ARCHIVE_02', 'ARCHIVE_03'];
+export const GAP_READ_SHARDS = Object.freeze(['DB', 'ARCHIVE_01', 'ARCHIVE_02', 'ARCHIVE_03', 'ARCHIVE_04']);
+const SHARDS = GAP_READ_SHARDS;
 const MAX_ROWS_PER_SHARD = 2000;
 const MAX_READS_PER_RUN = 20000;
 const MAX_ARCHIVE_SIZE = 300_000_000;
@@ -144,7 +145,7 @@ async function main() {
       || readRows + Number(verified.meta.rows_read || 0) > MAX_READS_PER_RUN) {
     throw Error('Post-write identity/read cap exceeded; cursor unchanged');
   }
-  snapshots[snapshots.length - 1] = verified.rows;
+  snapshots[SHARDS.indexOf('ARCHIVE_03')] = verified.rows;
   const remainingAfterWrite = missingArticles(found.articles, snapshots, limit).missing;
   const finalReport = {
     ...report, verified: true, remainingAfterWrite,
