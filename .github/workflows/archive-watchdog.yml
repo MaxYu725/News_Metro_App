@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           cd worker
-          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03; do
+          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03 ARCHIVE_04; do
             lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
             npx wrangler d1 execute "$binding" --remote --json --command "
               SELECT
@@ -86,7 +86,7 @@ jobs:
               stale: Number(row.stale_open_batches || 0),
             };
           };
-          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02'), read('ARCHIVE_03')];
+          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02'), read('ARCHIVE_03'), read('ARCHIVE_04')];
           if (shards.some(shard => shard.size <= 0)) throw new Error('watchdog cannot observe archive shard size');
 
           const totalRows = shards.reduce((sum, shard) => sum + shard.total, 0);
@@ -116,6 +116,7 @@ jobs:
             `- ARCHIVE_01: rows=${shards[0].total}, size=${shards[0].size}`,
             `- ARCHIVE_02: rows=${shards[1].total}, size=${shards[1].size}`,
             `- ARCHIVE_03: rows=${shards[2].total}, size=${shards[2].size}`,
+            `- ARCHIVE_04: rows=${shards[3].total}, size=${shards[3].size}`,
             `- all shards capacity halted: ${capacityHalted}`,
             `- exhausted: ${exhausted}`,
           ];
