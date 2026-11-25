@@ -103,7 +103,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == 'schedule' ]]; then
-            limit=1000
+            # Temporarily prioritize the recent 2026 gap over older history.
+            limit=500
           else
             limit=${INPUT_LIMIT:-1000}
           fi
