@@ -48,8 +48,8 @@ def main() -> int:
 
     d1 = config.get("d1_databases", [])
     d1_map = {item.get("binding"): item for item in d1}
-    if set(d1_map) != {"DB", "ARCHIVE_01", "ARCHIVE_02", "ARCHIVE_03"}:
-        fail(f"expected live + three archive D1 bindings, got {sorted(d1_map)}")
+    if set(d1_map) != {"DB", "ARCHIVE_01", "ARCHIVE_02", "ARCHIVE_03", "ARCHIVE_04"}:
+        fail(f"expected live + four archive D1 bindings, got {sorted(d1_map)}")
     live_d1 = d1_map["DB"]
     if live_d1.get("database_id") != binding_map["DB"].get("id"):
         fail("live D1 database_id does not match recovered production binding")
@@ -71,6 +71,12 @@ def main() -> int:
         fail("ARCHIVE_03 database_id mismatch")
     if archive_d3.get("database_name") != "metro_news_archive_03" or archive_d3.get("migrations_dir") != "archive-migrations":
         fail("ARCHIVE_03 name/migrations_dir mismatch")
+
+    archive_d4 = d1_map["ARCHIVE_04"]
+    if archive_d4.get("database_id") != "306dabbd-bc02-419f-af24-f582f50bc475":
+        fail("ARCHIVE_04 database_id mismatch")
+    if archive_d4.get("database_name") != "metro_news_archive_04" or archive_d4.get("migrations_dir") != "archive-migrations":
+        fail("ARCHIVE_04 name/migrations_dir mismatch")
 
     if config.get("secrets", {}).get("required") != ["API_KEY"]:
         fail("API_KEY must be declared as the only required secret")
@@ -218,10 +224,10 @@ def main() -> int:
     ]:
         if signal not in source:
             fail(f"archive search integration signal missing: {signal}")
-    for signal in ["ARCHIVE_BINDING_NAMES", "ARCHIVE_01", "ARCHIVE_02", "ARCHIVE_03", "first-unconstrained"]:
+    for signal in ["ARCHIVE_BINDING_NAMES", "ARCHIVE_01", "ARCHIVE_02", "ARCHIVE_03", "ARCHIVE_04", "first-unconstrained"]:
         if signal not in archive_shards:
             fail(f"archive shard registry signal missing: {signal}")
-    if any(signal in source for signal in ["ARCHIVE_01.prepare", "ARCHIVE_01.batch", "ARCHIVE_02.prepare", "ARCHIVE_02.batch", "ARCHIVE_03.prepare", "ARCHIVE_03.batch"]):
+    if any(signal in source for signal in ["ARCHIVE_01.prepare", "ARCHIVE_01.batch", "ARCHIVE_02.prepare", "ARCHIVE_02.batch", "ARCHIVE_03.prepare", "ARCHIVE_03.batch", "ARCHIVE_04.prepare", "ARCHIVE_04.batch"]):
         fail("production Worker must not write directly to archive shards")
 
     # NS2C3A: historical backfill is bounded, backward-only, replayable, and external to the Worker runtime.
@@ -276,7 +282,7 @@ def main() -> int:
     ]:
         if signal not in archive_backfill_script:
             fail(f"archive backfill generator signal missing: {signal}")
-    if any(signal in source for signal in ["ARCHIVE_01.prepare", "ARCHIVE_01.batch", "ARCHIVE_02.prepare", "ARCHIVE_02.batch", "ARCHIVE_03.prepare", "ARCHIVE_03.batch"]):
+    if any(signal in source for signal in ["ARCHIVE_01.prepare", "ARCHIVE_01.batch", "ARCHIVE_02.prepare", "ARCHIVE_02.batch", "ARCHIVE_03.prepare", "ARCHIVE_03.batch", "ARCHIVE_04.prepare", "ARCHIVE_04.batch"]):
         fail("production Worker must remain read-only against archive shards")
 
     # CF-W5: indexed substring search must remain on D1 FTS5 trigram.

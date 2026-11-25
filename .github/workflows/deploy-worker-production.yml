@@ -127,6 +127,7 @@ jobs:
           npx wrangler d1 migrations apply metro_news_archive_01 --remote
           npx wrangler d1 migrations apply metro_news_archive_02 --remote
           npx wrangler d1 migrations apply metro_news_archive_03 --remote
+          npx wrangler d1 migrations apply metro_news_archive_04 --remote
 
       - name: Deploy Worker
         working-directory: worker
