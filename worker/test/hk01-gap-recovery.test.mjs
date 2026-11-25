@@ -4,6 +4,7 @@ import {
   GAP_START,GAP_END,DAY_COUNT,MAX_CYCLES,FIRST_SLOT_UTC,
   advanceRecoveryState,validateRecoveryState,progressTableSql,
   progressInitialSql,progressAdvanceSql,shouldAttemptRecovery,verifiedDayResult,
+  recoverConsecutiveDays, MAX_DAYS_PER_RUN, MAX_ARTICLES_PER_DAY,
 } from '../scripts/hk01-gap-recovery.mjs';
 
 test('delayed or dropped cron invocations do not skip a UTC day', () => {
@@ -78,4 +79,60 @@ test('only the start boundary uses wall clock time', () => {
   assert.equal(shouldAttemptRecovery(Date.parse(FIRST_SLOT_UTC)),true);
   assert.equal(shouldAttemptRecovery('2027-02-01T00:00:00Z'),true);
   assert.throws(() => shouldAttemptRecovery('bad'));
+});
+
+const reportFor = (state, remaining = 0) => ({
+  utcDay: state.nextDate, mode: 'run', verified: true,
+  hk01Found: 550, archive03Identities: 550 - remaining,
+  remainingAfterWrite: remaining, complete: remaining === 0,
+});
+
+test('three-day acceleration commits every day separately and caps article selection', async () => {
+  const seen = [], committed = [];
+  const result = await recoverConsecutiveDays({cycle:1,next_date:GAP_START,completed_days:0},
+    state => { seen.push(state.nextDate); return reportFor(state); },
+    (state,next) => committed.push(next.lastCompletedDate));
+  assert.deepEqual(seen, ['2026-08-17','2026-08-18','2026-08-19']);
+  assert.deepEqual(committed, seen);
+  assert.equal(result.state.nextDate,'2026-08-20');
+  assert.equal(result.advanced,3);
+  assert.equal(MAX_DAYS_PER_RUN * MAX_ARTICLES_PER_DAY,1500);
+});
+
+test('partial day stops batch without skipping or undoing earlier completed days', async () => {
+  const seen = [], committed = [];
+  const result = await recoverConsecutiveDays({cycle:1,next_date:GAP_START,completed_days:0},
+    state => { seen.push(state.nextDate); return reportFor(state, seen.length === 2 ? 50 : 0); },
+    (state,next) => committed.push(next.lastCompletedDate));
+  assert.deepEqual(seen, ['2026-08-17','2026-08-18']);
+  assert.deepEqual(committed, ['2026-08-17']);
+  assert.equal(result.state.nextDate,'2026-08-18');
+  assert.equal(result.remaining,50);
+});
+
+test('failed child or CAS never processes a later date', async () => {
+  const seen = [];
+  await assert.rejects(recoverConsecutiveDays({cycle:1,next_date:GAP_START,completed_days:0},
+    state => { seen.push(state.nextDate); return reportFor(state); },
+    () => { throw Error('CAS failed'); }), /CAS failed/);
+  assert.deepEqual(seen, [GAP_START]);
+  const completed = [];
+  await assert.rejects(recoverConsecutiveDays({cycle:1,next_date:GAP_START,completed_days:0},
+    state => { if (state.nextDate !== GAP_START) throw Error('D1 quota'); return reportFor(state); },
+    (state,next) => completed.push(next.lastCompletedDate)), /D1 quota/);
+  assert.deepEqual(completed,[GAP_START]);
+});
+
+test('a batch stops at pass boundaries and after final completion', async () => {
+  const seen = [];
+  const result = await recoverConsecutiveDays({cycle:1,next_date:GAP_END,completed_days:84},
+    state => { seen.push(state.nextDate); return reportFor(state); }, () => {});
+  assert.deepEqual(seen,[GAP_END]);
+  assert.equal(result.state.cycle,2);
+  const final = await recoverConsecutiveDays({cycle:2,next_date:GAP_END,completed_days:169},
+    reportFor, () => {});
+  assert.equal(final.state.done,true);
+  const done = await recoverConsecutiveDays(final.state, () => { throw Error('must not run'); }, () => {});
+  assert.equal(done.advanced,0);
+  await assert.rejects(recoverConsecutiveDays(final.state, reportFor, () => {}, 4), /Invalid day batch limit/);
 });
