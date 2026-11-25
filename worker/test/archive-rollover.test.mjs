@@ -14,18 +14,19 @@ const shard = (binding, size, statePresent = false, cursor = '', status = '') =>
 test('new batches select newest writable shard and inherit latest existing cursor', () => {
   const old = shard('ARCHIVE_01', 299000000, true, 'old');
   const previous = shard('ARCHIVE_02', 299990000, true, 'preserved');
-  const newest = shard('ARCHIVE_03', 40960);
-  const result = control([old, previous, newest]);
-  assert.equal(result.active.binding, 'ARCHIVE_03');
+  const third = shard('ARCHIVE_03', 119169024);
+  const newest = shard('ARCHIVE_04', 40960);
+  const result = control([old, previous, third, newest]);
+  assert.equal(result.active.binding, 'ARCHIVE_04');
   assert.equal(result.sourceState.state.cursor, 'preserved');
 });
-test('replays stay on original shard including third shard and all full halts', () => {
-  for (let i=0;i<3;i++) {
-    const shards = [1,2,3].map(n => shard(`ARCHIVE_0${n}`, 300000000));
+test('replays stay on original shard including fourth shard and all full halts', () => {
+  for (let i=0;i<4;i++) {
+    const shards = [1,2,3,4].map(n => shard(`ARCHIVE_0${n}`, 300000000));
     shards[i].status = 'written';
     assert.equal(control(shards).active.binding, shards[i].binding);
   }
-  assert.equal(control([1,2,3].map(n => shard(`ARCHIVE_0${n}`,300000000))).haltReason, 'all-shards-at-capacity');
+  assert.equal(control([1,2,3,4].map(n => shard(`ARCHIVE_0${n}`,300000000))).haltReason, 'all-shards-at-capacity');
 });
 test('watchdog uses newest writable shard and newest state owner', () => {
   const text = workflow('archive-watchdog');
@@ -52,4 +53,12 @@ test('successive fallback writes resume newest timestamp rather than highest bin
   const text = workflow('archive-watchdog');
   const state = text.match(/          const stateOwner = (.*);/)[1];
   assert.equal(vm.runInNewContext(state, {shards}).binding, 'ARCHIVE_02');
+});
+
+test('empty fourth shard inherits latest persisted historical cursor without resetting', () => {
+  const shards = [shard('ARCHIVE_01',300000000,true,'old'),shard('ARCHIVE_02',300000000,true,'older'),shard('ARCHIVE_03',119169024,true,'current'),shard('ARCHIVE_04',40960)];
+  shards[2].stateUpdatedAt = '2026-11-25T08:33:00.000Z';
+  const result = control(shards);
+  assert.equal(result.active.binding,'ARCHIVE_04');
+  assert.equal(result.sourceState.state.cursor,'current');
 });
