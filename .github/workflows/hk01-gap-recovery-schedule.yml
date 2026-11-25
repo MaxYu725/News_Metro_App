@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: metro-news-archive-backfill
+  group: ${{ github.event_name == 'pull_request' && format('archive-ci-{0}-{1}', github.workflow, github.ref) || 'metro-news-archive-backfill' }}
   cancel-in-progress: false
 
 jobs:
