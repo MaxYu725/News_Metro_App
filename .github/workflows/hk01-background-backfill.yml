@@ -128,6 +128,7 @@ jobs:
           npx wrangler d1 migrations apply metro_news_archive_01 --remote
           npx wrangler d1 migrations apply metro_news_archive_02 --remote
           npx wrangler d1 migrations apply metro_news_archive_03 --remote
+          npx wrangler d1 migrations apply metro_news_archive_04 --remote
 
       - name: Locate replay batch and select writable shard
         id: control
@@ -137,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           cd worker
-          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03; do
+          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03 ARCHIVE_04; do
             lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
             npx wrangler d1 execute "$binding" --remote --json --command "
               SELECT
@@ -181,7 +182,7 @@ jobs:
               },
             };
           };
-          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02'), read('ARCHIVE_03')];
+          const shards = [read('ARCHIVE_01'), read('ARCHIVE_02'), read('ARCHIVE_03'), read('ARCHIVE_04')];
           if (shards.some(shard => shard.size <= 0)) throw new Error('Unable to observe archive shard size');
 
           const replay = shards.filter(shard => shard.status);
@@ -251,7 +252,7 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const rows = [];
-          for (const binding of ['archive_01', 'archive_02', 'archive_03']) {
+          for (const binding of ['archive_01', 'archive_02', 'archive_03', 'archive_04']) {
             const payload = JSON.parse(fs.readFileSync(`/tmp/${binding}-existing.json`, 'utf8'));
             const chunks = Array.isArray(payload) ? payload : [payload];
             for (const chunk of chunks) {
@@ -362,7 +363,7 @@ jobs:
         run: |
           set -euo pipefail
           cd worker
-          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03; do
+          for binding in ARCHIVE_01 ARCHIVE_02 ARCHIVE_03 ARCHIVE_04; do
             lower=$(echo "$binding" | tr '[:upper:]' '[:lower:]')
             npx wrangler d1 execute "$binding" --remote --json \
               --command "SELECT COUNT(*) AS total_rows,SUM(CASE WHEN source='香港01' THEN 1 ELSE 0 END) AS hk01_rows,MIN(CASE WHEN source='香港01' THEN pubDate END) AS hk01_oldest FROM articles" \
@@ -381,14 +382,16 @@ jobs:
           const a = read('ARCHIVE_01');
           const b = read('ARCHIVE_02');
           const c = read('ARCHIVE_03');
-          const oldest = [a.oldest, b.oldest, c.oldest].filter(Boolean).sort()[0] || 'unknown';
+          const d = read('ARCHIVE_04');
+          const oldest = [a.oldest, b.oldest, c.oldest, d.oldest].filter(Boolean).sort()[0] || 'unknown';
           console.log('## HK01 background archive');
           console.log(`- batch: ${process.env.BATCH_ID || 'unknown'}`);
           console.log(`- active shard: ${process.env.ACTIVE_BINDING || 'none'}`);
-          console.log(`- total rows: ${a.rows + b.rows + c.rows}`);
-          console.log(`- HK01 rows: ${a.hk01 + b.hk01 + c.hk01}`);
+          console.log(`- total rows: ${a.rows + b.rows + c.rows + d.rows}`);
+          console.log(`- HK01 rows: ${a.hk01 + b.hk01 + c.hk01 + d.hk01}`);
           console.log(`- HK01 oldest: ${oldest}`);
           console.log(`- ARCHIVE_01 rows: ${a.rows}`);
           console.log(`- ARCHIVE_02 rows: ${b.rows}`);
           console.log(`- ARCHIVE_03 rows: ${c.rows}`);
+          console.log(`- ARCHIVE_04 rows: ${d.rows}`);
           NODE
