@@ -1,0 +1,42 @@
+name: Provision ARCHIVE_04 (one-time)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/provision-archive04.yml
+      - .github/scripts/provision-archive04.sh
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/provision-archive04.yml
+      - .github/scripts/provision-archive04.sh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: metro-news-archive-backfill
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n .github/scripts/provision-archive04.sh
+
+  provision:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reuse or provision exactly one ARCHIVE_04 database
+        run: bash .github/scripts/provision-archive04.sh
